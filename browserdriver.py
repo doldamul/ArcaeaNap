@@ -90,12 +90,8 @@ def get_browser_info():
 
 # 'chrome', 'edge', 'firefox', 'unsupported'
 def get_browser_name() -> str:
-    browser = get_browser_name_os()
-        
-    if __name__=='__main__':
-        print(browser)
+    browser = get_browser_name_os().lower()
     
-    browser = browser.lower()
     if 'chrome' in browser:
         return 'chrome'
     elif 'edge' in browser:
