@@ -100,7 +100,8 @@ class Configuration:
         return True
 
     def save(self):
-        with open(self.filename, 'w', encoding='utf-8') as f:
+        filepath = os.path.join(self._config['general']['cache_path'], self.filename)
+        with open(filepath, 'w', encoding='utf-8') as f:
             self._config.write(f)
 
 config = Configuration()

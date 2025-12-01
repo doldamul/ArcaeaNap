@@ -1,11 +1,10 @@
+from configuration import config
 from selenium import webdriver
 from selenium_stealth import stealth
 import platform
 get_browser_name_os = None # function variable
 os = None
 
-# TODO: get preferred browser name from preferences
-# currently just uses default browser
 # TODO: add firefox support
 def get_driver():
     driver = None
@@ -90,6 +89,9 @@ def get_browser_info():
 
 # 'chrome', 'edge', 'firefox', 'unsupported'
 def get_browser_name() -> str:
+    if config['general']['browser'] != 'system_default':
+        return config['general']['browser']
+    
     browser = get_browser_name_os().lower()
     
     if 'chrome' in browser:

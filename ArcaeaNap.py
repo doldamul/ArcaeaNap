@@ -1,3 +1,4 @@
+from configuration import config
 import keyring
 import time
 import json
@@ -11,14 +12,16 @@ def open_arcaea_online():
     VUE_COMPONENT_SELECTOR = "#app > section > div:nth-child(3)"
     lang = 'ko'
     url = f'https://arcaea.lowiro.com/{lang}/profile/scores?page=1'
+    login_filename = 'login.dat'
     try:
         driver = get_driver()
         assert driver is not None, "unsupported browser"
 
         # check login session
-        login = os.path.exists('login.dat') and os.path.isfile('login.dat')
+        login_filepath = os.path.join(config['general']['cache_path'], login_filename)
+        login = os.path.exists(login_filepath) and os.path.isfile(login_filepath) and config['general']['auto_login']
         if login:
-            with open('login.dat', 'r', encoding='utf-8') as f:
+            with open(login_filepath, 'r', encoding='utf-8') as f:
                 login_cookies = json.load(f)
             
             driver.execute_cdp_cmd('Network.enable', {})
@@ -97,7 +100,7 @@ def open_arcaea_online():
             if __name__=='__main__':
                 print(cookies)
             
-            with open('login.dat', 'w', encoding='utf-8') as f:
+            with open(login_filepath, 'w', encoding='utf-8') as f:
                 json.dump(cookies, f, ensure_ascii=False)
         
         # get content (TODO: auto repeat when it detects new page) 
@@ -115,6 +118,8 @@ def open_arcaea_online():
             )
 
             # save as json
+            score_filename = 'user_scores.json'
+            score_filepath = os.path.join(config['general']['cache_path'], score_filename)
             if user_scores_data:
                 print(f"{len(user_scores_data)}개의 플레이 기록 발견")
                 
@@ -122,9 +127,9 @@ def open_arcaea_online():
                     print("\n데이터 샘플:")
                     print(json.dumps(user_scores_data[0], indent=2, ensure_ascii=False))
 
-                with open('user_scores.json', 'w', encoding='utf-8') as f:
+                with open(score_filepath, 'w', encoding='utf-8') as f:
                     json.dump(user_scores_data, f, ensure_ascii=False, indent=4)
-                print("\n'user_scores.json' 파일로 데이터 저장 완료")
+                print(f"\n'{score_filename}' 파일로 데이터 저장 완료")
                 
             else:
                 print("데이터 가져오는 중 오류 발생")
