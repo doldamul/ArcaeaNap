@@ -27,7 +27,7 @@ _converters = {
     'general': {
         'browser': Browser,
         'auto_login': lambda v: v.lower() == 'true',
-        'cache_path': lambda v: (_ for _ in ()).throw(ValueError(f'invalid path: {v}')) if os.path.isdir(os.path.dirname(v)) else v
+        'cache_path': lambda v: (_ for _ in ()).throw(ValueError(f'invalid path: {v}')) if not os.path.isdir(os.path.dirname(os.path.abspath(v))) else v
     }
 }
 
@@ -59,7 +59,7 @@ class SectionWrapper:
     def __getitem__(self, key):
         raw_value = self.section_proxy[key]
     
-        return self.parent.transform_value(self.section_name, key, raw_value)
+        return self.transform_value(self.section_name, key, raw_value)
 
     def __setitem__(self, key, value):
         self.section_proxy[key] = str(value)
@@ -88,7 +88,7 @@ class Configuration:
         if key not in self._config:
             self._config.add_section(key)
             
-        return SectionWrapper(self, self._config[key])
+        return SectionWrapper(self, key, self._config[key])
 
     def _is_valid_structure(self) -> bool:
         for section, keys in _config_default.items():
