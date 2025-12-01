@@ -1,6 +1,5 @@
 from configuration import config
 import keyring
-import time
 import json
 import os
 from browserdriver import get_driver
@@ -103,36 +102,48 @@ def open_arcaea_online():
             with open(login_filepath, 'w', encoding='utf-8') as f:
                 json.dump(cookies, f, ensure_ascii=False)
         
-        # get content (TODO: auto repeat when it detects new page) 
+        # get content
         try:        
-            # wait until content loaded
-            wait = WebDriverWait(driver, 30)
-            
-            target_element = wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, VUE_COMPONENT_SELECTOR))
-            )
-            
-            user_scores_data = driver.execute_script(
-                "return arguments[0].__vue__.userScores;", # javascript
-                target_element
-            )
-
-            # save as json
-            score_filename = 'user_scores.json'
-            score_filepath = os.path.join(config['general']['cache_path'], score_filename)
-            if user_scores_data:
-                print(f"{len(user_scores_data)}개의 플레이 기록 발견")
+            while True:
+                # wait until content loaded
+                wait = WebDriverWait(driver, 30)
                 
-                if __name__=='__main__':
-                    print("\n데이터 샘플:")
-                    print(json.dumps(user_scores_data[0], indent=2, ensure_ascii=False))
-
-                with open(score_filepath, 'w', encoding='utf-8') as f:
-                    json.dump(user_scores_data, f, ensure_ascii=False, indent=4)
-                print(f"\n'{score_filename}' 파일로 데이터 저장 완료")
+                target_element = wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, VUE_COMPONENT_SELECTOR))
+                )
                 
-            else:
-                print("데이터 가져오는 중 오류 발생")
+                user_scores_data = driver.execute_script(
+                    "return arguments[0].__vue__.userScores;", # javascript
+                    target_element
+                )
+
+                # save as json
+                score_filename = 'user_scores.json'
+                score_filepath = os.path.join(config['general']['cache_path'], score_filename)
+                if user_scores_data:
+                    print(f"{len(user_scores_data)}개의 플레이 기록 발견")
+                    
+                    if __name__=='__main__':
+                        print("\n데이터 샘플:")
+                        print(json.dumps(user_scores_data[0], indent=2, ensure_ascii=False))
+
+                    with open(score_filepath, 'w', encoding='utf-8') as f:
+                        json.dump(user_scores_data, f, ensure_ascii=False, indent=4)
+                    print(f"\n'{score_filename}' 파일로 데이터 저장 완료")
+                    
+                else:
+                    print("데이터 가져오는 중 오류 발생")
+                    break
+                
+                difficulty = driver.find_element(By.CSS_SELECTOR, ".difficulty-selector.active .label").text
+                pageno = driver.find_element(By.CSS_SELECTOR, '.selected.no-select').text
+                
+                def has_page_changed(driver):
+                    new_difficulty = driver.find_element(By.CSS_SELECTOR, ".difficulty-selector.active .label").text
+                    new_pageno = driver.find_element(By.CSS_SELECTOR, '.selected.no-select').text
+                    return new_difficulty != difficulty or new_pageno != pageno
+                
+                WebDriverWait(driver, 300).until(has_page_changed)
 
         except Exception as e:
             print(f"스크립트 실행 중 오류 발생: {e}")
@@ -141,7 +152,7 @@ def open_arcaea_online():
         print(f'브라우저 종료됨: {e}')
 
     finally:
-        time.sleep(5) # 5초 후 브라우저 종료 (TODO: 종료 전 변경된 쿠키 확인 후 업데이트?)
+        # TODO: 종료 전 변경된 쿠키 확인 후 업데이트?
         try: driver.quit()
         except: pass
 
