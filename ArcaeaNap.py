@@ -1,4 +1,5 @@
 from configuration import config
+from disrupt import block_pointer_events, restore_pointer_events
 import sqlite3
 import pandas as pd
 import keyring
@@ -21,10 +22,14 @@ def open_arcaea_online():
         login(driver, url)
         
         while True:
-            save_data(driver)
+            try:
+                block_pointer_events(driver)
+                save_data(driver)
                 
-            difficulty = driver.find_element(By.CSS_SELECTOR, ".difficulty-selector.active .label").text
-            pageno = driver.find_element(By.CSS_SELECTOR, '.selected.no-select').text
+                difficulty = driver.find_element(By.CSS_SELECTOR, ".difficulty-selector.active .label").text
+                pageno = driver.find_element(By.CSS_SELECTOR, '.selected.no-select').text
+            finally:
+                restore_pointer_events(driver)
             
             def has_page_changed(driver):
                 new_difficulty = driver.find_element(By.CSS_SELECTOR, ".difficulty-selector.active .label").text
