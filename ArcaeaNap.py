@@ -112,9 +112,10 @@ def open_arcaea_online():
                     EC.presence_of_element_located((By.CSS_SELECTOR, VUE_COMPONENT_SELECTOR))
                 )
                 
-                user_scores_data = driver.execute_script(
-                    "return arguments[0].__vue__.userScores;", # javascript
-                    target_element
+                user_scores_data = wait.until(
+                    lambda d: d.execute_script("return arguments[0].__vue__.userScores;", 
+                        target_element
+                    )
                 )
 
                 # save as json
