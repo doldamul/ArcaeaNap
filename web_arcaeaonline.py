@@ -4,6 +4,7 @@ import sqlite3
 import pandas as pd
 import keyring
 import json
+import time
 import os
 from browserdriver import get_driver
 from selenium.webdriver.common.by import By
@@ -36,14 +37,17 @@ def open_arcaea_online():
                 new_pageno = driver.find_element(By.CSS_SELECTOR, '.selected.no-select').text
                 return new_difficulty != difficulty or new_pageno != pageno
             
-            WebDriverWait(driver, 300).until(has_page_changed)    
+            WebDriverWait(driver, 300).until(has_page_changed)
         
     except Exception as e:
-        print(f'브라우저 종료됨: {e}')
+        print(f'브라우저 종료됨')
 
     finally:
         # TODO: 종료 전 변경된 쿠키 확인 후 업데이트?
         try: driver.quit()
+        except: pass
+        
+        try: del driver
         except: pass
 
 def login(driver, url):
@@ -302,5 +306,5 @@ def check_db_data():
         print(f"데이터 로드 중 오류 발생: {e}")
 
 if __name__=='__main__':
-    # open_arcaea_online()
+    open_arcaea_online()
     check_db_data()

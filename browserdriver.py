@@ -80,13 +80,16 @@ def get_browser_info():
             b_info['webgl_vendor'] = "Intel Inc."
             b_info['renderer'] = "Intel Iris OpenGL Engine"
         finally:
-            driver.quit()
+            try: driver.quit()
+            except: pass
+            
+            try: del driver
+            except: pass
     
     if __name__=='__main__':
         print(b_info)
     
     return b_info
-    
 
 # 'chrome', 'edge', 'firefox', 'unsupported'
 def get_browser_name() -> str:
@@ -136,6 +139,13 @@ def get_browser_name_linux():
     result = subprocess.run(['xdg-settings', 'get', 'default-web-browser'], capture_output=True, text=True)
     return result.stdout.strip()
     
+def suppress_del_error(self):
+    try:
+        self.quit()
+    except Exception:
+        pass
+
+uc.Chrome.__del__ = suppress_del_error
         
 system = platform.system()
 match system:
@@ -151,7 +161,6 @@ match system:
     case _:
         print(f"error: {system} is not supported")
         exit(1)
-        
 
 if __name__=='__main__':
     print(get_driver())
