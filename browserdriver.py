@@ -1,5 +1,6 @@
 from configuration import config
 from selenium import webdriver
+import undetected_chromedriver as uc
 from selenium_stealth import stealth
 import platform
 get_browser_name_os = None # function variable
@@ -11,7 +12,7 @@ def get_driver():
     
     match get_browser_name():
         case 'chrome':
-            driver = webdriver.Chrome()
+            driver = uc.Chrome()
         case 'edge':
             driver = webdriver.Edge()
         case 'unsupported':
