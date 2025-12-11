@@ -44,18 +44,27 @@ def open_wiki():
             try:
                 row_texts = [cell.get_text(' ') for cell in cells]
 
-                artist = row_texts[2]
                 titles = [a.get_text(strip=True) for a in cells[1].find_all('a')]
-                
-                length = row_texts[8]
+                artist = row_texts[2].strip()
+                length = row_texts[8].strip()
+                bpm = row_texts[9].strip()
+
+                # in wiki, title:artist:length:bpm
+                # always 1:1:1:1 or 2:1:1:1 or 3:1:1:1 or 2:1:2:1 or 2:1:2:2
                 if ' ' in length:  # ex) '2:00 2:38'
-                    lengths = length.split(' ')   
+                    lengths = length.split()
                     
-                    for i in range(len(lengths)):
-                        songs_data.append((titles[i], artist, lengths[i]))
+                    if ' ' in bpm:
+                        bpms = bpm.split()
+
+                        for i in range(len(lengths)):
+                            songs_data.append((titles[i], artist, lengths[i], bpms[i]))
+                    else:
+                        for i in range(len(lengths)):
+                            songs_data.append((titles[i], artist, lengths[i], bpm))
                 else:
                     for title in titles:
-                        songs_data.append((title, artist, length))
+                        songs_data.append((title, artist, length, bpm))
 
             except Exception as e:
                 print(f"행 파싱 중 오류 발생 (무시함): {e}")
@@ -84,7 +93,7 @@ def save_data(data):
         updated_count = 0
         from db_utils import resolve_song_id_with_artist, update_song_metadata
         
-        for title, artist, length_str in data:
+        for title, artist, length_str, bpm in data:
             # Convert length "m:ss" to seconds (int)
             length_seconds = None
             if length_str:
@@ -99,7 +108,7 @@ def save_data(data):
             song_id = resolve_song_id_with_artist(cursor, title, artist)
             
             # Update Metadata
-            update_song_metadata(cursor, song_id, artist, length_seconds)
+            update_song_metadata(cursor, song_id, artist, length_seconds, bpm)
             updated_count += 1
             
         conn.commit()

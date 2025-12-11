@@ -23,11 +23,15 @@ def open_sheet():
     init_songs_db()
 
     target_headers = {
+        'level': '레벨',
         'bp': 'BP(M)',
         'perceived_bp': '체감 BP',
         's_bp': 'S-BP',
         'note_count': '노트수',
         'cut_200': '#200 컷',
+        'ignore_chart': '⛔',
+        'skill_issues': '⚠️',
+        'contain_slowspeed': 'isLower'
     }
 
     tabs = ['_bp_load', '_song_database', '_sbp_load'] # _bp_load first as canonical source
@@ -76,11 +80,15 @@ def open_sheet():
                     merged_data[norm_key] = {
                         'title': title, # Use the first encountered case (from _bp_load)
                         'difficulty': difficulty_str,
+                        'level': None,
                         'bp': None,
                         'perceived_bp': None,
                         's_bp': None,
                         'note_count': None,
-                        'cut_200': None
+                        'cut_200': None,
+                        'ignore_chart': None,
+                        'skill_issues': None,
+                        'contain_slowspeed': None
                     }
                 
                 song = merged_data[norm_key]
@@ -120,6 +128,12 @@ def save_to_db(data):
                     return int(float(clean)) # 1000.0 방지
                 except: return None
                 
+            def parse_bool(val: str) -> int:
+                if not val: return None
+                if isinstance(val, bool): return int(val)
+                try: return int(val.lower() == 'true')
+                except: return None
+
             title = entry['title']
             difficulty = entry['difficulty']
             
@@ -129,22 +143,30 @@ def save_to_db(data):
             # 2. Insert/Update Chart
             cursor.execute('''
                 INSERT INTO charts 
-                (song_id, difficulty, bp, perceived_bp, s_bp, note_count, cut_200)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (song_id, difficulty, level, bp, perceived_bp, s_bp, note_count, cut_200, ignore_chart, skill_issues, contain_slowspeed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(song_id, difficulty) DO UPDATE SET
+                    level=excluded.level,
                     bp=excluded.bp,
                     perceived_bp=excluded.perceived_bp,
                     s_bp=excluded.s_bp,
                     note_count=excluded.note_count,
-                    cut_200=excluded.cut_200
+                    cut_200=excluded.cut_200,
+                    ignore_chart=excluded.ignore_chart,
+                    skill_issues=excluded.skill_issues,
+                    contain_slowspeed=excluded.contain_slowspeed
             ''', (
                 song_id,
                 difficulty,
+                entry['level'],
                 parse_float(entry['bp']),
                 parse_float(entry['perceived_bp']),
                 parse_float(entry['s_bp']),
                 parse_int(entry['note_count']),
-                parse_int(entry['cut_200'])
+                parse_int(entry['cut_200']),
+                parse_bool(entry['ignore_chart']),
+                parse_bool(entry['skill_issues']),
+                parse_bool(entry['contain_slowspeed'])
             ))
             updated_count += 1
             

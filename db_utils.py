@@ -25,6 +25,7 @@ def init_songs_db():
             title TEXT UNIQUE,
             artist TEXT,
             length INTEGER,
+            bpm TEXT,
             arcaea_id TEXT
         )
     ''')
@@ -35,15 +36,37 @@ def init_songs_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             song_id INTEGER,
             difficulty TEXT,
+            level TEXT,
             bp REAL,
             perceived_bp REAL,
             s_bp REAL,
             note_count INTEGER,
             cut_200 INTEGER,
+            ignore_chart INTEGER,
+            skill_issues INTEGER,
+            contain_slowspeed INTEGER,
             UNIQUE(song_id, difficulty),
             FOREIGN KEY(song_id) REFERENCES songs(id)
         )
     ''')
+    
+    # Simple migration for existing DBs
+    cursor.execute("PRAGMA table_info(songs)")
+    columns = [info[1] for info in cursor.fetchall()]
+    if 'bpm' not in columns:
+        cursor.execute("ALTER TABLE songs ADD COLUMN bpm TEXT")
+
+    cursor.execute("PRAGMA table_info(charts)")
+    columns = [info[1] for info in cursor.fetchall()]
+    
+    if 'level' not in columns:
+        cursor.execute("ALTER TABLE charts ADD COLUMN level TEXT")
+    if 'ignore_chart' not in columns:
+        cursor.execute("ALTER TABLE charts ADD COLUMN ignore_chart INTEGER")
+    if 'skill_issues' not in columns:
+        cursor.execute("ALTER TABLE charts ADD COLUMN skill_issues INTEGER")
+    if 'contain_slowspeed' not in columns:
+        cursor.execute("ALTER TABLE charts ADD COLUMN contain_slowspeed INTEGER")
     
     conn.commit()
     conn.close()
@@ -110,15 +133,15 @@ def resolve_song_id_with_artist(cursor, title, artist=None):
         cursor.execute('INSERT INTO songs (title) VALUES (?)', (title,))
         return cursor.lastrowid
 
-def update_song_metadata(cursor, song_id, artist, length):
+def update_song_metadata(cursor, song_id, artist, length, bpm=None):
     """
-    Updates artist and length for a given song_id.
+    Updates artist, length, and bpm for a given song_id.
     """
     cursor.execute('''
         UPDATE songs 
-        SET artist = ?, length = ?
+        SET artist = ?, length = ?, bpm = ?
         WHERE id = ?
-    ''', (artist, length, song_id))
+    ''', (artist, length, bpm, song_id))
 
 def resolve_song_id_for_ao(cursor, ao_id, ao_title):
     target_title = AO_ID_MAP.get(ao_id, ao_title)
