@@ -19,7 +19,7 @@ _config_default = {
     'general': {
         'browser': Browser.CHROME,
         'auto_login': True,
-        'cache_path': './'
+        'cache_path': './arcaea_nap_data/'
     }
 }
 

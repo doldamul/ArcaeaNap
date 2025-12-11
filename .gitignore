@@ -164,3 +164,8 @@ cython_debug/
 
 # notes
 notes/
+
+# project configuration files
+arcaea_nap_data/**
+!arcaea_nap_data/ui/
+!arcaea_nap_data/ui/**

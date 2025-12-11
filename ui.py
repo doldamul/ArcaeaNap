@@ -10,7 +10,7 @@ def main():
     engine = QQmlApplicationEngine()
 
     qml_filename = "main.qml"
-    qml_filepath = os.path.join(config['general']['cache_path'], qml_filename)
+    qml_filepath = os.path.join(config['general']['cache_path'], 'ui', qml_filename)
     
     engine.load(QUrl.fromLocalFile(qml_filepath))
 
