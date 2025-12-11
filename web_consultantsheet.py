@@ -4,8 +4,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from configuration import config
 import gspread
-import sqlite3
 import re
+from db_utils import init_songs_db, get_connection, resolve_song_id
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -16,20 +16,11 @@ SPREADSHEET_ID = "1myl8cFTgMX6tim7Eqci4LNl6fzisuxcFrWt9EX0_obs" # Arcaea Song Da
 
 def open_sheet():
     creds = get_creds()
-    print('creds: ', creds)
     
     gc = gspread.authorize(creds)
     sheet = gc.open_by_key(SPREADSHEET_ID)
-    
-    name_exception = {
-        'Quon(Lanota)': 'quon', 
-        'Quon(WACCA)': 'quonwacca', 
-        'Genesis(Arcaea)': 'genesis',
-        'Genesis(CHUNITHM)': 'genesischunithm',
-    }
 
-    # DB 초기화
-    init_db()
+    init_songs_db()
 
     target_headers = {
         'bp': 'BP(M)',
@@ -103,31 +94,12 @@ def open_sheet():
     print(f"Total unique songs combined: {len(merged_data)}")
     save_to_db(merged_data.values())
 
-def init_db():
-    db_path = os.path.join(config['general']['cache_path'], 'consultant_data.db')
-    with sqlite3.connect(db_path) as conn:
-        cursor = conn.cursor()
-        cursor.execute('DROP TABLE IF EXISTS songs')
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS songs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT,
-                difficulty TEXT,
-                bp REAL,
-                perceived_bp REAL,
-                s_bp REAL,
-                note_count INTEGER,
-                cut_200 INTEGER,
-                UNIQUE(title, difficulty)
-            )
-        ''')
-        conn.commit()
-
 def save_to_db(data):
-    db_path = os.path.join(config['general']['cache_path'], 'consultant_data.db')
-    with sqlite3.connect(db_path) as conn:
-        cursor = conn.cursor()
-        
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        updated_count = 0
         for entry in data:
             def parse_float(val):
                 if not val: return None
@@ -147,22 +119,42 @@ def save_to_db(data):
                     if not clean: return None
                     return int(float(clean)) # 1000.0 방지
                 except: return None
-
+                
+            title = entry['title']
+            difficulty = entry['difficulty']
+            
+            # 1. Resolve Song ID
+            song_id = resolve_song_id(cursor, title)
+            
+            # 2. Insert/Update Chart
             cursor.execute('''
-                INSERT OR REPLACE INTO songs 
-                (title, difficulty, bp, perceived_bp, s_bp, note_count, cut_200)
+                INSERT INTO charts 
+                (song_id, difficulty, bp, perceived_bp, s_bp, note_count, cut_200)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(song_id, difficulty) DO UPDATE SET
+                    bp=excluded.bp,
+                    perceived_bp=excluded.perceived_bp,
+                    s_bp=excluded.s_bp,
+                    note_count=excluded.note_count,
+                    cut_200=excluded.cut_200
             ''', (
-                entry['title'],
-                entry['difficulty'],
+                song_id,
+                difficulty,
                 parse_float(entry['bp']),
                 parse_float(entry['perceived_bp']),
                 parse_float(entry['s_bp']),
                 parse_int(entry['note_count']),
                 parse_int(entry['cut_200'])
             ))
+            updated_count += 1
+            
         conn.commit()
-        print(f"Saved {len(list(data))} rows to database.")
+        print(f"Saved/Updated {updated_count} charts to database.")
+    
+    except Exception as e:
+        print(f"Error saving to DB: {e}")
+    finally:
+        conn.close()
 
 # Regex to capture "Title [Difficulty]" format.
 # e.g. "Remind the Souls (Short Version) [PRS]" -> "Remind the Souls (Short Version)", "PRS"

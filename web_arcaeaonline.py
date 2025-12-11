@@ -1,5 +1,6 @@
 from configuration import config
 from disrupt import block_pointer_events, restore_pointer_events
+from db_utils import get_connection, resolve_song_id_for_ao, init_songs_db
 import sqlite3
 import pandas as pd
 import keyring
@@ -162,11 +163,17 @@ def save_data(driver):
     if __name__=='__main__':
         print("\n데이터 샘플:")
         print(json.dumps(user_scores_data[0], indent=2, ensure_ascii=False))
+    
+    # Ensure songs.db exists
+    init_songs_db()
+    songs_conn = get_connection()
+    songs_cursor = songs_conn.cursor()
 
     with sqlite3.connect(score_filepath) as conn:
         cursor = conn.cursor()
         
         try:
+            # Create table with new schema
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS scores (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -186,10 +193,18 @@ def save_data(driver):
                     artist TEXT,
                     user_id INTEGER,
                     yearly_play_count INTEGER,
-                    score_below_max INTEGER,                    
+                    score_below_max INTEGER,
+                    db_song_id INTEGER,
                     UNIQUE(song_id, difficulty, time_played)
                 )
             ''')
+            
+            # Check if db_song_id exists (migration)
+            cursor.execute("PRAGMA table_info(scores)")
+            columns = [info[1] for info in cursor.fetchall()]
+            if 'db_song_id' not in columns:
+                print("Adding 'db_song_id' column to scores table...")
+                cursor.execute("ALTER TABLE scores ADD COLUMN db_song_id INTEGER")
 
             data_to_insert = []
             for item in user_scores_data:
@@ -198,9 +213,13 @@ def save_data(driver):
                     title_str = title_obj.get('en', '')
                 else:
                     title_str = str(title_obj) if title_obj else ''
+                
+                # Resolve db_song_id from songs.db
+                ao_song_id = item.get('song_id')
+                db_song_id = resolve_song_id_for_ao(songs_cursor, ao_song_id, title_str)
 
                 row = (
-                    item.get('song_id'),
+                    ao_song_id,
                     item.get('difficulty'),
                     item.get('score'),
                     item.get('shiny_perfect_count'),
@@ -216,16 +235,19 @@ def save_data(driver):
                     item.get('artist'),
                     item.get('user_id'),
                     item.get('yearly_play_count'),
-                    item.get('score_below_max')
+                    item.get('score_below_max'),
+                    db_song_id
                 )
                 data_to_insert.append(row)
+            
+            songs_conn.commit() # Commit any new song creations in songs.db
 
             cursor.executemany('''
                 INSERT OR IGNORE INTO scores 
                 (song_id, difficulty, score, shiny_perfect_count, perfect_count, near_count, 
                     miss_count, health, modifier, time_played, clear_type, best_clear_type, 
-                    title, artist, user_id, yearly_play_count, score_below_max)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    title, artist, user_id, yearly_play_count, score_below_max, db_song_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', data_to_insert)
             
             conn.commit()
@@ -234,6 +256,10 @@ def save_data(driver):
             
         except Exception as e:
             print(f"DB 저장 중 오류 발생: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            songs_conn.close()
 
 def get_all_cookies_chromium(driver):
     try:

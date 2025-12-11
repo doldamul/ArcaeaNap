@@ -1,12 +1,11 @@
 from configuration import config
-import sqlite3
-import os
 import time
 from browserdriver import get_driver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from bs4 import BeautifulSoup  # HTML 파싱을 위해 추가
+from bs4 import BeautifulSoup
+from db_utils import get_connection, init_songs_db
 
 WIKI_URL = 'https://arcaea.fandom.com/wiki/Songs_by_Date'
 TABLE_SELECTOR = 'table.wikitable:nth-child(1) > tbody:nth-child(2)'
@@ -74,34 +73,42 @@ def open_wiki():
             driver.quit()
 
 def save_data(data):
-    db_filename = 'wiki_songs.db'
-    db_filepath = os.path.join(config['general']['cache_path'], db_filename)
+    init_songs_db()
     
-    print(f"DB 저장 시작: {db_filepath}")
+    print(f"DB 저장 시작: songs.db")
     
-    with sqlite3.connect(db_filepath) as conn:
-        cursor = conn.cursor()
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        updated_count = 0
+        from db_utils import resolve_song_id_with_artist, update_song_metadata
         
-        try:
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS wiki_songs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    title TEXT,
-                    artist TEXT,
-                    length TEXT
-                )
-            ''')
+        for title, artist, length_str in data:
+            # Convert length "m:ss" to seconds (int)
+            length_seconds = None
+            if length_str:
+                parts = length_str.split(':')
+                if len(parts) == 2:
+                    try:
+                        length_seconds = int(parts[0]) * 60 + int(parts[1])
+                    except:
+                        pass # keep None
             
-            cursor.executemany('''
-                INSERT OR IGNORE INTO wiki_songs (title, artist, length)
-                VALUES (?, ?, ?)
-            ''', data)
+            # Resolve ID (handles case-insensitivity and Wiki Exceptions)
+            song_id = resolve_song_id_with_artist(cursor, title, artist)
             
-            conn.commit()
-            print(f"DB 저장 완료: {cursor.rowcount}건 업데이트 됨")
+            # Update Metadata
+            update_song_metadata(cursor, song_id, artist, length_seconds)
+            updated_count += 1
             
-        except Exception as e:
-            print(f"DB 저장 중 오류 발생: {e}")
+        conn.commit()
+        print(f"DB 저장 완료: {updated_count}건 처리됨")
+        
+    except Exception as e:
+        print(f"DB 저장 중 오류 발생: {e}")
+    finally:
+        conn.close()
 
 if __name__ == '__main__':
     open_wiki()
