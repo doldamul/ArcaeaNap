@@ -94,7 +94,11 @@ Item {
                                 Text { text: "▶"; color: "white"; font.pixelSize: 18 }
                                 Text { text: "Start Analysis"; color: "white"; font.bold: true; font.pixelSize: 18 }
                             }
-                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: analysisHandler.startAnalysis()
+                            }
                         }
 
                         Item { Layout.preferredHeight: 20; Layout.fillHeight: true }
