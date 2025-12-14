@@ -11,8 +11,16 @@ from browserdriver import get_driver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from enum import IntEnum
 
 VUE_COMPONENT_SELECTOR = "#app > section > div:nth-child(3)"
+
+class Difficulty(IntEnum):
+    PST = 0
+    PRS = 1
+    FTR = 2
+    ETR = 4
+    BYD = 3
 
 def open_arcaea_online():
     lang = 'ko'
@@ -21,8 +29,12 @@ def open_arcaea_online():
         driver = get_driver()
         assert driver is not None, "unsupported browser"
 
+        driver.set_window_size(600, 1000)
+
         login(driver, url)
         
+        save_data.checked_page = set()
+
         while True:
             try:
                 block_pointer_events(driver)
@@ -41,7 +53,7 @@ def open_arcaea_online():
             WebDriverWait(driver, 300).until(has_page_changed)
         
     except Exception as e:
-        print(f'브라우저 종료됨')
+        print(f'브라우저 종료됨: {e}')
 
     finally:
         # TODO: 종료 전 변경된 쿠키 확인 후 업데이트?
@@ -147,12 +159,113 @@ def save_data(driver):
     )
     
     time.sleep(0.5) # TODO: compare with previous object(global variable). if same, wait again(after source code file splitting)
-    user_scores_data = wait.until(
-        lambda d: d.execute_script("return arguments[0].__vue__.userScores;", 
-            target_element
-        )
+    user_data = wait.until(
+        lambda d: d.execute_script("""
+            var vue = arguments[0].__vue__;
+            return {
+                userScores: vue.userScores,
+                dropDownSelectedValue: vue.dropDownSelectedValue,
+                searchTerm: vue.searchTerm,
+                currentPage: vue.currentPage,
+                selectedDifficulty: vue.selectedDifficulty,
+                totalPage: vue.totalPage,
+                count: vue.count
+            };
+        """, target_element)
     )
 
+    user_scores_data = user_data['userScores']
+    is_datesort = user_data['dropDownSelectedValue']['value'] == 'date'
+    is_search = user_data['searchTerm'] != ''
+
+    if not is_search and is_datesort:
+        save_data.checked_page.add(user_data['currentPage'])
+
+    difficulty = int(user_data['selectedDifficulty'])
+    pin_id = get_pin_id(difficulty)
+
+    if pin_id:
+        score_filepath = os.path.join(config['general']['cache_path'], 'user_scores.db')
+        pinned_song_date = None
+        pinned_song_id = None
+        
+        with sqlite3.connect(score_filepath) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT song_id, time_played FROM scores WHERE id = ?', (pin_id,))
+            row = cursor.fetchone()
+            if row:
+                pinned_song_id, pinned_song_date = row
+        
+        # if newest item is older, skip(return)
+        newest_item = user_scores_data[0]
+        if newest_item.get('time_played', 0) < pinned_song_date:
+            return
+
+        # iterate user_scores_data and compare name_id with pin data
+        for item in user_scores_data:
+            if item.get('song_id') != pinned_song_id:
+                continue
+            
+            # if name_id is same, compare the date
+            item_date = item.get('time_played')
+            if item_date == pinned_song_date:
+                if not is_search and is_datesort:
+                    save_data.total_page = user_data['currentPage']
+            else:
+                # iterate db data - find previous last saved data's id in db, which is not overlaped with newer one, save to pin_id and break
+                current_search_date = pinned_song_date
+                found_new_pin = False
+
+                while True:
+                    # Find candidate: newest record in DB older than current_search_date
+                    cursor.execute('SELECT id, song_id, time_played FROM scores WHERE difficulty = ? AND time_played < ? ORDER BY time_played DESC LIMIT 1', (difficulty, current_search_date))
+                    candidate_row = cursor.fetchone()
+
+                    if not candidate_row:
+                        # No more history -> Set Pin to None
+                        save_pin_id(difficulty, None)
+                        found_new_pin = True
+                        break
+                    
+                    c_id, c_song_id, c_time = candidate_row
+                    current_search_date = c_time # Move cursor for next iteration
+
+                    # Check Overlap (Is there a newer record for this song?)
+                    newer_exists = False
+
+                    # 1. Check in Fetched Data
+                    for fetched_item in user_scores_data:
+                        if fetched_item.get('song_id') == c_song_id:
+                            f_time = fetched_item.get('time_played', 0)
+                            if f_time > c_time:
+                                newer_exists = True
+                                break
+                    
+                    if newer_exists:
+                        continue # Newer exists, try previous
+
+                    # 2. Check in DB (Is there a newer record for this song?)
+                    cursor.execute('SELECT 1 FROM scores WHERE song_id = ? AND difficulty = ? AND time_played > ? LIMIT 1', (c_song_id, difficulty, c_time))
+                    if cursor.fetchone():
+                        newer_exists = True
+                    
+                    if newer_exists:
+                        continue # Newer exists, try previous
+                    
+                    # If we are here, No Newer Record exists (Stable)
+                    save_pin_id(difficulty, c_id)
+                    found_new_pin = True
+                    break
+                
+                if found_new_pin:
+                    break
+            break
+    else:
+        save_data.total_page = user_data['totalPage']
+
+    record_count = user_data['count']
+
+    # save data
     score_filename = 'user_scores.db'
     score_filepath = os.path.join(config['general']['cache_path'], score_filename)
     
@@ -250,8 +363,21 @@ def save_data(driver):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', data_to_insert)
             
+            # check all_pages_checked, if yes, call rise_all_saved_flag, find newest saved data's id in db and save to pin_id
+            if all_pages_checked():
+                print(f'{difficulty} 난이도의 최신화 완료')
+                
+                # find most recent data in current difficulty from db
+                cursor.execute('SELECT id FROM scores WHERE difficulty = ? ORDER BY time_played DESC LIMIT 1', (difficulty,))
+                
+                row = cursor.fetchone()
+                id = row[0]
+
+                # save the id to db's pin_id
+                save_pin_id(difficulty, id)
+                rise_all_saved_flag(difficulty)
+
             conn.commit()
-            
             print(f"\n'{score_filepath}' DB 파일에 {cursor.rowcount}건 저장/업데이트 완료")
             
         except Exception as e:
@@ -279,7 +405,59 @@ def get_all_cookies_chromium(driver):
             target_cookies.append(cookie)
             
     return target_cookies
-    
+
+# get pinned last saved data's id from db
+def get_pin_id(difficulty) -> int | None:
+    score_filepath = os.path.join(config['general']['cache_path'], 'user_scores.db')
+    try:
+        with sqlite3.connect(score_filepath) as conn:
+            cursor = conn.cursor()
+            # Note: Changed to use score_id as INTEGER based on user correction.
+            # Handle potential schema mismatch from previous runs gracefully
+            try:
+                cursor.execute('SELECT score_id FROM pin WHERE difficulty = ?', (difficulty,))
+            except sqlite3.OperationalError:
+                # If table exists with old schema (song_id column), drop and recreate
+                cursor.execute('DROP TABLE IF EXISTS pin')
+                cursor.execute('CREATE TABLE pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER)')
+                cursor.execute('SELECT score_id FROM pin WHERE difficulty = ?', (difficulty,))
+            
+            row = cursor.fetchone()
+            
+            if row is None:
+                # Table might be empty or this difficulty not present
+                # Ensure table exists if we dropped it or it's new
+                cursor.execute('CREATE TABLE IF NOT EXISTS pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER)')
+                cursor.execute('INSERT OR IGNORE INTO pin (difficulty, score_id) VALUES (?, NULL)', (difficulty,))
+                conn.commit()
+                return None
+            return row[0]
+            
+    except Exception as e:
+        print(f"get_pin_id 오류: {e}")
+        return None
+
+def save_pin_id(difficulty, score_id):
+    score_filepath = os.path.join(config['general']['cache_path'], 'user_scores.db')
+    try:
+        with sqlite3.connect(score_filepath) as conn:
+            cursor = conn.cursor()
+            cursor.execute('CREATE TABLE IF NOT EXISTS pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER)')
+            cursor.execute('INSERT OR REPLACE INTO pin (difficulty, score_id) VALUES (?, ?)', (difficulty, score_id))
+            conn.commit()
+    except Exception as e:
+        print(f"save_pin_id 오류: {e}")
+
+def all_pages_checked():
+    if not save_data.total_page:
+        return False
+    return set(range(1, save_data.total_page + 1)) <= save_data.checked_page
+
+def rise_all_saved_flag(difficulty):
+    # reset static variables
+    save_data.checked_page = set()
+    save_data.total_page = None
+
 def check_db_data():
     DB_FILENAME = 'user_scores.db'
     DB_FILEPATH = os.path.join(config['general']['cache_path'], DB_FILENAME)
@@ -333,4 +511,4 @@ def check_db_data():
 
 if __name__=='__main__':
     open_arcaea_online()
-    check_db_data()
+    # check_db_data()
