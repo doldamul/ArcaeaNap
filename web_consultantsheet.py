@@ -194,16 +194,22 @@ def get_creds():
     creds = None
     if os.path.exists(token_filepath):
         creds = Credentials.from_authorized_user_file(token_filepath, SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+    
+    if creds and creds.expired and creds.refresh_token:
+        try:
             creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                secret_filepath, SCOPES
-            )
-            creds = flow.run_local_server(port=0) # TODO: mannually open URL to set the browser as configuration, and handle the redirect
+        except Exception as e:
+            print(f"Token refresh failed: {e}. Re-authenticating...")
+            creds = None
+    
+    if not creds or not creds.valid:
+        flow = InstalledAppFlow.from_client_secrets_file(
+            secret_filepath, SCOPES
+        )
+        creds = flow.run_local_server(port=0) # TODO: mannually open URL to set the browser as configuration, and handle the redirect
         with open(token_filepath, "w") as token:
             token.write(creds.to_json())
+    
     return creds
 
 if __name__ == "__main__":
