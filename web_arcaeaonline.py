@@ -196,70 +196,70 @@ def save_data(driver):
             if row:
                 pinned_song_id, pinned_song_date = row
         
-        # if newest item is older, skip(return)
-        newest_item = user_scores_data[0]
-        if newest_item.get('time_played', 0) < pinned_song_date:
-            return
+                # if newest item is older, skip(return)
+                newest_item = user_scores_data[0]
+                if newest_item.get('time_played', 0) < pinned_song_date:
+                    return
 
-        # iterate user_scores_data and compare name_id with pin data
-        for item in user_scores_data:
-            if item.get('song_id') != pinned_song_id:
-                continue
-            
-            # if name_id is same, compare the date
-            item_date = item.get('time_played')
-            if item_date == pinned_song_date:
-                if not is_search and is_datesort:
-                    save_data.total_page = user_data['currentPage']
-            else:
-                # iterate db data - find previous last saved data's id in db, which is not overlaped with newer one, save to pin_id and break
-                current_search_date = pinned_song_date
-                found_new_pin = False
-
-                while True:
-                    # Find candidate: newest record in DB older than current_search_date
-                    cursor.execute('SELECT id, song_id, time_played FROM scores WHERE difficulty = ? AND time_played < ? ORDER BY time_played DESC LIMIT 1', (difficulty, current_search_date))
-                    candidate_row = cursor.fetchone()
-
-                    if not candidate_row:
-                        # No more history -> Set Pin to None
-                        save_pin_id(difficulty, None)
-                        found_new_pin = True
-                        break
+                # iterate user_scores_data and compare name_id with pin data
+                for item in user_scores_data:
+                    if item.get('song_id') != pinned_song_id:
+                        continue
                     
-                    c_id, c_song_id, c_time = candidate_row
-                    current_search_date = c_time # Move cursor for next iteration
+                    # if name_id is same, compare the date
+                    item_date = item.get('time_played')
+                    if item_date == pinned_song_date:
+                        if not is_search and is_datesort:
+                            save_data.total_page = user_data['currentPage']
+                    else:
+                        # iterate db data - find previous last saved data's id in db, which is not overlaped with newer one, save to pin_id and break
+                        current_search_date = pinned_song_date
+                        found_new_pin = False
 
-                    # Check Overlap (Is there a newer record for this song?)
-                    newer_exists = False
+                        while True:
+                            # Find candidate: newest record in DB older than current_search_date
+                            cursor.execute('SELECT id, song_id, time_played FROM scores WHERE difficulty = ? AND time_played < ? ORDER BY time_played DESC LIMIT 1', (difficulty, current_search_date))
+                            candidate_row = cursor.fetchone()
 
-                    # 1. Check in Fetched Data
-                    for fetched_item in user_scores_data:
-                        if fetched_item.get('song_id') == c_song_id:
-                            f_time = fetched_item.get('time_played', 0)
-                            if f_time > c_time:
-                                newer_exists = True
+                            if not candidate_row:
+                                # No more history -> Set Pin to None
+                                save_pin_id(difficulty, None, cursor)
+                                found_new_pin = True
                                 break
-                    
-                    if newer_exists:
-                        continue # Newer exists, try previous
+                            
+                            c_id, c_song_id, c_time = candidate_row
+                            current_search_date = c_time # Move cursor for next iteration
 
-                    # 2. Check in DB (Is there a newer record for this song?)
-                    cursor.execute('SELECT 1 FROM scores WHERE song_id = ? AND difficulty = ? AND time_played > ? LIMIT 1', (c_song_id, difficulty, c_time))
-                    if cursor.fetchone():
-                        newer_exists = True
-                    
-                    if newer_exists:
-                        continue # Newer exists, try previous
-                    
-                    # If we are here, No Newer Record exists (Stable)
-                    save_pin_id(difficulty, c_id)
-                    found_new_pin = True
+                            # Check Overlap (Is there a newer record for this song?)
+                            newer_exists = False
+
+                            # 1. Check in Fetched Data
+                            for fetched_item in user_scores_data:
+                                if fetched_item.get('song_id') == c_song_id:
+                                    f_time = fetched_item.get('time_played', 0)
+                                    if f_time > c_time:
+                                        newer_exists = True
+                                        break
+                            
+                            if newer_exists:
+                                continue # Newer exists, try previous
+
+                            # 2. Check in DB (Is there a newer record for this song?)
+                            cursor.execute('SELECT 1 FROM scores WHERE song_id = ? AND difficulty = ? AND time_played > ? LIMIT 1', (c_song_id, difficulty, c_time))
+                            if cursor.fetchone():
+                                newer_exists = True
+                            
+                            if newer_exists:
+                                continue # Newer exists, try previous
+                            
+                            # If we are here, No Newer Record exists (Stable)
+                            save_pin_id(difficulty, c_id, cursor)
+                            found_new_pin = True
+                            break
+                        
+                        if found_new_pin:
+                            break
                     break
-                
-                if found_new_pin:
-                    break
-            break
     else:
         save_data.total_page = user_data['totalPage']
 
@@ -268,8 +268,10 @@ def save_data(driver):
     # save data
     score_filename = 'user_scores.db'
     score_filepath = os.path.join(config['general']['cache_path'], score_filename)
-    
-    assert user_scores_data, '데이터 가져오는 중 오류 발생'
+
+    if not user_scores_data:
+        print("데이터 비어있음")
+        return
 
     print(f"{len(user_scores_data)}개의 플레이 기록 발견")
         
@@ -374,7 +376,7 @@ def save_data(driver):
                 id = row[0]
 
                 # save the id to db's pin_id
-                save_pin_id(difficulty, id)
+                save_pin_id(difficulty, id, cursor)
                 rise_all_saved_flag(difficulty)
 
             conn.commit()
@@ -437,14 +439,10 @@ def get_pin_id(difficulty) -> int | None:
         print(f"get_pin_id 오류: {e}")
         return None
 
-def save_pin_id(difficulty, score_id):
-    score_filepath = os.path.join(config['general']['cache_path'], 'user_scores.db')
+def save_pin_id(difficulty, score_id, cursor):
     try:
-        with sqlite3.connect(score_filepath) as conn:
-            cursor = conn.cursor()
-            cursor.execute('CREATE TABLE IF NOT EXISTS pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER)')
-            cursor.execute('INSERT OR REPLACE INTO pin (difficulty, score_id) VALUES (?, ?)', (difficulty, score_id))
-            conn.commit()
+        cursor.execute('CREATE TABLE IF NOT EXISTS pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER)')
+        cursor.execute('INSERT OR REPLACE INTO pin (difficulty, score_id) VALUES (?, ?)', (difficulty, score_id))
     except Exception as e:
         print(f"save_pin_id 오류: {e}")
 
