@@ -9,7 +9,7 @@ from db_utils import get_connection, init_songs_db
 
 WIKI_URL = 'https://arcaea.fandom.com/wiki/Songs_by_Date'
 TABLE_SELECTOR = 'table.wikitable:nth-child(1) > tbody:nth-child(2)'
-LOAD_DETECT_SELECTOR = 'a > div > img'
+LOAD_DETECT_SELECTOR = 'div:nth-child(1) > div > div > table th:nth-child(4)'
 
 # TODO: compare arcaea version with db and call open_wiki if needed
 def open_wiki():
@@ -22,8 +22,8 @@ def open_wiki():
         
         wait = WebDriverWait(driver, 30)
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, LOAD_DETECT_SELECTOR)))
-        time.sleep(0.5)
-        
+        wait.until(EC.text_to_be_present_in_element((By.CSS_SELECTOR, LOAD_DETECT_SELECTOR), 'PST'))
+
         table_body = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, TABLE_SELECTOR)))
         
         print("테이블 HTML 가져오는 중...")
