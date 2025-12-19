@@ -7,14 +7,20 @@ get_browser_name_os = None # function variable
 os = None
 
 # TODO: add firefox support
-def get_driver():
+def get_driver(headless=False):
     driver = None
     
     match get_browser_name():
         case 'chrome':
-            driver = uc.Chrome()
+            options = uc.ChromeOptions()
+            if headless:
+                options.add_argument('--headless')
+            driver = uc.Chrome(options=options)
         case 'edge':
-            driver = webdriver.Edge()
+            options = webdriver.EdgeOptions()
+            if headless:
+                options.add_argument('--headless')
+            driver = webdriver.Edge(options=options)
         case 'unsupported':
             return None
     

@@ -15,7 +15,7 @@ LOAD_DETECT_SELECTOR = 'div:nth-child(1) > div > div > table th:nth-child(4)'
 def open_wiki():
     driver = None
     try:
-        driver = get_driver()
+        driver = get_driver(headless=True)
         assert driver is not None, "unsupported browser"
         
         driver.get(WIKI_URL)
