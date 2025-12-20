@@ -34,23 +34,20 @@ def open_arcaea_online():
         login(driver, url)
         
         save_data.checked_page = set()
+        save_data.previous_user_data = None
+
+        open_arcaea_online.difficulty = None
+        open_arcaea_online.pageno = None
+        open_arcaea_online.sort = None
+        open_arcaea_online.search_text = ''
 
         while True:
+            WebDriverWait(driver, 300).until(has_page_changed)
             try:
                 block_pointer_events(driver)
                 save_data(driver)
-                
-                difficulty = driver.find_element(By.CSS_SELECTOR, ".difficulty-selector.active .label").text
-                pageno = driver.find_element(By.CSS_SELECTOR, '.selected.no-select').text
             finally:
                 restore_pointer_events(driver)
-            
-            def has_page_changed(driver):
-                new_difficulty = driver.find_element(By.CSS_SELECTOR, ".difficulty-selector.active .label").text
-                new_pageno = driver.find_element(By.CSS_SELECTOR, '.selected.no-select').text
-                return new_difficulty != difficulty or new_pageno != pageno
-            
-            WebDriverWait(driver, 300).until(has_page_changed)
         
     except Exception as e:
         print(f'브라우저 종료됨: {e}')
@@ -151,6 +148,33 @@ def login(driver, url):
         with open(login_filepath, 'w', encoding='utf-8') as f:
             json.dump(cookies, f, ensure_ascii=False)
 
+def has_page_changed(driver):
+    new_difficulty = driver.find_element(By.CSS_SELECTOR, ".difficulty-selector.active .label").text
+    new_pageno = driver.find_element(By.CSS_SELECTOR, '.selected.no-select').text
+    new_sort = driver.find_element(By.CSS_SELECTOR, 'div.dropdown > div > span:nth-child(1)').text
+
+    if new_difficulty != open_arcaea_online.difficulty or new_pageno != open_arcaea_online.pageno or new_sort != open_arcaea_online.sort:
+        open_arcaea_online.difficulty = new_difficulty
+        open_arcaea_online.pageno = new_pageno
+        open_arcaea_online.sort = new_sort
+        return True
+
+    new_search_text = driver.find_element(By.CSS_SELECTOR, 'div.search-box > input[type=text]').get_attribute('value')
+
+    if new_search_text != open_arcaea_online.search_text:
+        time.sleep(0.4)
+        waited_new_search_text = driver.find_element(By.CSS_SELECTOR, 'div.search-box > input[type=text]').get_attribute('value')
+        if new_search_text != waited_new_search_text:
+            return False
+
+        time.sleep(0.4)
+        waited_new_search_text = driver.find_element(By.CSS_SELECTOR, 'div.search-box > input[type=text]').get_attribute('value')
+        if new_search_text == waited_new_search_text:
+            open_arcaea_online.search_text = new_search_text
+            return True
+    
+    return False
+
 def save_data(driver):
     wait = WebDriverWait(driver, 30)
             
@@ -158,110 +182,124 @@ def save_data(driver):
         EC.presence_of_element_located((By.CSS_SELECTOR, VUE_COMPONENT_SELECTOR))
     )
     
-    time.sleep(0.5) # TODO: compare with previous object(global variable). if same, wait again(after source code file splitting)
-    user_data = wait.until(
-        lambda d: d.execute_script("""
-            var vue = arguments[0].__vue__;
-            return {
-                userScores: vue.userScores,
-                dropDownSelectedValue: vue.dropDownSelectedValue,
-                searchTerm: vue.searchTerm,
-                currentPage: vue.currentPage,
-                selectedDifficulty: vue.selectedDifficulty,
-                totalPage: vue.totalPage,
-                count: vue.count
-            };
-        """, target_element)
-    )
+    user_data = None
+    while(True):
+        user_data = wait.until(
+            lambda d: d.execute_script("""
+                var vue = arguments[0].__vue__;
+                return {
+                    userScores: vue.userScores,
+                    dropDownSelectedValue: vue.dropDownSelectedValue,
+                    searchTerm: vue.searchTerm,
+                    currentPage: vue.currentPage,
+                    selectedDifficulty: vue.selectedDifficulty,
+                    totalPage: vue.totalPage,
+                    count: vue.count
+                };
+            """, target_element)
+        )
+
+        if user_data == save_data.previous_user_data:
+            time.sleep(0.5)
+            continue
+
+        save_data.previous_user_data = user_data
+        break
 
     user_scores_data = user_data['userScores']
+
+    if not user_scores_data or len(user_scores_data) == 0:
+        print('current page is empty')
+        return
+    
     is_datesort = user_data['dropDownSelectedValue']['value'] == 'date'
     is_search = user_data['searchTerm'] != ''
-
-    if not is_search and is_datesort:
-        save_data.checked_page.add(user_data['currentPage'])
 
     difficulty = int(user_data['selectedDifficulty'])
     pin_id = get_pin_id(difficulty)
 
-    if pin_id:
-        score_filepath = os.path.join(config['general']['cache_path'], 'user_scores.db')
-        pinned_song_date = None
-        pinned_song_id = None
+    if not is_search and is_datesort:
+        save_data.checked_page.add(user_data['currentPage'])
         
-        with sqlite3.connect(score_filepath) as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT song_id, time_played FROM scores WHERE id = ?', (pin_id,))
-            row = cursor.fetchone()
-            if row:
-                pinned_song_id, pinned_song_date = row
-        
-                # if newest item is older, skip(return)
-                newest_item = user_scores_data[0]
-                if newest_item.get('time_played', 0) < pinned_song_date:
-                    return
+        if pin_id:
+            score_filepath = os.path.join(config['general']['cache_path'], 'user_scores.db')
+            pinned_song_date = None
+            pinned_song_id = None
+            
+            with sqlite3.connect(score_filepath) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT song_id, time_played FROM scores WHERE id = ?', (pin_id,))
+                row = cursor.fetchone()
+                if row:
+                    pinned_song_id, pinned_song_date = row
+            
+                    # if newest item is older, skip(return)
+                    newest_item = user_scores_data[0]
+                    if newest_item.get('time_played', 0) < pinned_song_date:
+                        print('newest item is older than pinned')
+                        return
 
-                # iterate user_scores_data and compare name_id with pin data
-                for item in user_scores_data:
-                    if item.get('song_id') != pinned_song_id:
-                        continue
-                    
-                    # if name_id is same, compare the date
-                    item_date = item.get('time_played')
-                    if item_date == pinned_song_date:
-                        if not is_search and is_datesort:
-                            save_data.total_page = user_data['currentPage']
-                    else:
-                        # iterate db data - find previous last saved data's id in db, which is not overlaped with newer one, save to pin_id and break
-                        current_search_date = pinned_song_date
-                        found_new_pin = False
+                    # iterate user_scores_data and compare name_id with pin data
+                    for item in user_scores_data:
+                        if item.get('song_id') != pinned_song_id:
+                            continue
+                        
+                        # if name_id is same, compare the date
+                        item_date = item.get('time_played')
+                        if item_date == pinned_song_date:
+                            if not is_search and is_datesort:
+                                save_data.total_page = user_data['currentPage']
+                        else:
+                            # iterate db data - find previous last saved data's id in db, which is not overlaped with newer one, save to pin_id and break
+                            current_search_date = pinned_song_date
+                            found_new_pin = False
 
-                        while True:
-                            # Find candidate: newest record in DB older than current_search_date
-                            cursor.execute('SELECT id, song_id, time_played FROM scores WHERE difficulty = ? AND time_played < ? ORDER BY time_played DESC LIMIT 1', (difficulty, current_search_date))
-                            candidate_row = cursor.fetchone()
+                            while True:
+                                # Find candidate: newest record in DB older than current_search_date
+                                cursor.execute('SELECT id, song_id, time_played FROM scores WHERE difficulty = ? AND time_played < ? ORDER BY time_played DESC LIMIT 1', (difficulty, current_search_date))
+                                candidate_row = cursor.fetchone()
 
-                            if not candidate_row:
-                                # No more history -> Set Pin to None
-                                save_pin_id(difficulty, None, cursor)
+                                if not candidate_row:
+                                    # No more history -> Set Pin to None
+                                    save_pin_id(difficulty, None, cursor)
+                                    found_new_pin = True
+                                    break
+                                
+                                c_id, c_song_id, c_time = candidate_row
+                                current_search_date = c_time # Move cursor for next iteration
+
+                                # Check Overlap (Is there a newer record for this song?)
+                                newer_exists = False
+
+                                # 1. Check in Fetched Data
+                                for fetched_item in user_scores_data:
+                                    if fetched_item.get('song_id') == c_song_id:
+                                        f_time = fetched_item.get('time_played', 0)
+                                        if f_time > c_time:
+                                            newer_exists = True
+                                            break
+                                
+                                if newer_exists:
+                                    continue # Newer exists, try previous
+
+                                # 2. Check in DB (Is there a newer record for this song?)
+                                cursor.execute('SELECT 1 FROM scores WHERE song_id = ? AND difficulty = ? AND time_played > ? LIMIT 1', (c_song_id, difficulty, c_time))
+                                if cursor.fetchone():
+                                    newer_exists = True
+                                
+                                if newer_exists:
+                                    continue # Newer exists, try previous
+                                
+                                # If we are here, No Newer Record exists (Stable)
+                                save_pin_id(difficulty, c_id, cursor)
                                 found_new_pin = True
                                 break
                             
-                            c_id, c_song_id, c_time = candidate_row
-                            current_search_date = c_time # Move cursor for next iteration
-
-                            # Check Overlap (Is there a newer record for this song?)
-                            newer_exists = False
-
-                            # 1. Check in Fetched Data
-                            for fetched_item in user_scores_data:
-                                if fetched_item.get('song_id') == c_song_id:
-                                    f_time = fetched_item.get('time_played', 0)
-                                    if f_time > c_time:
-                                        newer_exists = True
-                                        break
-                            
-                            if newer_exists:
-                                continue # Newer exists, try previous
-
-                            # 2. Check in DB (Is there a newer record for this song?)
-                            cursor.execute('SELECT 1 FROM scores WHERE song_id = ? AND difficulty = ? AND time_played > ? LIMIT 1', (c_song_id, difficulty, c_time))
-                            if cursor.fetchone():
-                                newer_exists = True
-                            
-                            if newer_exists:
-                                continue # Newer exists, try previous
-                            
-                            # If we are here, No Newer Record exists (Stable)
-                            save_pin_id(difficulty, c_id, cursor)
-                            found_new_pin = True
-                            break
-                        
-                        if found_new_pin:
-                            break
-                    break
-    else:
-        save_data.total_page = user_data['totalPage']
+                            if found_new_pin:
+                                break
+                        break
+        else:
+            save_data.total_page = user_data['totalPage']
 
     record_count = user_data['count']
 
