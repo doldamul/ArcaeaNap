@@ -33,8 +33,13 @@ def open_arcaea_online():
 
         login(driver, url)
         
-        save_data.checked_page = set()
         save_data.previous_user_data = None
+        save_data.checked_page = {}
+        save_data.total_page = {}
+
+        for difficulty in Difficulty:
+            save_data.checked_page[difficulty] = set()
+            save_data.total_page[difficulty] = None
 
         open_arcaea_online.difficulty = None
         open_arcaea_online.pageno = None
@@ -219,7 +224,7 @@ def save_data(driver):
     pin_id = get_pin_id(difficulty)
 
     if not is_search and is_datesort:
-        save_data.checked_page.add(user_data['currentPage'])
+        save_data.checked_page[difficulty].add(user_data['currentPage'])
         
         if pin_id:
             score_filepath = os.path.join(config['general']['cache_path'], 'user_scores.db')
@@ -248,7 +253,7 @@ def save_data(driver):
                         item_date = item.get('time_played')
                         if item_date == pinned_song_date:
                             if not is_search and is_datesort:
-                                save_data.total_page = user_data['currentPage']
+                                save_data.total_page[difficulty] = user_data['totalPage']
                         else:
                             # iterate db data - find previous last saved data's id in db, which is not overlaped with newer one, save to pin_id and break
                             current_search_date = pinned_song_date
@@ -299,7 +304,7 @@ def save_data(driver):
                                 break
                         break
         else:
-            save_data.total_page = user_data['totalPage']
+            save_data.total_page[difficulty] = user_data['totalPage']
 
     record_count = user_data['count']
 
@@ -404,9 +409,9 @@ def save_data(driver):
             ''', data_to_insert)
             
             # check all_pages_checked, if yes, call rise_all_saved_flag, find newest saved data's id in db and save to pin_id
-            if all_pages_checked():
                 print(f'{difficulty} 난이도의 최신화 완료')
                 
+            if all_pages_checked(difficulty):
                 # find most recent data in current difficulty from db
                 cursor.execute('SELECT id FROM scores WHERE difficulty = ? ORDER BY time_played DESC LIMIT 1', (difficulty,))
                 
@@ -484,15 +489,15 @@ def save_pin_id(difficulty, score_id, cursor):
     except Exception as e:
         print(f"save_pin_id 오류: {e}")
 
-def all_pages_checked():
-    if not save_data.total_page:
+def all_pages_checked(difficulty):
+    if not save_data.total_page[difficulty]:
         return False
-    return set(range(1, save_data.total_page + 1)) <= save_data.checked_page
+    return set(range(1, save_data.total_page[difficulty] + 1)) <= save_data.checked_page[difficulty]
 
 def rise_all_saved_flag(difficulty):
     # reset static variables
-    save_data.checked_page = set()
-    save_data.total_page = None
+    save_data.checked_page[difficulty] = set()
+    save_data.total_page[difficulty] = None
 
 def check_db_data():
     DB_FILENAME = 'user_scores.db'
