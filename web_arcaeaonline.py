@@ -409,17 +409,27 @@ def save_data(driver):
             ''', data_to_insert)
             
             # check all_pages_checked, if yes, call rise_all_saved_flag, find newest saved data's id in db and save to pin_id
-                print(f'{difficulty} 난이도의 최신화 완료')
-                
             if all_pages_checked(difficulty):
                 # find most recent data in current difficulty from db
                 cursor.execute('SELECT id FROM scores WHERE difficulty = ? ORDER BY time_played DESC LIMIT 1', (difficulty,))
                 
                 row = cursor.fetchone()
-                id = row[0]
+                recent_id = None
+                if row:
+                    recent_id = row[0]
+                    
+                # Check if the newest data is different from the current pin (avoid log spam)
+                try:
+                    cursor.execute('SELECT score_id FROM pin WHERE difficulty = ?', (difficulty,))
+                    pin_row = cursor.fetchone()
+                    current_pin_id = pin_row[0] if pin_row else None
+                except Exception:
+                    current_pin_id = None
 
-                # save the id to db's pin_id
-                save_pin_id(difficulty, id, cursor)
+                if recent_id != current_pin_id:
+                    save_pin_id(difficulty, recent_id, cursor)
+                    print(f'{difficulty} 난이도의 최신화 완료')
+                
                 rise_all_saved_flag(difficulty)
 
             conn.commit()
