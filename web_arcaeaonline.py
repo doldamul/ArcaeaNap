@@ -494,8 +494,20 @@ def get_pin_id(difficulty) -> int | None:
 
 def save_pin_id(difficulty, score_id, cursor):
     try:
-        cursor.execute('CREATE TABLE IF NOT EXISTS pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER)')
-        cursor.execute('INSERT OR REPLACE INTO pin (difficulty, score_id) VALUES (?, ?)', (difficulty, score_id))
+        # Check if updated_at column exists (migration)
+        try:
+            cursor.execute('SELECT updated_at FROM pin LIMIT 1')
+        except sqlite3.OperationalError:
+            try:
+                # If table exists but column missing, add it
+                cursor.execute('ALTER TABLE pin ADD COLUMN updated_at INTEGER')
+            except sqlite3.OperationalError:
+                # If table doesn't exist, create it with new schema
+                cursor.execute('CREATE TABLE IF NOT EXISTS pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER, updated_at INTEGER)')
+        
+        # Use milliseconds timestamp like time_played
+        current_time = int(time.time() * 1000)
+        cursor.execute('INSERT OR REPLACE INTO pin (difficulty, score_id, updated_at) VALUES (?, ?, ?)', (difficulty, score_id, current_time))
     except Exception as e:
         print(f"save_pin_id 오류: {e}")
 
