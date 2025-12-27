@@ -244,6 +244,21 @@ Item {
                     }
 
                     Item { height: 10 }
+                    
+                    // --- Log Data Model ---
+                    ListModel {
+                        id: logModel
+                    }
+
+                    Connections {
+                        target: analysisHandler
+                        function onLogAdded(message) {
+                            logModel.append({ "logText": message })
+                            if (logView.count > 0) {
+                                logView.positionViewAtEnd()
+                            }
+                        }
+                    }
 
                     Row {
                         spacing: 8
@@ -259,21 +274,22 @@ Item {
                         radius: 12
                         border.color: "#EEEEEE"
 
-                        Text {
+                        ListView {
+                            id: logView
                             anchors.fill: parent
                             anchors.margins: 15
-                            font.family: "Consolas, monospace"
-                            font.pixelSize: 11
-                            lineHeight: 1.5
-                            color: "#999"
-                            wrapMode: Text.Wrap
-                            textFormat: Text.RichText
-                            text: "[10:42:01] Initializing headless browser...<br>" +
-                                  "[10:42:03] Connection established.<br>" +
-                                  "[10:42:05] Navigating to arcaea.lowiro.com...<br>" +
-                                  "[10:42:08] Requesting packet 401... <font color='#4CAF50'><b>OK</b></font><br>" +
-                                  "[10:42:11] Parsing 'Song_A'... <font color='#007AFF'><b>Done</b></font><br>" +
-                                  "[10:42:12] Parsing 'Song_B'... <font color='#007AFF'><b>Done</b></font>"
+                            clip: true
+                            model: logModel
+                            spacing: 4
+
+                            delegate: Text {
+                                width: ListView.view.width
+                                text: logText
+                                font.family: "Consolas, monospace"
+                                font.pixelSize: 11
+                                color: "#666"
+                                wrapMode: Text.Wrap
+                            }
                         }
                     }
                 }

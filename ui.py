@@ -4,20 +4,41 @@ import os
 import threading
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtQml import QQmlApplicationEngine
-from PyQt6.QtCore import QUrl, QObject, pyqtSlot
-from web_arcaeaonline import open_arcaea_online
+from PyQt6.QtCore import QUrl, QObject, pyqtSlot, pyqtSignal
+from web_arcaeaonline import ArcaeaOnline
 from web_consultantsheet import open_sheet
 from web_wiki import open_wiki
 
 class AnalysisHandler(QObject):
+    logAdded = pyqtSignal(str, arguments=['message'])
+
     def __init__(self):
         super().__init__()
+        self.analyzer = None
+        self.thread = None
 
     @pyqtSlot()
     def startAnalysis(self):
+        if self.thread and self.thread.is_alive():
+            print("Analysis already running.")
+            return
+
         print("Starting analysis thread...")
-        thread = threading.Thread(target=open_arcaea_online, daemon=True)
-        thread.start()
+        self.analyzer = ArcaeaOnline()
+        self.analyzer.set_log_callback(self.emit_log)
+        
+        self.thread = threading.Thread(target=self.analyzer.start, daemon=True)
+        self.thread.start()
+
+    @pyqtSlot()
+    def stopAnalysis(self):
+        if self.analyzer:
+            print("Stopping analysis...")
+            self.analyzer.stop()
+            # Thread will join naturally as start() returns
+
+    def emit_log(self, message):
+        self.logAdded.emit(message)
 
 def main():
     app = QGuiApplication(sys.argv)

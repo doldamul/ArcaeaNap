@@ -36,6 +36,7 @@ class ArcaeaOnline:
     def __init__(self):
         self.status = AnalysisStatus()
         self.driver = None
+        self.log_callback = None
         
         # State variables
         self.previous_user_data = None
@@ -50,6 +51,9 @@ class ArcaeaOnline:
         for difficulty in Difficulty:
             self.checked_page[difficulty] = set()
             self.total_page[difficulty] = None
+
+    def set_log_callback(self, callback):
+        self.log_callback = callback
 
     def start(self):
         self.status.is_running = True
@@ -579,6 +583,9 @@ class ArcaeaOnline:
         formatted_message = f"{timestamp} {message}"
         self.status.logs.append(formatted_message)
         print(formatted_message)
+        
+        if self.log_callback:
+            self.log_callback(formatted_message)
 
 def check_db_data():
     DB_FILENAME = 'user_scores.db'
