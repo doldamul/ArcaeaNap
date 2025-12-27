@@ -172,6 +172,10 @@ def save_to_db(data):
             
         conn.commit()
         print(f"Saved/Updated {updated_count} charts to database.")
+        
+        # Try to fill arcaea_id from user_scores.db
+        from db_utils import fill_missing_arcaea_ids_from_scores
+        fill_missing_arcaea_ids_from_scores()
     
     except Exception as e:
         print(f"Error saving to DB: {e}")

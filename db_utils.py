@@ -98,6 +98,7 @@ TITLE_ALIAS_MAP = {
     'Anokumene': 'Anökumene',
     'neo kosmo': 'nέo κósmo',
     'Alice a la mode': 'Alice à la mode',
+    'April Showers': 'April showers',
 }
 
 def resolve_song_id(cursor, title):
@@ -159,3 +160,60 @@ def resolve_song_id_for_ao(cursor, ao_id, ao_title):
     else:
         cursor.execute('INSERT INTO songs (title, arcaea_id) VALUES (?, ?)', (target_title, ao_id))
         return cursor.lastrowid
+
+def fill_missing_arcaea_ids_from_scores():
+    """
+    Backfills missing arcaea_id in songs.db using data from user_scores.db.
+    """
+    scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
+    if not os.path.exists(scores_db_path):
+        return
+
+    songs_conn = get_connection()
+    songs_cursor = songs_conn.cursor()
+    
+    # Get songs with missing arcaea_id
+    songs_cursor.execute("SELECT id, title FROM songs WHERE arcaea_id IS NULL OR arcaea_id = ''")
+    missing_songs = songs_cursor.fetchall()
+    
+    if not missing_songs:
+        songs_conn.close()
+        return
+
+    try:
+        updated_count = 0
+        with sqlite3.connect(scores_db_path) as scores_conn:
+            scores_cursor = scores_conn.cursor()
+            
+            for song_id, title in missing_songs:
+                # 1. Try exact title match in user_scores.db
+                scores_cursor.execute("SELECT arcaea_id FROM scores WHERE title = ? LIMIT 1", (title,))
+                row = scores_cursor.fetchone()
+                
+                arcaea_id = None
+                if row:
+                    arcaea_id = row[0]
+                else:
+                    # 2. Try Reverse AO_ID_MAP Lookup
+                    # Check if current song title is a canonical title in the map
+                    # If so, the key is the candidate arcaea_id
+                    for map_id, map_title in AO_ID_MAP.items():
+                        if map_title == title:
+                            # Verify if this ID exists in user_scores.db
+                            scores_cursor.execute("SELECT arcaea_id FROM scores WHERE arcaea_id = ? LIMIT 1", (map_id,))
+                            if scores_cursor.fetchone():
+                                arcaea_id = map_id
+                            break
+                            
+                if arcaea_id:
+                    songs_cursor.execute("UPDATE songs SET arcaea_id = ? WHERE id = ?", (arcaea_id, song_id))
+                    updated_count += 1
+        
+        songs_conn.commit()
+        if updated_count > 0:
+            print(f"Backfilled arcaea_id for {updated_count} songs from user_scores.db")
+            
+    except Exception as e:
+        print(f"Error filling arcaea_ids: {e}")
+    finally:
+        songs_conn.close()

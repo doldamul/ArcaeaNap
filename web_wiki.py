@@ -91,7 +91,7 @@ def save_data(data):
     
     try:
         updated_count = 0
-        from db_utils import resolve_song_id_with_artist, update_song_metadata
+        from db_utils import resolve_song_id_with_artist, update_song_metadata, fill_missing_arcaea_ids_from_scores
         
         for title, artist, length_str, bpm in data:
             # Convert length "m:ss" to seconds (int)
@@ -113,6 +113,9 @@ def save_data(data):
             
         conn.commit()
         print(f"DB 저장 완료: {updated_count}건 처리됨")
+        
+        # Try to fill arcaea_id from user_scores.db
+        fill_missing_arcaea_ids_from_scores()
         
     except Exception as e:
         print(f"DB 저장 중 오류 발생: {e}")
