@@ -78,6 +78,9 @@ AO_ID_MAP = {
     'quonwacca': 'Quon(WACCA)', 
     'genesis': 'Genesis(Arcaea)',
     'genesischunithm': 'Genesis(CHUNITHM)',
+    'ii': '͟͝͞Ⅱ́̕',
+    'mu': 'μ', 
+    'neokosmo': 'nέo κósmo',
 }
 
 # Standardizes Title differences between Wiki and DB
