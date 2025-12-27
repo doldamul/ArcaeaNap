@@ -383,9 +383,15 @@ class ArcaeaOnline:
 
             self.log(f"Found {len(user_scores_data)} play records.")
             
-            init_songs_db()
-            songs_conn = get_connection()
-            songs_cursor = songs_conn.cursor()
+            # Weak dependency for songs.db
+            songs_conn = None
+            songs_cursor = None
+            try:
+                init_songs_db()
+                songs_conn = get_connection()
+                songs_cursor = songs_conn.cursor()
+            except Exception as e:
+                self.log(f"Warning: Could not connect to songs.db. Data linking will be skipped. ({e})")
 
             with sqlite3.connect(score_filepath) as conn:
                 cursor = conn.cursor()
@@ -395,7 +401,7 @@ class ArcaeaOnline:
                     cursor.execute('''
                         CREATE TABLE IF NOT EXISTS scores (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            song_id TEXT,
+                            arcaea_id TEXT,
                             difficulty INTEGER,
                             score INTEGER,
                             shiny_perfect_count INTEGER,
@@ -412,17 +418,30 @@ class ArcaeaOnline:
                             user_id INTEGER,
                             yearly_play_count INTEGER,
                             score_below_max INTEGER,
-                            db_song_id INTEGER,
-                            UNIQUE(song_id, difficulty, time_played)
+                            UNIQUE(arcaea_id, difficulty, time_played)
                         )
                     ''')
                     
-                    # Check if db_song_id exists (migration)
+                    # Migration: song_id -> arcaea_id
+                    cursor.execute("PRAGMA table_info(scores)")
+                    columns_info = cursor.fetchall()
+                    columns = [info[1] for info in columns_info]
+                    
+                    if 'song_id' in columns and 'arcaea_id' not in columns:
+                        self.log("Migrating schema: renaming 'song_id' to 'arcaea_id'...")
+                        cursor.execute("ALTER TABLE scores RENAME COLUMN song_id TO arcaea_id")
+
+                    # Migration: remove db_song_id
+                    # Refresh columns after rename
                     cursor.execute("PRAGMA table_info(scores)")
                     columns = [info[1] for info in cursor.fetchall()]
-                    if 'db_song_id' not in columns:
-                        self.log("Adding 'db_song_id' column to scores table...")
-                        cursor.execute("ALTER TABLE scores ADD COLUMN db_song_id INTEGER")
+                    
+                    if 'db_song_id' in columns:
+                        self.log("Migrating schema: removing 'db_song_id'...")
+                        try:
+                            cursor.execute("ALTER TABLE scores DROP COLUMN db_song_id")
+                        except Exception as e:
+                            self.log(f"Warning: Failed to drop 'db_song_id' column (SQLite version might be old): {e}")
 
                     data_to_insert = []
                     for item in user_scores_data:
@@ -432,9 +451,18 @@ class ArcaeaOnline:
                         else:
                             title_str = str(title_obj) if title_obj else ''
                         
-                        # Resolve db_song_id from songs.db
+                        
+                        # Weak dependency: Update songs.db if possible
                         ao_song_id = item.get('song_id')
-                        db_song_id = resolve_song_id_for_ao(songs_cursor, ao_song_id, title_str)
+                        
+                        if songs_cursor:
+                            try:
+                                resolve_song_id_for_ao(songs_cursor, ao_song_id, title_str)
+                            except Exception as e:
+                                # Start a new transaction or ignore, assuming resolve_song_id handles its own simple logic?
+                                # Ideally we shouldn't break the loop.
+                                # resolve_song_id_for_ao performs Insert/Update.
+                                pass
 
                         row = (
                             ao_song_id,
@@ -453,8 +481,7 @@ class ArcaeaOnline:
                             item.get('artist'),
                             item.get('user_id'),
                             item.get('yearly_play_count'),
-                            item.get('score_below_max'),
-                            db_song_id
+                            item.get('score_below_max')
                         )
                         data_to_insert.append(row)
                     
@@ -462,10 +489,10 @@ class ArcaeaOnline:
 
                     cursor.executemany('''
                         INSERT OR IGNORE INTO scores 
-                        (song_id, difficulty, score, shiny_perfect_count, perfect_count, near_count, 
+                        (arcaea_id, difficulty, score, shiny_perfect_count, perfect_count, near_count, 
                             miss_count, health, modifier, time_played, clear_type, best_clear_type, 
-                            title, artist, user_id, yearly_play_count, score_below_max, db_song_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            title, artist, user_id, yearly_play_count, score_below_max)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', data_to_insert)
                     
                     # check all_pages_checked
@@ -500,7 +527,9 @@ class ArcaeaOnline:
                     import traceback
                     traceback.print_exc()
                 finally:
-                    songs_conn.close()
+                    if songs_conn:
+                        songs_conn.commit()
+                        songs_conn.close()
         
         finally:
             if self.status.status == 'analyzing':
@@ -621,9 +650,9 @@ def check_db_data():
         pd.set_option('display.float_format', lambda x: '%.2f' % x)
         print(df[['score', 'shiny_perfect_count', 'miss_count']].describe())
         
-        sample_song_id = df['song_id'].iloc[0]
+        sample_song_id = df['arcaea_id'].iloc[0]
         print(f"\n4. History for song ({sample_song_id}):")
-        print(df[df['song_id'] == sample_song_id][['play_date', 'title', 'score', 'perfect_count']])
+        print(df[df['arcaea_id'] == sample_song_id][['play_date', 'title', 'score', 'perfect_count']])
 
     except Exception as e:
         print(f"Error checking DB: {e}")
