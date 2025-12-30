@@ -11,12 +11,15 @@ from browserdriver import get_driver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchWindowException, WebDriverException
 from enum import IntEnum
 from dataclasses import dataclass, field
 from collections import deque
 from typing import Dict, Optional, Set
 
 VUE_COMPONENT_SELECTOR = "#app > section > div:nth-child(3)"
+LOGIN_COMPONENT_SELECTOR = ".button.login-button"
+ARCAEAONLINE_DOMAIN = "arcaea.lowiro.com"
 
 class Difficulty(IntEnum):
     PST = 0
@@ -87,7 +90,7 @@ class ArcaeaOnline:
                 try:
                     # Polling for page change with short timeout to check is_running frequency
                     WebDriverWait(self.driver, 1).until(self.has_page_changed)
-                except Exception:
+                except TimeoutException:
                     continue
                 
                 if not self.status.is_running:
@@ -103,6 +106,12 @@ class ArcaeaOnline:
                 
                 # Check directly if driver is alive
                 self.driver.title
+        except (NoSuchWindowException, WebDriverException) as e:
+            msg = str(e).lower()
+            if isinstance(e, NoSuchWindowException) or 'disconnected' in msg or 'not reachable' in msg or 'target closed' in msg:
+                self.log(f'Browser closed by user.\n')
+            else:
+                self.log(f'Browser terminated: {e}')
         except Exception as e:
             self.log(f'Browser terminated: {e}')
         finally:
@@ -147,17 +156,26 @@ class ArcaeaOnline:
             self.driver.execute_cdp_cmd('Network.disable', {})
             self.driver.get(url)
             
-            # Verify session: Check URL redirection or Component load
+            # Verify session
             try:
-                WebDriverWait(self.driver, 30).until(
-                    lambda d: "/login" in d.current_url or d.find_elements(By.CSS_SELECTOR, VUE_COMPONENT_SELECTOR)
-                )
+                def check_login(d):
+                    login_btns = d.find_elements(By.CSS_SELECTOR, LOGIN_COMPONENT_SELECTOR)
+                    if any(btn.is_displayed() for btn in login_btns):
+                        return "expired"
+                    
+                    vue_comps = d.find_elements(By.CSS_SELECTOR, VUE_COMPONENT_SELECTOR)
+                    if any(comp.is_displayed() for comp in vue_comps):
+                        return "verified"
+                    
+                    return False
+
+                result = WebDriverWait(self.driver, 30).until(check_login)
                 
-                if "/login" in self.driver.current_url:
+                if result == "verified":
+                    self.log("Login session verified.")
+                else:
                     self.log("Login session expired.")
                     login_exists = False
-                else:
-                    self.log("Login session verified.")
 
             except Exception:
                 self.log("Login session verification timeout.")
@@ -165,29 +183,10 @@ class ArcaeaOnline:
             
         if not login_exists: # manual login
             self.log("Waiting for manual login...")
-            new_sid = None
-            self.driver.get(url)
-            
-            try:
-                WebDriverWait(self.driver, 30).until(
-                    lambda d: d.get_cookie('sid') is not None
-                )
-                cookie = self.driver.get_cookie('sid')
-                old_sid = cookie['value']
-            except Exception as e:
-                self.log(f'Error reading old_sid: {e}')
-                raise
-                
-            def has_sid_changed(driver):
-                try:
-                    cookie = driver.get_cookie('sid')
-                    new_sid = cookie['value']
-                except Exception:
-                    return False
-                return new_sid != old_sid
-            
-            WebDriverWait(self.driver, 300).until(has_sid_changed)
-            WebDriverWait(self.driver, 30).until(
+            if ARCAEAONLINE_DOMAIN not in self.driver.current_url:
+                self.driver.get(url)
+
+            WebDriverWait(self.driver, 300).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, VUE_COMPONENT_SELECTOR))
             )
             
