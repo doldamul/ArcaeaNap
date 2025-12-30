@@ -61,7 +61,7 @@ class ArcaeaOnline:
         url = f'https://arcaea.lowiro.com/{lang}/profile/scores?page=1'
         
         try:
-            self.log("Initializing headless browser...")
+            self.log("Initializing browser...")
             self.driver = get_driver()
             assert self.driver is not None, "unsupported browser"
 
@@ -124,7 +124,7 @@ class ArcaeaOnline:
         login_exists = os.path.exists(login_filepath) and os.path.isfile(login_filepath) and config['general']['auto_login']
         
         if login_exists: # session load
-            self.log("Loading saved session...")
+            self.log("Loading saved login session...")
             with open(login_filepath, 'r', encoding='utf-8') as f:
                 login_cookies = json.load(f)
             
@@ -154,13 +154,13 @@ class ArcaeaOnline:
                 )
                 
                 if "/login" in self.driver.current_url:
-                    self.log("Session expired (redirected to login). Falling back to manual login...")
+                    self.log("Login session expired.")
                     login_exists = False
                 else:
-                    self.log("Session verified successfully.")
+                    self.log("Login session verified.")
 
             except Exception:
-                self.log("Session verification timed out. Falling back to manual login...")
+                self.log("Login session verification timeout.")
                 login_exists = False
             
         if not login_exists: # manual login
@@ -191,7 +191,7 @@ class ArcaeaOnline:
                 EC.presence_of_element_located((By.CSS_SELECTOR, VUE_COMPONENT_SELECTOR))
             )
             
-            self.log("Login successful.")
+            self.log("Login complete.")
 
             # save login session
             LOGIN_COOKIE = {'sid', '__stripe_sid', '__stripe_mid'}
@@ -296,8 +296,6 @@ class ArcaeaOnline:
                 self.log('Data save canceled: Current page is empty')
                 self.status.status = 'ready'
                 return
-            
-            self.log('Saving data...')
 
             is_datesort = user_data['dropDownSelectedValue']['value'] == 'date'
             is_search = user_data['searchTerm'] != ''
@@ -337,7 +335,7 @@ class ArcaeaOnline:
                                 if item_date == pinned_song_date:
                                     # found pin, pin page is the last page of new data
                                     self.total_page[difficulty] = user_data['currentPage']
-                                    self.log('Last page of new data is found.')
+                                    self.log('Found last page of new data.')
                                     break
 
                                 else:
@@ -439,26 +437,6 @@ class ArcaeaOnline:
                         )
                     ''')
                     
-                    # Migration: song_id -> arcaea_id
-                    cursor.execute("PRAGMA table_info(scores)")
-                    columns_info = cursor.fetchall()
-                    columns = [info[1] for info in columns_info]
-                    
-                    if 'song_id' in columns and 'arcaea_id' not in columns:
-                        self.log("Migrating schema: renaming 'song_id' to 'arcaea_id'...")
-                        cursor.execute("ALTER TABLE scores RENAME COLUMN song_id TO arcaea_id")
-
-                    # Migration: remove db_song_id
-                    # Refresh columns after rename
-                    cursor.execute("PRAGMA table_info(scores)")
-                    columns = [info[1] for info in cursor.fetchall()]
-                    
-                    if 'db_song_id' in columns:
-                        self.log("Migrating schema: removing 'db_song_id'...")
-                        try:
-                            cursor.execute("ALTER TABLE scores DROP COLUMN db_song_id")
-                        except Exception as e:
-                            self.log(f"Warning: Failed to drop 'db_song_id' column (SQLite version might be old): {e}")
 
                     data_to_insert = []
                     for item in user_scores_data:
@@ -532,13 +510,15 @@ class ArcaeaOnline:
 
                         if recent_id != current_pin_id:
                             self.save_pin_id(difficulty, recent_id, cursor)
-                            self.log(f'Updated pin for difficulty {difficulty}')
+                            self.log(f'Updated pin for {Difficulty(difficulty).name}')
                         
                         self.rise_all_saved_flag(difficulty)
 
                     conn.commit()
-                    self.log(f"Saved/Updated {cursor.rowcount} records in '{score_filepath}'")
-                    
+                    if cursor.rowcount > 0:
+                        self.log(f"Saved/Updated {cursor.rowcount} records in '{score_filepath}'")
+                    else:
+                        self.log(f"No records to save in '{score_filepath}'")
                 except Exception as e:
                     self.log(f"Error saving to DB: {e}")
                     import traceback
@@ -598,13 +578,7 @@ class ArcaeaOnline:
 
     def save_pin_id(self, difficulty, score_id, cursor):
         try:
-            try:
-                cursor.execute('SELECT updated_at FROM pin LIMIT 1')
-            except sqlite3.OperationalError:
-                try:
-                    cursor.execute('ALTER TABLE pin ADD COLUMN updated_at INTEGER')
-                except sqlite3.OperationalError:
-                    cursor.execute('CREATE TABLE IF NOT EXISTS pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER, updated_at INTEGER)')
+            cursor.execute('CREATE TABLE IF NOT EXISTS pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER, updated_at INTEGER)')
             
             current_time = int(time.time() * 1000)
             cursor.execute('INSERT OR REPLACE INTO pin (difficulty, score_id, updated_at) VALUES (?, ?, ?)', (difficulty, score_id, current_time))
