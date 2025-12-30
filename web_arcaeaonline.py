@@ -147,7 +147,23 @@ class ArcaeaOnline:
             self.driver.execute_cdp_cmd('Network.disable', {})
             self.driver.get(url)
             
-        else: # manual login
+            # Verify session: Check URL redirection or Component load
+            try:
+                WebDriverWait(self.driver, 30).until(
+                    lambda d: "/login" in d.current_url or d.find_elements(By.CSS_SELECTOR, VUE_COMPONENT_SELECTOR)
+                )
+                
+                if "/login" in self.driver.current_url:
+                    self.log("Session expired (redirected to login). Falling back to manual login...")
+                    login_exists = False
+                else:
+                    self.log("Session verified successfully.")
+
+            except Exception:
+                self.log("Session verification timed out. Falling back to manual login...")
+                login_exists = False
+            
+        if not login_exists: # manual login
             self.log("Waiting for manual login...")
             new_sid = None
             self.driver.get(url)
@@ -194,6 +210,7 @@ class ArcaeaOnline:
                 
                 cookies.append({k: v for k, v in cookie.items() if k in COOKIE_ESSENTIAL_FIELDS})
             
+            with open(login_filepath, 'w', encoding='utf-8') as f:
                 json.dump(cookies, f, ensure_ascii=False)
 
             self.log("Login session saved.")
