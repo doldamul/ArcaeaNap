@@ -43,17 +43,23 @@ class AnalysisHandler(QObject):
 def main():
     app = QGuiApplication(sys.argv)
     
-    print("Initializing Data... (Consultant Sheet & Wiki)")
+    print("Arcaea Nap v0.1")
+
+    print("Loading data from Consultant Sheet...")
     try:
         open_sheet()
+        print("Loading data successful.")
     except Exception as e:
         print(f"Failed to load Consultant Sheet data: {e}")
 
+    print("Loading data from Wiki...")
     try:
         open_wiki()
+        print("Loading data successful.")
     except Exception as e:
         print(f"Failed to load Wiki data: {e}")
 
+    print("UI loading...")
     engine = QQmlApplicationEngine()
 
     # Register handler
