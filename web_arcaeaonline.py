@@ -298,7 +298,7 @@ class ArcaeaOnline:
                     
                     with sqlite3.connect(score_filepath) as conn:
                         cursor = conn.cursor()
-                        cursor.execute('SELECT song_id, time_played FROM scores WHERE id = ?', (pin_id,))
+                        cursor.execute('SELECT arcaea_id, time_played FROM scores WHERE id = ?', (pin_id,))
                         row = cursor.fetchone()
                         if row:
                             pinned_song_id, pinned_song_date = row
@@ -330,7 +330,7 @@ class ArcaeaOnline:
 
                                     while True:
                                         # Find candidate: newest record in DB older than current_search_date
-                                        cursor.execute('SELECT id, song_id, time_played FROM scores WHERE difficulty = ? AND time_played < ? ORDER BY time_played DESC LIMIT 1', (difficulty, current_search_date))
+                                        cursor.execute('SELECT id, arcaea_id, time_played FROM scores WHERE difficulty = ? AND time_played < ? ORDER BY time_played DESC LIMIT 1', (difficulty, current_search_date))
                                         candidate_row = cursor.fetchone()
 
                                         if not candidate_row:
@@ -357,7 +357,7 @@ class ArcaeaOnline:
                                             continue # Newer exists, try previous
 
                                         # 2. Check in DB (Is there a newer record for this song?)
-                                        cursor.execute('SELECT 1 FROM scores WHERE song_id = ? AND difficulty = ? AND time_played > ? LIMIT 1', (c_song_id, difficulty, c_time))
+                                        cursor.execute('SELECT 1 FROM scores WHERE arcaea_id = ? AND difficulty = ? AND time_played > ? LIMIT 1', (c_song_id, difficulty, c_time))
                                         if cursor.fetchone():
                                             newer_exists = True
                                         
