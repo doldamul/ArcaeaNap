@@ -8,6 +8,21 @@ Item {
     anchors.fill: parent
 
     // [변경 1] ScrollView 추가 (여백 및 스크롤 담당)
+    Connections {
+        target: statsHandler
+        function onStatsChanged() {
+            playCountText.text = statsHandler.getTotalPlayCount()
+            playTimeText.text = statsHandler.getTotalPlayTime()
+        }
+    }
+    
+    Component.onCompleted: {
+        if (statsHandler) {
+            playCountText.text = statsHandler.getTotalPlayCount()
+            playTimeText.text = statsHandler.getTotalPlayTime()
+        }
+    }
+
     ScrollView {
         id: scrollView
         anchors.fill: parent
@@ -120,6 +135,52 @@ Item {
                                 }
                             }
                             
+                            Item { height: 20 }
+
+                            // Stats Row
+                            RowLayout {
+                                spacing: 30
+                                Layout.alignment: Qt.AlignLeft // Center in parent Layout
+
+                                Column {
+                                    spacing: 5
+                                    Text { 
+                                        text: "TOTAL PLAY" 
+                                        color: "#999999" 
+                                        font.pixelSize: 10 
+                                        font.bold: true
+                                        font.letterSpacing: 1.0
+                                    }
+                                    Text { 
+                                        id: playCountText
+                                        text: "0" 
+                                        color: "#333333" 
+                                        font.pixelSize: 20 
+                                        font.bold: true 
+                                    }
+                                }
+                                
+                                Rectangle { width: 1; height: 30; color: "#DDDDDD" }
+
+                                Column {
+                                    spacing: 5
+                                    Text { 
+                                        text: "PLAY TIME" 
+                                        color: "#999999" 
+                                        font.pixelSize: 10 
+                                        font.bold: true
+                                        font.letterSpacing: 1.0
+                                    }
+                                    Text { 
+                                        id: playTimeText
+                                        text: "0h 0m" 
+                                        color: "#333333" 
+                                        font.pixelSize: 20 
+                                        font.bold: true 
+                                    }
+                                }
+                            }
+
                             Item { height: 40 } // Spacer
 
                             // Export Button

@@ -8,7 +8,7 @@ from PyQt6.QtCore import QUrl, QObject, pyqtSlot, pyqtSignal
 from web_arcaeaonline import ArcaeaOnline
 from web_consultantsheet import open_sheet
 from web_wiki import open_wiki
-from db_utils import get_db_path
+from db_utils import get_db_path, calculate_user_stats
 
 class StartupHandler(QObject):
     loadingStarted = pyqtSignal()
@@ -82,6 +82,34 @@ class AnalysisHandler(QObject):
     def emit_log(self, message):
         self.logAdded.emit(message)
 
+class StatsHandler(QObject):
+    statsChanged = pyqtSignal()
+    
+    def __init__(self):
+        super().__init__()
+        self._total_count = 0
+        self._total_time_str = "0h 0m"
+        self.refreshStats()
+
+    @pyqtSlot(result=int)
+    def getTotalPlayCount(self):
+        return self._total_count
+
+    @pyqtSlot(result=str)
+    def getTotalPlayTime(self):
+        return self._total_time_str
+
+    @pyqtSlot()
+    def refreshStats(self):
+        count, seconds = calculate_user_stats()
+        self._total_count = count
+        
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        self._total_time_str = f"{hours}h {minutes}m"
+        
+        self.statsChanged.emit()
+
 def main():
     app = QGuiApplication(sys.argv)
     
@@ -96,6 +124,9 @@ def main():
     
     startup_handler = StartupHandler()
     engine.rootContext().setContextProperty("startupHandler", startup_handler)
+
+    stats_handler = StatsHandler()
+    engine.rootContext().setContextProperty("statsHandler", stats_handler)
 
     qml_filename = "main.qml"
     qml_filepath = os.path.join(config['general']['cache_path'], 'ui', qml_filename)

@@ -217,3 +217,63 @@ def fill_missing_arcaea_ids_from_scores():
         print(f"Error filling arcaea_ids: {e}")
     finally:
         songs_conn.close()
+
+def calculate_user_stats():
+    """
+    Calculates Total Play Count and Total Play Time.
+    
+    Logic:
+    1. For each (arcaea_id, difficulty), find the latest record in user_scores.db (scores table).
+    2. Total Play Count = Sum of yearly_play_count from these records.
+    3. Total Play Time = Sum of (yearly_play_count * song_length) for these records.
+       song_length is retrieved from songs.db (songs table) joining on arcaea_id.
+    
+    Returns:
+        tuple: (total_play_count, total_play_time_seconds)
+    """
+    scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
+    songs_db_path = get_db_path()
+
+    if not os.path.exists(scores_db_path) or not os.path.exists(songs_db_path):
+        return 0, 0
+
+    conn = sqlite3.connect(scores_db_path)
+    try:
+        # Attach songs.db
+        conn.execute(f"ATTACH DATABASE ? AS songs_db", (songs_db_path,))
+        
+        cursor = conn.cursor()
+        
+        # We need to group by arcaea_id AND difficulty to get unique chart records
+        # Then pick the latest one (MAX time_played)
+        query = """
+            WITH LatestScores AS (
+                SELECT 
+                    arcaea_id, 
+                    yearly_play_count,
+                    MAX(time_played) as latest_time
+                FROM scores 
+                GROUP BY arcaea_id, difficulty
+            )
+            SELECT 
+                SUM(ls.yearly_play_count),
+                SUM(ls.yearly_play_count * IFNULL(s.length, 0))
+            FROM LatestScores ls
+            LEFT JOIN songs_db.songs s ON ls.arcaea_id = s.arcaea_id
+        """
+        
+        cursor.execute(query)
+        result = cursor.fetchone()
+        
+        if result:
+            total_count = result[0] if result[0] is not None else 0
+            total_time = result[1] if result[1] is not None else 0
+            return int(total_count), int(total_time)
+        else:
+            return 0, 0
+            
+    except Exception as e:
+        print(f"Error calculating stats: {e}")
+        return 0, 0
+    finally:
+        conn.close()
