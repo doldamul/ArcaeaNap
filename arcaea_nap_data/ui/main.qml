@@ -227,4 +227,90 @@ ApplicationWindow {
             tabIndex: 2
         }
     }
+
+    // --- Loading Overlay ---
+    property bool isLoading: false
+
+    Connections {
+        target: startupHandler
+        function onLoadingStarted() {
+            window.isLoading = true
+        }
+        function onLoadingFinished() {
+            window.isLoading = false
+        }
+        function onErrorOccurred(msg) {
+            console.log("Loading error: " + msg)
+            window.isLoading = false
+        }
+    }
+
+    Component.onCompleted: {
+        if (startupHandler) {
+            startupHandler.checkAndLoad()
+        }
+    }
+
+    Rectangle {
+        id: loadingOverlay
+        anchors.fill: parent
+        color: "#80000000" // Semi-transparent black
+        z: 999
+        visible: window.isLoading
+        
+        // Block input
+        MouseArea { anchors.fill: parent }
+
+        ColumnLayout {
+            anchors.centerIn: parent
+            spacing: 20
+            
+            BusyIndicator {
+                Layout.alignment: Qt.AlignHCenter
+                running: loadingOverlay.visible
+                
+                contentItem: Rectangle {
+                    implicitWidth: 64
+                    implicitHeight: 64
+                    color: "transparent"
+                    border.color: "#FFFFFF"
+                    border.width: 4
+                    radius: 32
+                    
+                    Rectangle {
+                        width: 12
+                        height: 12
+                        radius: 6
+                        color: "#FFFFFF"
+                        x: 26
+                        y: 4
+                        
+                        transform: Rotation {
+                            origin.x: 6
+                            origin.y: 28
+                            angle: 0
+                            
+                            NumberAnimation on angle {
+                                from: 0
+                                to: 360
+                                duration: 1000
+                                loops: Animation.Infinite
+                                running: loadingOverlay.visible
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Text {
+                text: "Loading song data..."
+                color: "#FFFFFF"
+                font.pixelSize: 24
+                font.bold: true
+                Layout.alignment: Qt.AlignHCenter
+                style: Text.Outline
+                styleColor: "#000000"
+            }
+        }
+    }
 }

@@ -8,6 +8,48 @@ from PyQt6.QtCore import QUrl, QObject, pyqtSlot, pyqtSignal
 from web_arcaeaonline import ArcaeaOnline
 from web_consultantsheet import open_sheet
 from web_wiki import open_wiki
+from db_utils import get_db_path
+
+class StartupHandler(QObject):
+    loadingStarted = pyqtSignal()
+    loadingFinished = pyqtSignal()
+    errorOccurred = pyqtSignal(str)
+    logAdded = pyqtSignal(str) 
+
+    def __init__(self):
+        super().__init__()
+        self.thread = None
+
+    @pyqtSlot()
+    def checkAndLoad(self):
+        db_path = get_db_path()
+        if os.path.exists(db_path):
+            print("songs.db exists. Skipping initial data load.")
+            self.loadingFinished.emit()
+            return
+
+        print("songs.db missing. Starting initial data load...")
+        self.loadingStarted.emit()
+        
+        self.thread = threading.Thread(target=self._load_data, daemon=True)
+        self.thread.start()
+
+    def _load_data(self):
+        try:
+            print("Loading data from Consultant Sheet...")
+            open_sheet()
+            print("Consultant Sheet load successful.")
+            
+            print("Loading data from Wiki...")
+            open_wiki()
+            print("Wiki load successful.")
+            
+            self.loadingFinished.emit()
+            
+        except Exception as e:
+            print(f"Data loading failed: {e}")
+            self.errorOccurred.emit(str(e))
+            self.loadingFinished.emit()
 
 class AnalysisHandler(QObject):
     logAdded = pyqtSignal(str, arguments=['message'])
@@ -45,26 +87,15 @@ def main():
     
     print("Arcaea Nap v0.1")
 
-    print("Loading data from Consultant Sheet...")
-    try:
-        open_sheet()
-        print("Loading data successful.")
-    except Exception as e:
-        print(f"Failed to load Consultant Sheet data: {e}")
-
-    print("Loading data from Wiki...")
-    try:
-        open_wiki()
-        print("Loading data successful.")
-    except Exception as e:
-        print(f"Failed to load Wiki data: {e}")
-
     print("UI loading...")
     engine = QQmlApplicationEngine()
 
-    # Register handler
+    # Register handlers
     analysis_handler = AnalysisHandler()
     engine.rootContext().setContextProperty("analysisHandler", analysis_handler)
+    
+    startup_handler = StartupHandler()
+    engine.rootContext().setContextProperty("startupHandler", startup_handler)
 
     qml_filename = "main.qml"
     qml_filepath = os.path.join(config['general']['cache_path'], 'ui', qml_filename)
