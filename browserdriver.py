@@ -13,23 +13,31 @@ def get_driver(headless=False):
     match get_browser_name():
         case 'chrome':
             options = uc.ChromeOptions()
+            options.add_argument('--window-size=500,500')
             if headless:
                 options.add_argument('--headless')
             driver = uc.Chrome(options=options)
         case 'edge':
             options = webdriver.EdgeOptions()
+            options.add_argument('--window-size=500,500')
             if headless:
                 options.add_argument('--headless')
             driver = webdriver.Edge(options=options)
         case 'unsupported':
             return None
     
+    driver.set_window_size(500, 500)
+    driver.get("about:blank")
+
     b_info = get_browser_info()
     stealth(driver, **b_info)
     
     return driver
 
 def get_browser_info():
+    if getattr(get_browser_info, 'b_info', None):
+        return get_browser_info.b_info
+
     b_info = {}
     data = {}
     # TODO: save/load graphics info from database
@@ -52,10 +60,12 @@ def get_browser_info():
             case 'chrome':
                 options = webdriver.ChromeOptions()
                 options.add_argument('--start-minimized')
+                options.add_argument('--window-size=300,300')
                 driver = webdriver.Chrome(options=options)
             case 'edge':
                 options = webdriver.EdgeOptions()
                 options.add_argument('--start-minimized')
+                options.add_argument('--window-size=300,300')
                 driver = webdriver.Edge(options=options)
             case 'unsupported':
                 return None
@@ -92,6 +102,8 @@ def get_browser_info():
             try: del driver
             except: pass
     
+    get_browser_info.b_info = b_info
+
     if __name__=='__main__':
         print(b_info)
     
