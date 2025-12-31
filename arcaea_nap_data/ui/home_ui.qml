@@ -8,11 +8,21 @@ Item {
     anchors.fill: parent
 
     // [변경 1] ScrollView 추가 (여백 및 스크롤 담당)
+
     Connections {
         target: statsHandler
         function onStatsChanged() {
             playCountText.text = statsHandler.getTotalPlayCount()
             playTimeText.text = statsHandler.getTotalPlayTime()
+            updateTop10()
+        }
+    }
+    
+    function updateTop10() {
+        var top10 = statsHandler.getMostPlayed()
+        songModel.clear()
+        for (var i = 0; i < top10.length; i++) {
+            songModel.append(top10[i])
         }
     }
     
@@ -20,6 +30,7 @@ Item {
         if (statsHandler) {
             playCountText.text = statsHandler.getTotalPlayCount()
             playTimeText.text = statsHandler.getTotalPlayTime()
+            updateTop10()
         }
     }
 
@@ -272,10 +283,11 @@ Item {
                             Rectangle {
                                 width: 50; height: 50
                                 radius: 10
-                                color: model.colorCode // 목업 데이터 색상
+                                color: "#FFFFFF" // Requested white/empty background
+                                border.color: "#E0E0E0"
+                                border.width: 1
                                 
-                                // 실제 이미지라면 아래와 같이 사용
-                                // Image { source: model.iconSource; anchors.fill: parent; radius: 10 }
+                                // Placeholder image or empty
                             }
 
                             // 곡 정보
@@ -329,14 +341,6 @@ Item {
     // --- 목업 데이터 모델 ---
     ListModel {
         id: songModel
-        
-        ListElement { title: "dWxygfnsJW"; artist: "txPXRrNa"; playCount: 402; colorCode: "#AEEEEE" }
-        ListElement { title: "QKZrpaaiKecM"; artist: "UtsYpPVAHssHhE vs bBX"; playCount: 389; colorCode: "#4B0082" }
-        ListElement { title: "DjhDyAdKqCwkqhb"; artist: "XjtADQrRNEvEMJp"; playCount: 356; colorCode: "#0000FF" }
-        ListElement { title: "woJipkFq"; artist: "tA"; playCount: 312; colorCode: "#87CEEB" }
-        ListElement { title: "bEymYYgBBjKtsG"; artist: "nt+p"; playCount: 298; colorCode: "#FF0000" }
-        ListElement { title: "LdmToDXYVx"; artist: "UtsYpPVAHssHhE"; playCount: 245; colorCode: "#8B0000" }
-        ListElement { title: "cMcXKxLfuPAn"; artist: "NEvE"; playCount: 221; colorCode: "#FFFFFF" }
-        ListElement { title: "nPmDdkgHg"; artist: "UtsYpPVAHssHhE vs waEj"; playCount: 198; colorCode: "#FFD700" }
+        // Data populated from statsHandler
     }
 }

@@ -277,3 +277,59 @@ def calculate_user_stats():
         return 0, 0
     finally:
         conn.close()
+
+def get_top_10_most_played():
+    """
+    Returns the top 10 most played songs across all difficulties.
+    Returns:
+        list of dict: [{'title': str, 'artist': str, 'playCount': int}, ...]
+    """
+    scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
+    songs_db_path = get_db_path()
+
+    if not os.path.exists(scores_db_path) or not os.path.exists(songs_db_path):
+        return []
+
+    conn = sqlite3.connect(scores_db_path)
+    try:
+        conn.execute(f"ATTACH DATABASE ? AS songs_db", (songs_db_path,))
+        cursor = conn.cursor()
+        
+        # Use ROW_NUMBER() to get the latest record for each (arcaea_id, difficulty)
+        query = """
+            WITH RankedScores AS (
+                SELECT 
+                    arcaea_id, 
+                    yearly_play_count,
+                    ROW_NUMBER() OVER (PARTITION BY arcaea_id, difficulty ORDER BY time_played DESC) as rn
+                FROM scores
+            )
+            SELECT 
+                s.title,
+                s.artist,
+                SUM(rs.yearly_play_count) as total_plays
+            FROM RankedScores rs
+            LEFT JOIN songs_db.songs s ON rs.arcaea_id = s.arcaea_id
+            WHERE rs.rn = 1
+            GROUP BY rs.arcaea_id
+            ORDER BY total_plays DESC
+            LIMIT 10
+        """
+        
+        cursor.execute(query)
+        results = []
+        for row in cursor.fetchall():
+            results.append({
+                'title': row[0] if row[0] else 'Unknown Title',
+                'artist': row[1] if row[1] else 'Unknown Artist',
+                'playCount': row[2] if row[2] else 0,
+                'colorCode': "#FFFFFF" # Placeholder for UI consistency
+            })
+            
+        return results
+    except Exception as e:
+        print(f"Error fetching top 10: {e}")
+        return []
+    finally:
+        conn.close()
+

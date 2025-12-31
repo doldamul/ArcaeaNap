@@ -8,7 +8,7 @@ from PyQt6.QtCore import QUrl, QObject, pyqtSlot, pyqtSignal
 from web_arcaeaonline import ArcaeaOnline
 from web_consultantsheet import open_sheet
 from web_wiki import open_wiki
-from db_utils import get_db_path, calculate_user_stats
+from db_utils import get_db_path, calculate_user_stats, get_top_10_most_played
 
 class StartupHandler(QObject):
     loadingStarted = pyqtSignal()
@@ -98,6 +98,10 @@ class StatsHandler(QObject):
     @pyqtSlot(result=str)
     def getTotalPlayTime(self):
         return self._total_time_str
+
+    @pyqtSlot(result=list)
+    def getMostPlayed(self):
+        return get_top_10_most_played()
 
     @pyqtSlot()
     def refreshStats(self):
