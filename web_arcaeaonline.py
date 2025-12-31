@@ -16,17 +16,13 @@ from enum import IntEnum
 from dataclasses import dataclass, field
 from collections import deque
 from typing import Dict, Optional, Set
+from common_types import Difficulty
 
 VUE_COMPONENT_SELECTOR = "#app > section > div:nth-child(3)"
 LOGIN_COMPONENT_SELECTOR = ".button.login-button"
 ARCAEAONLINE_DOMAIN = "arcaea.lowiro.com"
 
-class Difficulty(IntEnum):
-    PST = 0
-    PRS = 1
-    FTR = 2
-    ETR = 4
-    BYD = 3
+
 
 @dataclass
 class AnalysisStatus:

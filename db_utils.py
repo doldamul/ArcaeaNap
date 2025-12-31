@@ -35,7 +35,7 @@ def init_songs_db():
         CREATE TABLE IF NOT EXISTS charts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             song_id INTEGER,
-            difficulty TEXT,
+            difficulty INTEGER,
             level TEXT,
             bp REAL,
             perceived_bp REAL,

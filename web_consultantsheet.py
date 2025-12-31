@@ -6,6 +6,7 @@ from configuration import config
 import gspread
 import re
 from db_utils import init_songs_db, get_connection, resolve_song_id
+from common_types import Difficulty
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -135,7 +136,12 @@ def save_to_db(data):
                 except: return None
 
             title = entry['title']
-            difficulty = entry['difficulty']
+            difficulty_str = entry['difficulty']
+            try:
+                difficulty = Difficulty[difficulty_str].value
+            except KeyError:
+                print(f"Unknown difficulty: {difficulty_str} for song: {title}")
+                continue
             
             # 1. Resolve Song ID
             song_id = resolve_song_id(cursor, title)
