@@ -244,23 +244,16 @@ def calculate_user_stats():
         
         cursor = conn.cursor()
         
-        # Group by title AND arcaea_id AND difficulty to get unique chart records
-        # Then pick the latest one (MAX time_played)
+        # Use play_count table for stats
+        # Use play_count table for stats
+        # Join with songs AND charts to ensure validity and match user requirement
         query = """
-            WITH LatestScores AS (
-                SELECT 
-                    title,
-                    arcaea_id, 
-                    yearly_play_count,
-                    MAX(time_played) as latest_time
-                FROM scores 
-                GROUP BY title, arcaea_id, difficulty
-            )
             SELECT 
-                SUM(ls.yearly_play_count),
-                SUM(ls.yearly_play_count * IFNULL(s.length, 0))
-            FROM LatestScores ls
-            LEFT JOIN songs_db.songs s ON ls.title = s.title AND ls.arcaea_id = s.arcaea_id
+                SUM(pc.yearly_play_count),
+                SUM(pc.yearly_play_count * IFNULL(s.length, 0))
+            FROM play_count pc
+            JOIN songs_db.songs s ON pc.arcaea_id = s.arcaea_id
+            JOIN songs_db.charts c ON s.id = c.song_id AND pc.difficulty = c.difficulty
         """
         
         cursor.execute(query)
@@ -296,24 +289,18 @@ def get_top_10_most_played():
         conn.execute(f"ATTACH DATABASE ? AS songs_db", (songs_db_path,))
         cursor = conn.cursor()
         
-        # Use ROW_NUMBER() to get the latest record for each (title, arcaea_id, difficulty)
+        # Query play_count table
+        # Query play_count table
+        # Join songs and charts to ensure validity
         query = """
-            WITH RankedScores AS (
-                SELECT 
-                    title,
-                    arcaea_id, 
-                    yearly_play_count,
-                    ROW_NUMBER() OVER (PARTITION BY title, arcaea_id, difficulty ORDER BY time_played DESC) as rn
-                FROM scores
-            )
             SELECT 
                 s.title,
                 s.artist,
-                SUM(rs.yearly_play_count) as total_plays
-            FROM RankedScores rs
-            LEFT JOIN songs_db.songs s ON rs.title = s.title AND rs.arcaea_id = s.arcaea_id
-            WHERE rs.rn = 1
-            GROUP BY rs.title, rs.arcaea_id
+                SUM(pc.yearly_play_count) as total_plays
+            FROM play_count pc
+            JOIN songs_db.songs s ON pc.arcaea_id = s.arcaea_id
+            JOIN songs_db.charts c ON s.id = c.song_id AND pc.difficulty = c.difficulty
+            GROUP BY s.title, s.arcaea_id
             ORDER BY total_plays DESC
             LIMIT 10
         """

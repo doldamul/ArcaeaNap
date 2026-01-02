@@ -7,6 +7,7 @@ import keyring
 import json
 import time
 import os
+from datetime import datetime, timezone
 from browserdriver import get_driver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -312,13 +313,6 @@ class ArcaeaOnline:
                         row = cursor.fetchone()
                         if row:
                             pinned_song_id, pinned_song_date = row
-                    
-                            # if newest item is older, skip(return)
-                            newest_item = user_scores_data[0]
-                            if newest_item.get('time_played', 0) < pinned_song_date:
-                                self.log('Data save canceled: Newest item is older than pinned.')
-                                self.status.status = 'ready'
-                                return
 
                             # iterate user_scores_data and compare name_id with pin data
                             for item in user_scores_data:
@@ -426,15 +420,30 @@ class ArcaeaOnline:
                             title TEXT,
                             artist TEXT,
                             user_id INTEGER,
-                            yearly_play_count INTEGER,
+                            yearly_play_index INTEGER,
                             score_below_max INTEGER,
                             UNIQUE(arcaea_id, difficulty, time_played)
                         )
                     ''')
                     
+                    # Create play_count table
+                    cursor.execute('''
+                        CREATE TABLE IF NOT EXISTS play_count (
+                            arcaea_id TEXT,
+                            difficulty INTEGER,
+                            year INTEGER,
+                            yearly_play_count INTEGER,
+                            PRIMARY KEY (arcaea_id, difficulty, year)
+                        )
+                    ''')
+                    
 
                     data_to_insert = []
-                    for item in user_scores_data:
+                    play_count_updates = [] # (arcaea_id, diff, year, count)
+                    current_year = datetime.now(timezone.utc).year
+
+                    for idx, item in enumerate(user_scores_data):
+                        diff_val = item.get('difficulty')
                         title_obj = item.get('title')
                         if isinstance(title_obj, dict):
                             title_str = title_obj.get('en', '')
@@ -449,41 +458,179 @@ class ArcaeaOnline:
                             try:
                                 resolve_song_id_for_ao(songs_cursor, ao_song_id, title_str)
                             except Exception as e:
-                                # Start a new transaction or ignore, assuming resolve_song_id handles its own simple logic?
-                                # Ideally we shouldn't break the loop.
-                                # resolve_song_id_for_ao performs Insert/Update.
                                 pass
 
-                        row = (
-                            ao_song_id,
-                            item.get('difficulty'),
-                            item.get('score'),
-                            item.get('shiny_perfect_count'),
-                            item.get('perfect_count'),
-                            item.get('near_count'),
-                            item.get('miss_count'),
-                            item.get('health'),
-                            item.get('modifier'),
-                            item.get('time_played'),
-                            item.get('clear_type'),
-                            item.get('best_clear_type'),
-                            title_str,
-                            item.get('artist'),
-                            item.get('user_id'),
-                            item.get('yearly_play_count'),
-                            item.get('score_below_max')
-                        )
-                        data_to_insert.append(row)
+                        # Logic for yearly_play_index
+                        time_played = item.get('time_played')
+                        score_year = datetime.fromtimestamp(time_played / 1000, tz=timezone.utc).year
+                        
+                        final_yearly_index = 0
+                        
+                        if score_year == current_year:
+                             # Trust the scraped data
+                             final_yearly_index = item.get('yearly_play_count')
+                        else:
+                             # Past year: Calculate incrementally
+                             # 1. Get current stored max for this year from DB (play_count table)
+                             # We need to query the DB for every item? This assumes `play_count` is up to date.
+                             # Optimization: If we have multiple scores for the same song/year in this batch, we need to track local increments.
+                             
+                             # NOTE: This approach has a performance cost (query per item). 
+                             # But `user_scores_data` per page is small (~20).
+                             
+                             # Check if we already have a pending update for this song/year in `play_count_updates`?
+                             # Or just query DB + check pending?
+                             
+                             # Simpler: Query DB.
+                             cursor.execute('SELECT yearly_play_count FROM play_count WHERE arcaea_id = ? AND difficulty = ? AND year = ?', 
+                                            (ao_song_id, diff_val, score_year))
+                             row_pc = cursor.fetchone()
+                             current_db_count = row_pc[0] if row_pc else 0
+                             
+                             final_yearly_index = current_db_count + 1
+                             
+                             # IMMEDIATELY update the DB (or track it so next iteration sees it?)
+                             # If we have 2 scores from last year in the same batch, the second one needs to know about the first one.
+                             # So we must update the state.
+                             
+                             # To avoid spamming DB writes, we can maintain a local cache for this batch.
+                             # But simpler to just write to DB if we are using `play_count` table as source of truth.
+                             # user_scores_data is likely sorted?
+                             # If sorted reverse-chrono (newest first), then the OLDER score comes LATER.
+                             # If we process iterating `user_scores_data`, we usually process Top->Bottom.
+                             # If the page is sorted by Date DESC, then we see Newest first.
+                             # If we determine Newest is Index N+1, then Oldest is Index N? No, that's backwards.
+                             # "If checking a record from last year late... find stored... add 1".
+                             # This assumes we are seeing them in *chronological* order or we are just appending?
+                             # If the page has 5 scores from last year (Reverse Chrono), and we process the first one (Newest):
+                             # DB has 0. Newest gets 1.
+                             # Next one (Older) gets 2.
+                             # This reverses the order of indices! The older score should have lower index.
+                             # REQUIRED: Process scores in Chronological Order (Oldest First) if we are doing incremental assignment.
+                             # user_scores_data order depends on `is_datesort`.
+                             # If `is_datesort` is true (default), it's Newest First.
+                             # So we should iterate in REVERSE for this logic?
+                             
+                             # Actually, `data_to_insert` construction order doesn't matter for SQLite `executemany`, 
+                             # BUT the *assignment of index* matters.
+                             # User says "updates yearly play count...".
+                             
+                             # If we process straightforwardly:
+                             # We must ensure we assign indices correctly. 
+                             # If we have multiple "new" scores for the same song/year, we must assign them increasing indices based on their timestamps.
                     
+                    # Sort data chronologically for processing indices
+                    # Make a list of items with their original index to preserve order if needed, or just re-sort.
+                    # Actually `user_scores_data` is a list of dicts.
+                    # user_scores_data_sorted = sorted(user_scores_data, key=lambda x: x.get('time_played'))
+                    
+                    # BUT `user_scores_data` comes from the page which might be mixed difficulty/song? (No, usually specific diff).
+                    # Actually `user_scores` is from Vue, likely the array shown on screen.
+                    
+                    # Let's sort `user_scores_data` by `time_played` ASC before processing.
+                    # This ensures we process older scores first, so incremental logic works:
+                    # Oldest (Year Y) -> enters -> gets DB Max (0) -> becomes 1 -> DB updated to 1.
+                    # Newer (Year Y) -> enters -> gets DB Max (1) -> becomes 2 -> DB updated to 2.
+                    # This is correct.
+                    
+                    user_scores_data_sorted = sorted(user_scores_data, key=lambda x: x.get('time_played'))
+                    
+                    for item in user_scores_data_sorted:
+                        # ... extract vars ...
+                        diff_val = item.get('difficulty')
+                        ao_song_id = item.get('song_id')
+                        # ... resolve song ... (omitted for brevity in thought trace, but included in code)
+                        title_obj = item.get('title')
+                        if isinstance(title_obj, dict):
+                            title_str = title_obj.get('en', '')
+                        else:
+                            title_str = str(title_obj) if title_obj else ''
+
+                        if songs_cursor:
+                            try:
+                                resolve_song_id_for_ao(songs_cursor, ao_song_id, title_str)
+                            except: pass
+
+                        time_played = item.get('time_played')
+                        score_year = datetime.fromtimestamp(time_played / 1000, tz=timezone.utc).year
+                        
+                        # Check existence first to prevent double counting on past scores
+                        # We need to know if we are inserting a NEW score or just seeing an old one.
+                        
+                        cursor.execute('SELECT 1 FROM scores WHERE arcaea_id = ? AND difficulty = ? AND time_played = ?', (ao_song_id, diff_val, time_played))
+                        is_existing_score = cursor.fetchone() is not None
+                        
+                        final_yearly_index = 0
+                        
+                        if score_year == current_year:
+                             # Current Year: Always trust scraped data for play count
+                             # Update play_count table regardless of score existence (to catch non-score-updating plays)
+                             final_yearly_index = item.get('yearly_play_count')
+                             
+                             cursor.execute('''
+                                INSERT INTO play_count (arcaea_id, difficulty, year, yearly_play_count)
+                                VALUES (?, ?, ?, ?)
+                                ON CONFLICT(arcaea_id, difficulty, year) DO UPDATE SET yearly_play_count = ?
+                             ''', (ao_song_id, diff_val, score_year, final_yearly_index, final_yearly_index))
+                             
+                        else:
+                             # Past Year: ONLY increment if it's a new score
+                             if is_existing_score:
+                                 # If exists, we don't query/update DB. 
+                                 # We effectively don't care about final_yearly_index since we won't insert.
+                                 # But for data_to_insert consistency (if we appended anyway), we might leave 0 or fetch.
+                                 # Since we use INSERT OR IGNORE, and key exists, it won't overwrite.
+                                 final_yearly_index = 0 
+                             else:
+                                 # New Past Score -> Increment from DB
+                                 cursor.execute('SELECT yearly_play_count FROM play_count WHERE arcaea_id = ? AND difficulty = ? AND year = ?', 
+                                                (ao_song_id, diff_val, score_year))
+                                 row_pc = cursor.fetchone()
+                                 current_db_count = row_pc[0] if row_pc else 0
+                                 final_yearly_index = current_db_count + 1
+                                 
+                                 # Update DB immediately for valid next iteration
+                                 cursor.execute('''
+                                    INSERT INTO play_count (arcaea_id, difficulty, year, yearly_play_count)
+                                    VALUES (?, ?, ?, ?)
+                                    ON CONFLICT(arcaea_id, difficulty, year) DO UPDATE SET yearly_play_count = ?
+                                 ''', (ao_song_id, diff_val, score_year, final_yearly_index, final_yearly_index))
+
+                        # Only prepare insert if it's new (optimization, plus safer)
+                        if not is_existing_score:
+                            row = (
+                                ao_song_id,
+                                item.get('difficulty'),
+                                item.get('score'),
+                                item.get('shiny_perfect_count'),
+                                item.get('perfect_count'),
+                                item.get('near_count'),
+                                item.get('miss_count'),
+                                item.get('health'),
+                                item.get('modifier'),
+                                item.get('time_played'),
+                                item.get('clear_type'),
+                                item.get('best_clear_type'),
+                                title_str,
+                                item.get('artist'),
+                                item.get('user_id'),
+                                final_yearly_index,
+                                item.get('score_below_max')
+                            )
+                            data_to_insert.append(row)
+
                     songs_conn.commit()
 
                     cursor.executemany('''
                         INSERT OR IGNORE INTO scores 
                         (arcaea_id, difficulty, score, shiny_perfect_count, perfect_count, near_count, 
                             miss_count, health, modifier, time_played, clear_type, best_clear_type, 
-                            title, artist, user_id, yearly_play_count, score_below_max)
+                            title, artist, user_id, yearly_play_index, score_below_max)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', data_to_insert)
+
+                    # Removed bulk play_count update since we did it incrementally in loop
+
                     
                     # check all_pages_checked
                     if self.all_pages_checked(difficulty):
