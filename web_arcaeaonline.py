@@ -214,7 +214,11 @@ class ArcaeaOnline:
     def has_page_changed(self, driver):
         if not self.status.is_running:
             return False
-            
+        
+        is_disabled = 'disabled' in (driver.find_element(By.CSS_SELECTOR, '.difficulty-select').get_attribute('class') or '')
+        if is_disabled:
+            return False
+
         new_difficulty = driver.find_element(By.CSS_SELECTOR, ".difficulty-selector.active .label").text
         new_pageno = driver.find_element(By.CSS_SELECTOR, '.selected.no-select').text
         new_sort = driver.find_element(By.CSS_SELECTOR, 'div.dropdown > div > span:nth-child(1)').text
