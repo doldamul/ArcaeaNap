@@ -103,14 +103,14 @@ class ArcaeaOnline:
                 
                 # Check directly if driver is alive
                 self.driver.title
-        except (NoSuchWindowException, WebDriverException) as e:
+        except (NoSuchWindowException, WebDriverException, AttributeError) as e:
             msg = str(e).lower()
-            if isinstance(e, NoSuchWindowException) or 'disconnected' in msg or 'not reachable' in msg or 'target closed' in msg:
+            if isinstance(e, NoSuchWindowException) or 'disconnected' in msg or 'not reachable' in msg or 'target closed' in msg or 'get_attribute' in msg:
                 self.log(f'Browser closed by user.\n')
             else:
-                self.log(f'Browser terminated: {e}')
+                self.log(f'Browser terminated: {type(e).__name__}; {e}')
         except Exception as e:
-            self.log(f'Browser terminated: {e}')
+            self.log(f'Browser terminated: {type(e).__name__}; {e}')
         finally:
             self.stop()
 
