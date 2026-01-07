@@ -245,12 +245,12 @@ def calculate_user_stats():
         cursor = conn.cursor()
         
         # Use play_count table for stats
-        # Use play_count table for stats
         # Join with songs AND charts to ensure validity and match user requirement
+        # If song length is null, use 140(2min 20sec) as default
         query = """
             SELECT 
                 SUM(pc.yearly_play_count),
-                SUM(pc.yearly_play_count * IFNULL(s.length, 0))
+                SUM(pc.yearly_play_count * IFNULL(s.length, 140))
             FROM play_count pc
             JOIN songs_db.songs s ON pc.arcaea_id = s.arcaea_id
             JOIN songs_db.charts c ON s.id = c.song_id AND pc.difficulty = c.difficulty
