@@ -7,6 +7,7 @@ import keyring
 import json
 import time
 import os
+import base64
 from datetime import datetime, timezone
 from browserdriver import get_driver
 from selenium.webdriver.common.by import By
@@ -22,6 +23,9 @@ from common_types import Difficulty
 VUE_COMPONENT_SELECTOR = "#app > section > div:nth-child(3)"
 LOGIN_COMPONENT_SELECTOR = ".button.login-button"
 ARCAEAONLINE_DOMAIN = "arcaea.lowiro.com"
+ALBUM_JACKET_SELECTOR = "img.album-jacket"
+
+DIFFICULTY_NAMES = {0: 'pst', 1: 'prs', 2: 'ftr', 3: 'byd', 4: 'etr'}
 
 
 
@@ -62,10 +66,16 @@ class ArcaeaOnline:
         
         try:
             self.log("Initializing browser...")
-            self.driver = get_driver()
+            self.driver = get_driver(enable_performance_log=True)
             assert self.driver is not None, "unsupported browser"
 
             self.driver.set_window_size(600, 1000)
+            
+            # CDP Network 도메인 활성화 (로그 수집을 위해 필수) - login 전에 위치 복구
+            try:
+                self.driver.execute_cdp_cmd('Network.enable', {})
+            except Exception as e:
+                self.log(f"Failed to enable Network domain: {e}")
 
             self.login(url)
             
@@ -94,15 +104,49 @@ class ArcaeaOnline:
                     break
 
                 self.log('New page detected.')
+                
+                # Network 도메인 재활성화 (네비게이션 후 풀릴 수 있음)
+                try:
+                    self.driver.execute_cdp_cmd('Network.enable', {})
+                except:
+                    pass
+            
+                # 이미지 로드 대기 후 Performance Log 파싱 (save_data 전에)
+                import time as _time
+                try:
+                    # album-jacket 이미지가 나타날 때까지 대기
+                    WebDriverWait(self.driver, 5).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR))
+                    )
+                    # 이미지가 실제로 src를 가질 때까지 대기
+                    WebDriverWait(self.driver, 5).until(
+                        lambda d: d.find_element(By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR).get_attribute('src') and 
+                                  'webassets.lowiro.com' in d.find_element(By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR).get_attribute('src')
+                    )
+                    _time.sleep(2)  # 이미지 응답 완료 대기 (네트워크 로그 기록 시간)
+                except:
+                    pass
+                
+                thumbnail_request_ids = self.parse_thumbnail_request_ids()
+                if thumbnail_request_ids:
+                    self.log(f"Thumbnail: Found {len(thumbnail_request_ids)} image requestIds")
+                else:
+                    self.log("Thumbnail: No image requestIds found")
 
                 try:
                     block_pointer_events(self.driver)
-                    self.save_data()
+                    self.save_data(thumbnail_request_ids)
                 finally:
                     restore_pointer_events(self.driver)
                 
                 # Check directly if driver is alive
                 self.driver.title
+                
+                # 다음 페이지 로드 대비 Network 활성화
+                try:
+                    self.driver.execute_cdp_cmd('Network.enable', {})
+                except:
+                    pass
         except (NoSuchWindowException, WebDriverException, AttributeError) as e:
             msg = str(e).lower()
             if isinstance(e, NoSuchWindowException) or 'disconnected' in msg or 'not reachable' in msg or 'target closed' in msg or 'get_attribute' in msg:
@@ -150,7 +194,15 @@ class ArcaeaOnline:
                 except Exception as e:
                     self.log(f'Cookie injection error: {e}')
             
-            self.driver.execute_cdp_cmd('Network.disable', {})
+            # Network.disable 호출 제거 - 로그 수집 유지
+            # self.driver.execute_cdp_cmd('Network.disable', {})
+            
+            # 페이지 로드 전 Network 활성화 재확인
+            try:
+                self.driver.execute_cdp_cmd('Network.enable', {})
+            except:
+                pass
+
             self.driver.get(url)
             
             # Verify session
@@ -245,7 +297,7 @@ class ArcaeaOnline:
             
         return False
 
-    def save_data(self):
+    def save_data(self, thumbnail_request_ids: dict = None):
         self.status.status = 'analyzing'
         target_element = None
         wait = WebDriverWait(self.driver, 1)
@@ -569,10 +621,150 @@ class ArcaeaOnline:
                     if songs_conn:
                         songs_conn.commit()
                         songs_conn.close()
+                    
+                    # 썸네일 다운로드 (DB 저장과 별개로 수행)
+                    try:
+                        self.save_thumbnails(user_scores_data, difficulty, thumbnail_request_ids)
+                    except Exception as e:
+                        self.log(f"Thumbnail save error: {e}")
+                        import traceback
+                        traceback.print_exc()
         
         finally:
             if self.status.status == 'analyzing':
                 self.status.status = 'ready'
+
+    def parse_thumbnail_request_ids(self) -> dict[str, tuple[str, bool]]:
+        """
+        Performance Log에서 webassets 이미지의 requestId를 파싱
+        Returns:
+            dict: {filename: (requestId, fromDiskCache)}
+        """
+        result = {}
+        
+        try:
+            logs = self.driver.get_log("performance")
+            
+            for entry in logs:
+                try:
+                    message = json.loads(entry["message"])["message"]
+                    
+                    if message.get("method") == "Network.responseReceived":
+                        params = message.get("params", {})
+                        response = params.get("response", {})
+                        url = response.get("url", "")
+                        
+                        if "webassets.lowiro.com" in url and any(ext in url for ext in ['.jpg', '.png', '.webp']):
+                            request_id = params.get("requestId")
+                            from_disk_cache = response.get("fromDiskCache", False) or response.get("fromServiceWorker", False)
+                            
+                            filename = url.split('/')[-1].split('?')[0]
+                            result[filename] = (request_id, from_disk_cache)
+                except:
+                    continue
+            
+            return result
+            
+            # if result:
+            #     self.log(f"Thumbnail: Found {len(result)} image requestIds in performance log")
+            return result
+        except Exception as e:
+            self.log(f"Error parsing performance log: {e}")
+            return {}
+
+    def download_thumbnail_via_cdp(self, request_id: str) -> bytes | None:
+        """CDP를 통해 브라우저 메모리에서 이미지 데이터 가져오기"""
+        try:
+            response_body = self.driver.execute_cdp_cmd(
+                "Network.getResponseBody",
+                {"requestId": request_id}
+            )
+            
+            body = response_body.get("body")
+            is_base64 = response_body.get("base64Encoded", False)
+            
+            if body:
+                if is_base64:
+                    return base64.b64decode(body)
+                else:
+                    return body.encode('utf-8')
+            
+            return None
+        except Exception as e:
+            return None
+
+    def save_thumbnails(self, user_scores_data: list, difficulty: int, request_id_map: dict):
+        """
+        현재 페이지의 썸네일 이미지를 저장
+        파일명 형식: {song_id}_{difficulty}.jpg
+        """
+        if not request_id_map:
+            return
+        
+        # 썸네일 저장 경로
+        thumbnails_dir = os.path.join(config['general']['cache_path'], 'thumbnails')
+        os.makedirs(thumbnails_dir, exist_ok=True)
+        
+        difficulty_name = DIFFICULTY_NAMES.get(difficulty, 'unknown')
+        
+        # 이미지 요소 가져오기
+        try:
+            img_elements = self.driver.find_elements(By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR)
+        except Exception as e:
+            self.log(f"Thumbnail: Failed to find image elements: {e}")
+            return
+        
+        if not img_elements:
+            self.log(f"Thumbnail: No image elements found")
+            return
+        
+        # Vue 데이터와 이미지 요소 매칭 (순서 기반)
+        saved_count = 0
+        skipped_count = 0
+        not_found_count = 0
+        
+        for score, img_elem in zip(user_scores_data, img_elements):
+            try:
+                song_id = score.get('song_id')
+                if not song_id:
+                    continue
+                
+                # 저장할 파일 경로
+                filename = f"{song_id}_{difficulty_name}.jpg"
+                filepath = os.path.join(thumbnails_dir, filename)
+                
+                # 이미 존재하면 스킵 (파일 존재 확인은 ~0.01ms로 빠름)
+                if os.path.exists(filepath):
+                    skipped_count += 1
+                    continue
+                
+                # 이미지 URL에서 파일명 추출
+                img_url = img_elem.get_attribute('src')
+                if not img_url:
+                    continue
+                
+                url_filename = img_url.split('/')[-1].split('?')[0]
+                
+                # requestId 찾기
+                if url_filename not in request_id_map:
+                    not_found_count += 1
+                    continue
+                
+                request_id, _ = request_id_map[url_filename]
+                
+                # CDP로 이미지 다운로드
+                img_data = self.download_thumbnail_via_cdp(request_id)
+                
+                if img_data:
+                    with open(filepath, 'wb') as f:
+                        f.write(img_data)
+                    saved_count += 1
+                    
+            except Exception as e:
+                continue
+        
+        if saved_count > 0 or skipped_count > 0 or not_found_count > 0:
+            self.log(f"Thumbnail: saved={saved_count}, skipped={skipped_count}, not_found={not_found_count}")
 
     def get_all_cookies_chromium(self):
         try:

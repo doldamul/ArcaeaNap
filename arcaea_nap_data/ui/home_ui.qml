@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
+import QtQuick.Effects
 
 Item {
     id: homeRoot
@@ -238,7 +239,10 @@ Item {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 30
+                    anchors.topMargin: 30
+                    anchors.leftMargin: 30
+                    anchors.rightMargin: 30
+                    anchors.bottomMargin: 10
                     spacing: 20
 
                     // 헤더
@@ -263,12 +267,12 @@ Item {
                         Layout.fillHeight: true
                         clip: true
                         model: songModel
-                        spacing: 15
+                        spacing: 6
 
                         delegate: RowLayout {
                             width: ListView.view.width
                             height: 60
-                            spacing: 15
+                            spacing: 6
 
                             // 순위
                             Text {
@@ -279,15 +283,49 @@ Item {
                                 horizontalAlignment: Text.AlignHCenter
                             }
 
-                            // 곡 아이콘 (사각형으로 대체)
                             Rectangle {
                                 width: 50; height: 50
-                                radius: 10
-                                color: "#FFFFFF" // Requested white/empty background
-                                border.color: "#E0E0E0"
-                                border.width: 1
+                                color: "transparent"
                                 
-                                // Placeholder image or empty
+                                // 마스크 아이템: MultiEffect를 위해 layer를 활성화하여 텍스처 생성 유도
+                                Item {
+                                    id: maskItem
+                                    anchors.fill: parent
+                                    visible: false 
+                                    layer.enabled: true
+                                    
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: 10
+                                        color: "black"
+                                    }
+                                }
+
+                                // 실제 이미지 + MultiEffect
+                                Image {
+                                    id: thumbnailImage
+                                    anchors.fill: parent
+                                    source: statsHandler ? statsHandler.getThumbnailPath(model.arcaeaId) : ""
+                                    fillMode: Image.PreserveAspectCrop
+                                    visible: status === Image.Ready
+                                    
+                                    layer.enabled: visible
+                                    layer.effect: MultiEffect {
+                                        maskEnabled: true
+                                        maskSource: maskItem
+                                    }
+                                }
+                                
+                                // 로딩 중이거나 이미지가 없을 때 보일 테두리/배경
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 10
+                                    color: "#EEEEEE" // 조금 더 진한 회색으로 변경
+                                    border.color: "#E0E0E0"
+                                    border.width: 1
+                                    visible: thumbnailImage.status !== Image.Ready
+                                    z: -1
+                                }
                             }
 
                             // 곡 정보

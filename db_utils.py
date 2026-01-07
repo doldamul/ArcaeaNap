@@ -276,7 +276,7 @@ def get_top_10_most_played():
     """
     Returns the top 10 most played songs across all difficulties.
     Returns:
-        list of dict: [{'title': str, 'artist': str, 'playCount': int}, ...]
+        list of dict: [{'title': str, 'artist': str, 'playCount': int, 'arcaeaId': str}, ...]
     """
     scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
     songs_db_path = get_db_path()
@@ -290,13 +290,13 @@ def get_top_10_most_played():
         cursor = conn.cursor()
         
         # Query play_count table
-        # Query play_count table
         # Join songs and charts to ensure validity
         query = """
             SELECT 
                 s.title,
                 s.artist,
-                SUM(pc.yearly_play_count) as total_plays
+                SUM(pc.yearly_play_count) as total_plays,
+                s.arcaea_id
             FROM play_count pc
             JOIN songs_db.songs s ON pc.arcaea_id = s.arcaea_id
             JOIN songs_db.charts c ON s.id = c.song_id AND pc.difficulty = c.difficulty
@@ -312,7 +312,8 @@ def get_top_10_most_played():
                 'title': row[0] if row[0] else 'Unknown Title',
                 'artist': row[1] if row[1] else 'Unknown Artist',
                 'playCount': row[2] if row[2] else 0,
-                'colorCode': "#FFFFFF" # Placeholder for UI consistency
+                'arcaeaId': row[3] if row[3] else '',
+                'colorCode': "#FFFFFF"  # Placeholder for UI consistency
             })
             
         return results

@@ -7,7 +7,7 @@ get_browser_name_os = None # function variable
 os = None
 
 # TODO: add firefox support
-def get_driver(headless=False):
+def get_driver(headless=False, enable_performance_log=False):
     driver = None
     
     match get_browser_name():
@@ -16,18 +16,31 @@ def get_driver(headless=False):
             options.add_argument('--window-size=500,500')
             if headless:
                 options.add_argument('--headless')
+            if enable_performance_log:
+                # undetected_chromedriver에서 performance log 활성화
+                options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+                options.add_argument("--disk-cache-size=100000000")
             driver = uc.Chrome(options=options)
         case 'edge':
             options = webdriver.EdgeOptions()
             options.add_argument('--window-size=500,500')
             if headless:
                 options.add_argument('--headless')
+            if enable_performance_log:
+                options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+                options.add_argument("--disk-cache-size=100000000")
             driver = webdriver.Edge(options=options)
         case 'unsupported':
             return None
     
     driver.set_window_size(500, 500)
     driver.get("about:blank")
+    
+    if enable_performance_log:
+        try:
+            driver.execute_cdp_cmd('Network.enable', {})
+        except:
+            pass
 
     b_info = get_browser_info()
     stealth(driver, **b_info)

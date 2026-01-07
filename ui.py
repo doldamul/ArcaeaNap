@@ -89,6 +89,7 @@ class StatsHandler(QObject):
         super().__init__()
         self._total_count = 0
         self._total_time_str = "0h 0m"
+        self._thumbnails_dir = os.path.join(config['general']['cache_path'], 'thumbnails')
         self.refreshStats()
 
     @pyqtSlot(result=int)
@@ -102,6 +103,27 @@ class StatsHandler(QObject):
     @pyqtSlot(result=list)
     def getMostPlayed(self):
         return get_top_10_most_played()
+
+    @pyqtSlot(str, result=str)
+    def getThumbnailPath(self, arcaea_id: str) -> str:
+        """
+        주어진 arcaea_id에 해당하는 썸네일 경로를 반환
+        FTR > BYD > ETR > PRS > PST 순서로 검색
+        """
+        if not arcaea_id:
+            return ""
+        
+        # 난이도 우선순위: FTR, BYD, ETR, PRS, PST
+        difficulty_priority = ['ftr', 'byd', 'etr', 'prs', 'pst']
+        
+        for diff in difficulty_priority:
+            filename = f"{arcaea_id}_{diff}.jpg"
+            filepath = os.path.join(self._thumbnails_dir, filename)
+            if os.path.exists(filepath):
+                # QML에서 사용할 수 있도록 file:// URL 반환
+                return QUrl.fromLocalFile(filepath).toString()
+        
+        return ""
 
     @pyqtSlot()
     def refreshStats(self):
