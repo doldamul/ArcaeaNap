@@ -267,105 +267,188 @@ Item {
                         Layout.fillHeight: true
                         clip: true
                         model: songModel
-                        spacing: 6
+                        spacing: 2
 
                         delegate: RowLayout {
                             width: ListView.view.width
-                            height: 60
-                            spacing: 6
+                            spacing: 4
 
-                            // 순위
-                            Text {
-                                text: index + 1
-                                color: "#999999"
-                                font.pixelSize: 16
-                                Layout.preferredWidth: 20
-                                horizontalAlignment: Text.AlignHCenter
+                            // Calculate rank-specific properties
+                            readonly property bool isRank1: index === 0
+                            readonly property bool isRank2: index === 1
+                            readonly property bool isRank3: index === 2
+                            readonly property bool isTop3: index < 3
+                            
+                            // Dynamic sizes
+                            readonly property int rowHeight: isRank1 ? 70 : (isRank2 ? 66 : (isRank3 ? 63 : 60))
+                            readonly property int thumbSize: isRank1 ? 64 : (isRank2 ? 58 : (isRank3 ? 54 : 50))
+                            readonly property real rankFontSize: isRank1 ? 22 : (isRank2 ? 20 : 18)
+                            readonly property real titleFontSize: isRank1 ? 24 : (isRank2 ? 21 : (isRank3 ? 18 : 16))
+                            readonly property real playCountFontSize: isRank1 ? 26 : (isRank2 ? 23 : (isRank3 ? 20 : 18))
+                            
+                            // Colors
+                            readonly property string playCountColor: isRank1 ? "#C5A028" : (isRank2 ? "#7A7A7A" : (isRank3 ? "#A0522D" : "#984AD0"))
+                            readonly property string rankDiamondBgColor: isRank1 ? "#c2a955" : (isRank2 ? "#8c8f93" : "#b16a48")
+                            readonly property string rankDiamondBorderColor: isRank1 ? "#B8860B" : (isRank2 ? "#636363" : "#8B4513")
+                            readonly property string rankNumberColor: isTop3 ? "white" : "#999999"
+                            readonly property string titleColor: "#333"
+                            readonly property string artistColor: "#888"
+                            readonly property string playsLabelColor: "#999"
+                            
+                            height: rowHeight
+
+                            // Rank Indicator Container
+                            Item {
+                                Layout.preferredWidth: 40
+                                Layout.preferredHeight: 40
+                                Layout.alignment: Qt.AlignVCenter
+                                
+                                // Diamond Background for top 3
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    width: isRank1 ? 28 : (isRank2 ? 26 : 24)
+                                    height: width
+                                    rotation: 45
+                                    visible: isTop3
+                                    
+                                    color: rankDiamondBgColor
+                                    
+                                    border.color: rankDiamondBorderColor
+                                    border.width: 1
+                                    
+                                    layer.enabled: true
+                                    layer.effect: MultiEffect {
+                                        shadowEnabled: true
+                                        shadowColor: "#40000000"
+                                        shadowBlur: 4
+                                        shadowHorizontalOffset: 1
+                                        shadowVerticalOffset: 1
+                                    }
+                                }
+
+                                // Rank Number
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: index + 1
+                                    color: rankNumberColor
+                                    font.pixelSize: rankFontSize
+                                    font.bold: isTop3
+                                    
+                                    // Add shadow to text for better visibility on metallic backgrounds
+                                    layer.enabled: isTop3
+                                    layer.effect: MultiEffect {
+                                        shadowEnabled: true
+                                        shadowColor: "#80000000"
+                                        shadowBlur: 0.5
+                                        shadowHorizontalOffset: 0.5
+                                        shadowVerticalOffset: 0.5
+                                    }
+                                }
                             }
 
-                            Rectangle {
-                                width: 50; height: 50
-                                color: "transparent"
+                            // Spacing
+                            Item { width: 6 }
+
+                            // Thumbnail Container (fixed width for center alignment)
+                            Item {
+                                Layout.preferredWidth: 64  // Max thumbnail size for alignment
+                                Layout.preferredHeight: rowHeight
                                 
-                                // 마스크 아이템: MultiEffect를 위해 layer를 활성화하여 텍스처 생성 유도
-                                Item {
-                                    id: maskItem
-                                    anchors.fill: parent
-                                    visible: false 
-                                    layer.enabled: true
+                                Rectangle {
+                                    anchors.centerIn: parent
+                                    width: thumbSize; height: thumbSize
+                                    color: "transparent"
                                     
+                                    // Mask for rounded corners
+                                    Item {
+                                        id: maskItem
+                                        anchors.fill: parent
+                                        visible: false 
+                                        layer.enabled: true
+                                        layer.smooth: true
+                                        layer.samples: 8
+                                        
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: 10
+                                            color: "black"
+                                            antialiasing: true
+                                            smooth: true
+                                        }
+                                    }
+
+                                    // Actual Image + MultiEffect
+                                    Image {
+                                        id: thumbnailImage
+                                        anchors.fill: parent
+                                        source: statsHandler ? statsHandler.getThumbnailPath(model.arcaeaId) : ""
+                                        fillMode: Image.PreserveAspectCrop
+                                        mipmap: true
+                                        antialiasing: true
+                                        visible: status === Image.Ready
+                                        
+                                        layer.enabled: visible
+                                        layer.smooth: true
+                                        layer.samples: 8
+                                        layer.effect: MultiEffect {
+                                            maskEnabled: true
+                                            maskSource: maskItem
+                                        }
+                                    }
+                                    
+                                    // Placeholder / border
                                     Rectangle {
                                         anchors.fill: parent
                                         radius: 10
-                                        color: "black"
+                                        color: "#EEEEEE"
+                                        border.color: "#E0E0E0"
+                                        border.width: 1
+                                        visible: thumbnailImage.status !== Image.Ready
+                                        z: -1
                                     }
-                                }
-
-                                // 실제 이미지 + MultiEffect
-                                Image {
-                                    id: thumbnailImage
-                                    anchors.fill: parent
-                                    source: statsHandler ? statsHandler.getThumbnailPath(model.arcaeaId) : ""
-                                    fillMode: Image.PreserveAspectCrop
-                                    visible: status === Image.Ready
-                                    
-                                    layer.enabled: visible
-                                    layer.effect: MultiEffect {
-                                        maskEnabled: true
-                                        maskSource: maskItem
-                                    }
-                                }
-                                
-                                // 로딩 중이거나 이미지가 없을 때 보일 테두리/배경
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: 10
-                                    color: "#EEEEEE" // 조금 더 진한 회색으로 변경
-                                    border.color: "#E0E0E0"
-                                    border.width: 1
-                                    visible: thumbnailImage.status !== Image.Ready
-                                    z: -1
                                 }
                             }
 
-                            // 곡 정보
+                            // Dynamic spacing to align text start position
+                            Item { 
+                                Layout.preferredWidth: (thumbSize - 50) / 2
+                            }
+
+                            // Song Info
                             Column {
                                 Layout.fillWidth: true
                                 Text {
                                     text: model.title
                                     font.bold: true
-                                    font.pixelSize: 16
-                                    color: "#333"
+                                    font.pixelSize: titleFontSize
+                                    color: titleColor
                                     elide: Text.ElideRight
                                     width: parent.width
                                 }
                                 Text {
                                     text: model.artist
-                                    color: "#888"
+                                    color: artistColor
                                     font.pixelSize: 12
                                     elide: Text.ElideRight
                                     width: parent.width
                                 }
                             }
 
-                            // 플레이 횟수
+                            // Play Count
                             Column {
-                                // RowLayout 내에서 Column 자체를 수직 중앙, 필요하다면 우측으로 정렬
                                 Layout.alignment: Qt.AlignRight | Qt.AlignVCenter 
 
                                 Text {
                                     text: model.playCount
-                                    color: "#6A0DAD"
+                                    color: playCountColor
                                     font.bold: true
-                                    font.pixelSize: 16
-                                    // 텍스트를 Column의 오른쪽 끝에 맞춤
+                                    font.pixelSize: playCountFontSize
                                     anchors.right: parent.right 
                                 }
                                 Text {
                                     text: "plays"
-                                    color: "#999"
-                                    font.pixelSize: 10
-                                    // 텍스트를 Column의 오른쪽 끝에 맞춤
+                                    color: playsLabelColor
+                                    font.pixelSize: 12
                                     anchors.right: parent.right
                                 }
                             }
