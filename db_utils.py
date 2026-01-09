@@ -272,6 +272,177 @@ def calculate_user_stats():
     finally:
         conn.close()
 
+def calculate_rank(score: int) -> str:
+    """
+    Calculate grade rank from score.
+    """
+    if score is None:
+        return ""
+    if score >= 10000000:
+        return "PM"
+    elif score >= 9900000:
+        return "EX+"
+    elif score >= 9800000:
+        return "EX"
+    elif score >= 9500000:
+        return "AA"
+    elif score >= 9200000:
+        return "A"
+    elif score >= 8900000:
+        return "B"
+    elif score >= 8600000:
+        return "C"
+    else:
+        return "D"
+
+
+def get_all_songs_with_charts():
+    """
+    Fetches all songs and their charts from songs.db.
+    Returns:
+        dict: {arcaea_id: {
+            'title': str, 'artist': str, 'length': int, 'bpm': str,
+            'charts': {difficulty: {level, bp, s_bp, perceived_bp, note_count, ignore_chart, skill_issues, contain_slowspeed}}
+        }}
+    """
+    songs_db_path = get_db_path()
+    if not os.path.exists(songs_db_path):
+        return {}
+
+    conn = sqlite3.connect(songs_db_path)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT s.arcaea_id, s.title, s.artist, s.length, s.bpm,
+                   c.difficulty, c.level, c.bp, c.s_bp, c.perceived_bp, c.note_count,
+                   c.ignore_chart, c.skill_issues, c.contain_slowspeed, s.id
+            FROM songs s
+            LEFT JOIN charts c ON s.id = c.song_id
+            WHERE s.arcaea_id IS NOT NULL AND s.arcaea_id != ''
+        """)
+        
+        result = {}
+        for row in cursor.fetchall():
+            arcaea_id = row[0]
+            song_id = row[14]
+            
+            if song_id not in result:
+                result[song_id] = {
+                    'arcaea_id': arcaea_id,
+                    'title': row[1] or 'Unknown',
+                    'artist': row[2] or 'Unknown',
+                    'length': row[3] or 0,
+                    'bpm': row[4] or '',
+                    'charts': {}
+                }
+            
+            if row[5] is not None:  # difficulty exists
+                result[song_id]['charts'][row[5]] = {
+                    'level': row[6] or '',
+                    'bp': row[7] or 0.0,
+                    's_bp': row[8] or 0.0,
+                    'perceived_bp': row[9] or 0.0,
+                    'note_count': row[10] or 0,
+                    'ignore_chart': bool(row[11]),
+                    'skill_issues': bool(row[12]),
+                    'contain_slowspeed': bool(row[13]),
+                }
+        
+        return result
+    except Exception as e:
+        print(f"Error fetching songs with charts: {e}")
+        return {}
+    finally:
+        conn.close()
+
+
+def get_best_scores_per_chart():
+    """
+    For each (arcaea_id, difficulty), fetches the record with the highest score.
+    Returns:
+        dict: {(arcaea_id, difficulty): {
+            'score': int, 'shiny_perfect': int, 'perfect': int, 'near': int, 'miss': int,
+            'best_clear_type': int, 'time_played': int, 'score_below_max': int
+        }}
+    """
+    scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
+    if not os.path.exists(scores_db_path):
+        return {}
+
+    conn = sqlite3.connect(scores_db_path)
+    try:
+        cursor = conn.cursor()
+        # Get best score per chart using window function
+        cursor.execute("""
+            WITH ranked AS (
+                SELECT 
+                    arcaea_id, difficulty, score, 
+                    shiny_perfect_count, perfect_count, near_count, miss_count,
+                    best_clear_type, time_played, score_below_max,
+                    ROW_NUMBER() OVER (PARTITION BY arcaea_id, difficulty ORDER BY score DESC) as rn
+                FROM scores
+            )
+            SELECT arcaea_id, difficulty, score, 
+                   shiny_perfect_count, perfect_count, near_count, miss_count,
+                   best_clear_type, time_played, score_below_max
+            FROM ranked WHERE rn = 1
+        """)
+        
+        result = {}
+        for row in cursor.fetchall():
+            key = (row[0], row[1])
+            result[key] = {
+                'score': row[2] or 0,
+                'shiny_perfect': row[3] or 0,
+                'perfect': row[4] or 0,
+                'near': row[5] or 0,
+                'miss': row[6] or 0,
+                'best_clear_type': row[7] or 0,
+                'time_played': row[8] or 0,
+                'score_below_max': row[9] or 0,
+            }
+        
+        return result
+    except Exception as e:
+        print(f"Error fetching best scores: {e}")
+        return {}
+    finally:
+        conn.close()
+
+
+def get_play_counts():
+    """
+    Fetches total play count for each (arcaea_id, difficulty).
+    Returns:
+        dict: {(arcaea_id, difficulty): total_play_count}
+    """
+    scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
+    if not os.path.exists(scores_db_path):
+        return {}
+
+    conn = sqlite3.connect(scores_db_path)
+    try:
+        cursor = conn.cursor()
+        # Sum all yearly_play_count for each chart
+        cursor.execute("""
+            SELECT arcaea_id, difficulty, SUM(yearly_play_count) as total
+            FROM play_count
+            GROUP BY arcaea_id, difficulty
+        """)
+        
+        result = {}
+        for row in cursor.fetchall():
+            key = (row[0], row[1])
+            result[key] = row[2] or 0
+        
+        return result
+    except Exception as e:
+        print(f"Error fetching play counts: {e}")
+        return {}
+    finally:
+        conn.close()
+
+
 def get_top_10_most_played():
     """
     Returns the top 10 most played songs across all difficulties.

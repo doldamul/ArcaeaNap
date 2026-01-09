@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 import QtQuick.Shapes 1.15
+import QtQuick.Effects
 
 Item {
     id: statsRoot
@@ -16,8 +17,29 @@ Item {
     // 이 때는 스플릿 뷰를 유지하되 난이도 패널만 SwipeView로 보여줍니다.
     property bool isDiffCramped: width < 1250
 
-    property var currentSong: songListModel.get(0)
-    property int currentSongIndex: 0
+    // Data from statisticsHandler
+    property var listData: statisticsHandler ? statisticsHandler.getListModel() : []
+    property var currentSong: statisticsHandler ? statisticsHandler.getSelectedItem() : null
+    property int currentSongIndex: -1
+    property string searchText: ""  // Search text managed at root level
+    
+    // Search debounce timer
+    Timer {
+        id: searchDebounce
+        interval: 300
+        onTriggered: if (statisticsHandler) statisticsHandler.setSearchText(statsRoot.searchText)
+    }
+    
+    // Update list when handler data changes
+    Connections {
+        target: statisticsHandler
+        function onDataChanged() {
+            statsRoot.listData = statisticsHandler.getListModel()
+        }
+        function onSelectedItemChanged() {
+            statsRoot.currentSong = statisticsHandler.getSelectedItem()
+        }
+    }
 
     // =========================================================================
     // [1] 재사용 가능한 컴포넌트 정의 (Components)
@@ -74,6 +96,63 @@ Item {
         }
     }
 
+    // 1-1. 상단 통계 카드 (숫자)
+
+    // 1-2. Flag filter helper component (Moved to root)
+    component FlagSegmentedControl: RowLayout {
+        id: flagSegmentRoot
+        property string flagName: ""
+        property int selectedIndex: 1  // 0=Hide, 1=Show, 2=Only
+        signal indexChanged(int idx)
+        
+        spacing: 0
+        
+        Text { 
+            text: flagName
+            color: "#333"
+            Layout.preferredWidth: 100
+        }
+        
+        Repeater {
+            model: ["Hide", "Show", "Only"]
+            
+            Rectangle {
+                width: 50; height: 28
+                radius: index === 0 ? 4 : (index === 2 ? 4 : 0)
+                color: flagSegmentRoot.selectedIndex === index ? "#6A0DAD" : "#F0F0F0"
+                border.color: "#D0D0D0"
+                border.width: flagSegmentRoot.selectedIndex === index ? 0 : 1
+                
+                // Round only left/right corners based on position
+                Rectangle {
+                    visible: index === 0
+                    anchors.right: parent.right; width: 4; height: parent.height
+                    color: parent.color
+                }
+                Rectangle {
+                    visible: index === 2
+                    anchors.left: parent.left; width: 4; height: parent.height
+                    color: parent.color
+                }
+                
+                Text {
+                    anchors.centerIn: parent
+                    text: modelData
+                    font.pixelSize: 11
+                    color: flagSegmentRoot.selectedIndex === index ? "white" : "#666"
+                }
+                
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        flagSegmentRoot.selectedIndex = index
+                        flagSegmentRoot.indexChanged(index)
+                    }
+                }
+            }
+        }
+    }
     // 1-1. 상단 통계 카드 (숫자)
     component StatsCard: Rectangle {
         color: "#FFFFFF"; radius: 20
@@ -140,24 +219,109 @@ Item {
         property string diffName: "FTR"
         property string diffLevel: "11"
         property string diffColor: "#A060FF"
-        property string score: "00,000,000"
+        property int score: 0
+        property string rank: ""
+        property int pure: 0
+        property int shinyPure: 0
+        property int far: 0
+        property int lost: 0
+        property int clearType: 0
         property bool isSelected: false
+        property int difficulty: 2  // Numeric difficulty for click handling
+        
+        signal clicked(int diff)
+        
+        // Helper function for rank color
+        function getRankColor(r) {
+            if (r === "PM") return "#FFD700"
+            if (r === "EX+" || r === "EX") return "#A060FF"
+            if (r === "AA") return "#4A90E2"
+            return "#666"
+        }
+        
+        // Helper function for clear type text
+        function getClearTypeText(t) {
+            switch(t) {
+                case 0: return "Track Lost"
+                case 1: return "Track Complete"
+                case 2: return "Full Recall"
+                case 3: return "Pure Memory"
+                case 4: return "Easy Clear"
+                case 5: return "Hard Clear"
+                default: return ""
+            }
+        }
 
         Layout.fillWidth: true
         Layout.preferredHeight: 280
         radius: 15
-        color: isSelected ? "#FFFFFF" : (diffName === "PST" ? "#F5FCFF" : (diffName === "PRS" ? "#F0FFF0" : "#FFF5F5"))
+        color: isSelected ? "#FFFFFF" : (diffName === "PST" ? "#F5FCFF" : (diffName === "PRS" ? "#F0FFF0" : (diffName === "ETR" ? "#F5F0F5" : "#FFF5F5")))
         border.color: isSelected ? diffColor : "#E0E0E0"
         border.width: isSelected ? 2 : 1
+        
+        // Clickable area for radio-button behavior
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: parent.clicked(parent.difficulty)
+        }
 
         ColumnLayout {
-            anchors.fill: parent; anchors.margins: 20
-            Text { text: diffName; color: diffColor; font.bold: true; font.pixelSize: 18 }
+            anchors.fill: parent; anchors.margins: 20; spacing: 8
+            
+            // Header: Difficulty Name + Level
+            RowLayout {
+                Layout.fillWidth: true
+                Text { text: diffName; color: diffColor; font.bold: true; font.pixelSize: 18 }
+                Item { Layout.fillWidth: true }
+                Text { text: getClearTypeText(clearType); color: "#888"; font.pixelSize: 10; visible: score > 0 }
+            }
             Text { text: "LEVEL " + diffLevel; color: "#999"; font.pixelSize: 10 }
-            Item { height: 10 }
-            Text { text: score; font.bold: true; font.pixelSize: 22; color: "#333" }
-            Item { height: 15 }
-            RowLayout { Layout.fillWidth: true; Text { text: "Max Combo"; color: "#888"; font.pixelSize: 12 } Item { Layout.fillWidth: true } Text { text: "1450"; color: "#333"; font.bold: true } }
+            
+            Item { Layout.preferredHeight: 10 }
+            
+            // Score + Rank
+            Text { 
+                text: score > 0 ? score : "-"
+                font.bold: true; font.pixelSize: 24; color: "#333" 
+            }
+            Text { 
+                text: rank
+                font.bold: true; font.pixelSize: 14
+                color: getRankColor(rank)
+                visible: rank !== ""
+            }
+            
+            Item { Layout.fillHeight: true }
+            
+            // Stats Grid: Pure, Far, Lost
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                rowSpacing: 6
+                columnSpacing: 10
+                
+                Text { text: "Pure"; color: "#888"; font.pixelSize: 12 }
+                Text { 
+                    text: score > 0 ? pure + (shinyPure > 0 ? " (" + shinyPure + ")" : "") : "-"
+                    color: "#333"; font.bold: true; font.pixelSize: 12
+                    Layout.alignment: Qt.AlignRight
+                }
+                
+                Text { text: "Far"; color: "#888"; font.pixelSize: 12 }
+                Text { 
+                    text: score > 0 ? far.toString() : "-"
+                    color: "#E0A000"; font.bold: true; font.pixelSize: 12
+                    Layout.alignment: Qt.AlignRight
+                }
+                
+                Text { text: "Lost"; color: "#888"; font.pixelSize: 12 }
+                Text { 
+                    text: score > 0 ? lost.toString() : "-"
+                    color: "#E04040"; font.bold: true; font.pixelSize: 12
+                    Layout.alignment: Qt.AlignRight
+                }
+            }
         }
     }
 
@@ -201,45 +365,7 @@ Item {
 
                 spacing: 30
 
-                // (A) 상단 대시보드 섹션
-                Item {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 220
 
-                    // [Mobile] SwipeView + [신규] ArrowNav 적용
-                    ArrowNav {
-                        visible: isNarrow
-                        targetView: dashboardSwipe // 타겟 지정
-                        
-                        SwipeView {
-                            id: dashboardSwipe
-                            anchors.fill: parent
-                            clip: true; spacing: 10
-                            StatsCard { }
-                            RadarCard { }
-                            GraphCard { }
-                        }
-                    }
-                    
-                    PageIndicator {
-                        visible: isNarrow
-                        count: dashboardSwipe.count
-                        currentIndex: dashboardSwipe.currentIndex
-                        anchors.bottom: parent.bottom
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        delegate: Rectangle { width: 8; height: 8; radius: 4; color: index === dashboardSwipe.currentIndex ? "#6A0DAD" : "#DDD" }
-                    }
-
-                    // [Desktop] RowLayout
-                    RowLayout {
-                        anchors.fill: parent
-                        visible: !isNarrow
-                        spacing: 30
-                        StatsCard { Layout.fillWidth: true; Layout.fillHeight: true }
-                        RadarCard { Layout.fillWidth: true; Layout.fillHeight: true }
-                        GraphCard { Layout.preferredWidth: 350; Layout.fillHeight: true }
-                    }
-                }
 
                 // (B) 하단 컨텐츠 섹션
                 RowLayout {
@@ -250,52 +376,349 @@ Item {
 
                     // (B-1) 곡 목록
                     Rectangle {
-                        Layout.preferredWidth: isNarrow ? -1 : 380
+                        id: songListContainer
+                        Layout.preferredWidth: isNarrow ? -1 : 420
                         Layout.fillWidth: isNarrow 
                         Layout.fillHeight: true
                         color: "#FFFFFF"; radius: 20
                         
                         ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 20; spacing: 15
+                            anchors.fill: parent; anchors.margins: 20; spacing: 12
+                            
+                            // Search Bar
                             Rectangle {
                                 Layout.fillWidth: true; height: 40; radius: 10; color: "#F5F5F5"
                                 RowLayout {
                                     anchors.fill: parent; anchors.margins: 10
                                     Text { text: "🔍"; color: "#AAA" }
-                                    TextInput { text: "Search songs..."; color: "#333"; font.pixelSize: 14; selectByMouse: true; Layout.fillWidth: true }
+                                    TextInput { 
+                                        id: searchInput
+                                        text: statsRoot.searchText
+                                        color: "#333"; font.pixelSize: 14
+                                        selectByMouse: true; Layout.fillWidth: true
+                                        clip: true
+                                        onTextChanged: {
+                                            statsRoot.searchText = text
+                                            searchDebounce.restart()
+                                        }
+                                        
+                                        // Placeholder text
+                                        Text {
+                                            anchors.fill: parent
+                                            text: "Search songs..."
+                                            color: "#999"
+                                            font.pixelSize: 14
+                                            visible: !searchInput.text && !searchInput.activeFocus
+                                        }
+                                    }
                                 }
                             }
-                            ListView {
-                                Layout.fillWidth: true; Layout.fillHeight: true
-                                clip: true; model: songListModel; spacing: 10
-                                delegate: Rectangle {
-                                    width: ListView.view.width; height: 70
-                                    color: (!isNarrow && index === currentSongIndex) ? "#F8F0FF" : "transparent"
-                                    radius: 10
-                                    border.width: (!isNarrow && index === currentSongIndex) ? 1 : 0
-                                    border.color: "#D0A0FF"
+                            
+                            // Controls Row: Song/Chart Switch + Sort
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 10
+                                
+                                // Song/Chart Mode Switcher
+                                Rectangle {
+                                    Layout.preferredWidth: 110
+                                    Layout.preferredHeight: 32
+                                    radius: 6
+                                    color: "#F0F0F0"
+                                    
                                     RowLayout {
-                                        anchors.fill: parent; anchors.margins: 10; spacing: 10
-                                        Rectangle { width: 48; height: 48; radius: 6; color: model.colorCode }
-                                        Column {
-                                            Layout.fillWidth: true
-                                            Text { text: model.title; font.bold: true; color: "#333" }
-                                            Text { text: model.artist; font.pixelSize: 11; color: "#888" }
-                                        }
-                                        Column {
-                                            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                                            Text { text: model.rank; font.bold: true; color: model.rank === "PM" ? "#FFD700" : "#A060FF"; anchors.right: parent.right }
-                                            Text { text: model.score; font.bold: true; color: "#333"; anchors.right: parent.right }
-                                        }
-                                    }
-                                    MouseArea {
                                         anchors.fill: parent
-                                        onClicked: {
-                                            statsRoot.currentSongIndex = index
-                                            statsRoot.currentSong = songListModel.get(index)
-                                            if (isNarrow) mobileStack.push(detailPageComponent)
+                                        spacing: 0
+                                        
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            radius: 6
+                                            color: statisticsHandler && statisticsHandler.displayMode === "song" ? "#6A0DAD" : "transparent"
+                                            
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "Song"
+                                                font.pixelSize: 12
+                                                font.bold: statisticsHandler && statisticsHandler.displayMode === "song"
+                                                color: statisticsHandler && statisticsHandler.displayMode === "song" ? "white" : "#666"
+                                            }
+                                            
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: if (statisticsHandler) statisticsHandler.setDisplayMode("song")
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            radius: 6
+                                            color: statisticsHandler && statisticsHandler.displayMode === "chart" ? "#6A0DAD" : "transparent"
+                                            
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "Chart"
+                                                font.pixelSize: 12
+                                                font.bold: statisticsHandler && statisticsHandler.displayMode === "chart"
+                                                color: statisticsHandler && statisticsHandler.displayMode === "chart" ? "white" : "#666"
+                                            }
+                                            
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: if (statisticsHandler) statisticsHandler.setDisplayMode("chart")
+                                            }
                                         }
                                     }
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+
+                                // Filter Button
+                                Rectangle {
+                                    Layout.preferredWidth: 80; Layout.preferredHeight: 32
+                                    radius: 6
+                                    color: filterMouse.containsMouse ? "#E0E0E0" : "#F0F0F0"
+                                    
+                                    RowLayout {
+                                        anchors.centerIn: parent
+                                        spacing: 4
+                                        Text { text: "🔽"; font.pixelSize: 12; color: "#666" }
+                                        Text { text: "Filters"; font.pixelSize: 12; color: "#666"; font.bold: true }
+                                    }
+                                    
+                                    MouseArea {
+                                        id: filterMouse
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        hoverEnabled: true
+                                        onClicked: filterPopup.open()
+                                    }
+                                }
+                                
+                                // Item { Layout.fillWidth: true }
+                                
+                                Item { Layout.fillWidth: true }
+                                
+                                // Sort Dropdown
+                                ComboBox {
+                                    id: sortCombo
+                                    Layout.preferredWidth: 100
+                                    Layout.preferredHeight: 32
+                                    model: ["Title", "Score", "MAX", "Total Play", "This Year Play", "Recent", "Level (BP)", "S-BP", "P-BP", "Length"]
+                                    
+                                    property var sortModes: ["title", "score", "max", "total_play_count", "this_year_play_count", "recent_played", "level", "s_bp", "perceived_bp", "length"]
+                                    
+                                    onCurrentIndexChanged: {
+                                        if (statisticsHandler && currentIndex >= 0) {
+                                            statisticsHandler.setSortMode(sortModes[currentIndex])
+                                        }
+                                    }
+
+                                    // Custom Styling
+                                    background: Rectangle {
+                                        color: parent.hovered ? "#E0E0E0" : "#F0F0F0"
+                                        radius: 6
+                                    }
+                                    
+                                    contentItem: Text {
+                                        text: parent.displayText
+                                        font.pixelSize: 12
+                                        color: "#666"
+                                        verticalAlignment: Text.AlignVCenter
+                                        elide: Text.ElideRight
+                                        leftPadding: 10
+                                        rightPadding: 20
+                                    }
+                                    
+                                    indicator: Text {
+                                        x: parent.width - width - 8
+                                        y: (parent.height - height) / 2
+                                        text: "▼"
+                                        color: "#666"
+                                        font.pixelSize: 10
+                                    }
+
+                                    delegate: ItemDelegate {
+                                        width: parent.width
+                                        contentItem: Text {
+                                            text: modelData
+                                            color: "#333"
+                                            font.pixelSize: 12
+                                            elide: Text.ElideRight
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                        background: Rectangle {
+                                            color: parent.highlighted ? "#E0E0E0" : "transparent"
+                                        }
+                                    }
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+                                
+                                // Ascending/Descending Toggle
+                                Rectangle {
+                                    Layout.preferredWidth: 32; Layout.preferredHeight: 32
+                                    radius: 6
+                                    color: sortOrderMouse.containsMouse ? "#E0E0E0" : "#F0F0F0"
+                                    
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: statisticsHandler && statisticsHandler.sortAscending ? "↑" : "↓"
+                                        font.pixelSize: 16
+                                        font.bold: true
+                                        color: "#6A0DAD"
+                                    }
+                                    
+                                    MouseArea {
+                                        id: sortOrderMouse
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        hoverEnabled: true
+                                        onClicked: if (statisticsHandler) statisticsHandler.toggleSortOrder()
+                                    }
+                                }
+                            }
+                            
+                            // Item count label
+                            Text {
+                                text: listData.length + " items"
+                                font.pixelSize: 11
+                                color: "#999"
+                            }
+                            
+                            // Song/Chart ListView Wrapper
+                            Item {
+                                Layout.fillWidth: true; Layout.fillHeight: true
+
+                                ListView {
+                                    id: songListView
+                                    anchors.fill: parent
+                                    anchors.rightMargin: 14 // Make room for scrollbar
+                                    clip: true
+                                    model: listData
+                                    spacing: 8
+                                    
+                                    ScrollBar.vertical: listVerticalBar
+                                    
+                                    delegate: Rectangle {
+                                        width: ListView.view.width
+                                        height: 70
+                                        color: (!isNarrow && index === currentSongIndex) ? "#F8F0FF" : (delegateMouse.containsMouse ? "#FAFAFA" : "transparent")
+                                        radius: 10
+                                        border.width: (!isNarrow && index === currentSongIndex) ? 1 : 0
+                                        border.color: "#D0A0FF"
+                                        
+                                        property var itemData: modelData
+                                        
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 0
+                                            anchors.topMargin: 10
+                                            anchors.bottomMargin: 10
+                                            anchors.rightMargin: 10
+                                            spacing: 10
+                                            
+                                            // Index
+                                            Text {
+                                                text: index + 1
+                                                font.pixelSize: 11
+                                                color: "#888"
+                                                Layout.preferredWidth: 22
+                                                horizontalAlignment: Text.AlignRight
+                                            }
+                                            
+                                            // Thumbnail (uses real image with fallback to colored rectangle)
+                                            Rectangle { 
+                                                id: thumbRect
+                                                width: 48; height: 48; radius: 6
+                                                color: itemData.difficultyColor || "#E0E0E0"
+                                                clip: true
+                                                
+                                                Image {
+                                                    id: thumbImage
+                                                    anchors.fill: parent
+                                                    anchors.margins: -1 // Slight negative margin to avoid edge artifacts
+                                                    source: statsHandler ? statsHandler.getThumbnailPath(itemData.arcaeaId || "") : ""
+                                                    fillMode: Image.PreserveAspectCrop
+                                                    smooth: true
+                                                    visible: status === Image.Ready
+                                                }
+                                                
+                                                // Show 3-letter difficulty code ONLY when no thumbnail is loaded
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: itemData.difficultyName || ""
+                                                    font.pixelSize: 14
+                                                    font.bold: true
+                                                    color: "white"
+                                                    visible: thumbImage.status !== Image.Ready
+                                                }
+                                            }
+                                            
+                                            Column {
+                                                Layout.fillWidth: true
+                                                spacing: 2
+                                                Text { 
+                                                    text: itemData.title || ""
+                                                    font.bold: true
+                                                    color: "#333"
+                                                    elide: Text.ElideRight
+                                                    width: parent.width
+                                                }
+                                                Text { 
+                                                    text: itemData.artist || ""
+                                                    font.pixelSize: 11
+                                                    color: "#888"
+                                                    elide: Text.ElideRight
+                                                    width: parent.width
+                                                }
+                                            }
+                                            
+                                            // Dynamic display value (based on sort mode)
+                                            Text {
+                                                text: itemData.displayValue || ""
+                                                font.bold: true
+                                                font.pixelSize: 13
+                                                color: "#6A0DAD"
+                                                Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                                            }
+                                        }
+                                        
+                                        MouseArea {
+                                            id: delegateMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                statsRoot.currentSongIndex = index
+                                                if (statisticsHandler) statisticsHandler.selectItem(index)
+                                                if (isNarrow) mobileStack.push(detailPageComponent)
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Empty state
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "No songs found"
+                                        color: "#999"
+                                        font.pixelSize: 14
+                                        visible: listData.length === 0
+                                    }
+                                }
+
+                                // Independent ScrollBar anchored to the container
+                                ScrollBar {
+                                    id: listVerticalBar
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 0
+                                    active: true
+                                    width: 12
                                 }
                             }
                         }
@@ -323,6 +746,17 @@ Item {
             color: isNarrow ? "#F3F4F8" : "#FFFFFF" 
             radius: isNarrow ? 0 : 20
             clip: true
+            
+            // Get difficulties to display (filteredDifficulties for Song mode, single item for Chart mode)
+            property var difficultiesToShow: {
+                if (!currentSong) return []
+                // In song mode, use filteredDifficulties
+                if (currentSong.filteredDifficulties) {
+                    return currentSong.filteredDifficulties
+                }
+                // In chart mode, currentSong IS the chart, so wrap it in array
+                return [currentSong]
+            }
 
             ColumnLayout {
                 anchors.fill: parent
@@ -350,19 +784,84 @@ Item {
                     
                     ColumnLayout {
                         width: parent.width; spacing: 0
+                        
+                        // Song info header
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 200
                             gradient: Gradient { GradientStop { position: 0.0; color: "#2A1040" } GradientStop { position: 1.0; color: "#1A0520" } }
+                            
                             RowLayout {
                                 anchors.fill: parent; anchors.margins: isNarrow ? 20 : 40; spacing: isNarrow ? 20 : 30
+                                
+                                // Thumbnail with real image
                                 Rectangle {
-                                    width: isNarrow ? 80 : 120; height: isNarrow ? 80 : 120; radius: 10; color: currentSong.colorCode
+                                    width: isNarrow ? 120 : 260; height: isNarrow ? 120 : 260; radius: 15
+                                    color: currentSong ? (currentSong.difficultyColor || "#6A0DAD") : "#6A0DAD"
                                     border.color: "white"; border.width: 2
+                                    clip: true
+                                    
+                                    Image {
+                                        anchors.fill: parent
+                                        anchors.margins: -1 // Slight negative margin to avoid edge artifacts
+                                        source: statsHandler && currentSong ? statsHandler.getThumbnailPath(currentSong.arcaeaId || "") : ""
+                                        fillMode: Image.PreserveAspectCrop
+                                        smooth: true
+                                        visible: status === Image.Ready
+                                    }
                                 }
+                                
                                 Column {
                                     Layout.fillWidth: true; spacing: 10
-                                    Text { text: currentSong.title; color: "white"; font.bold: true; font.pixelSize: isNarrow ? 24 : 36; wrapMode: Text.Wrap; width: parent.width }
-                                    Text { text: currentSong.artist; color: "#CCC"; font.pixelSize: 16 }
+                                    
+                                    // BPM and Length badges
+                                    RowLayout {
+                                        spacing: 10
+                                        visible: Boolean(currentSong)
+                                        
+                                        Rectangle {
+                                            visible: Boolean(currentSong) && Boolean(currentSong.bpm)
+                                            Layout.preferredWidth: bpmText.width + 16
+                                            Layout.preferredHeight: 24
+                                            radius: 12
+                                            color: "#6A0DAD"
+                                            Text {
+                                                id: bpmText
+                                                anchors.centerIn: parent
+                                                text: Boolean(currentSong) && Boolean(currentSong.bpm) ? ("BPM: " + currentSong.bpm) : ""
+                                                color: "white"; font.pixelSize: 11
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            visible: Boolean(currentSong) && Number(currentSong.length) > 0
+                                            Layout.preferredWidth: lengthText.width + 16
+                                            Layout.preferredHeight: 24
+                                            radius: 12
+                                            color: "#4A90E2"
+                                            Text {
+                                                id: lengthText
+                                                anchors.centerIn: parent
+                                                text: {
+                                                    if (!currentSong || !currentSong.length) return ""
+                                                    var len = currentSong.length
+                                                    return "Length: " + Math.floor(len / 60) + ":" + (len % 60).toString().padStart(2, '0')
+                                                }
+                                                color: "white"; font.pixelSize: 11
+                                            }
+                                        }
+                                    }
+                                    
+                                    Text { 
+                                        text: currentSong ? currentSong.title : "Select a song"
+                                        color: "white"; font.bold: true
+                                        font.pixelSize: isNarrow ? 24 : 36
+                                        elide: Text.ElideRight
+                                        width: parent.width 
+                                    }
+                                    Text { 
+                                        text: currentSong ? currentSong.artist : ""
+                                        color: "#CCC"; font.pixelSize: 16 
+                                    }
                                 }
                             }
                         }
@@ -373,6 +872,8 @@ Item {
                             anchors.margins: isNarrow ? 20 : 40
                             Layout.margins: isNarrow ? 20 : 40
                             spacing: 30
+                            
+                            visible: currentSong !== null
 
                             Text { text: "📊 Difficulty Breakdown"; font.bold: true; font.pixelSize: 18; color: "#333" }
 
@@ -380,9 +881,9 @@ Item {
                             Item {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 300
+                                visible: difficultiesToShow.length > 0
                                 
-                                // [신규 적용] ArrowNav + SwipeView
-                                // 조건: 모바일 모드(isNarrow) 이거나 중간 단계 비좁은 모드(isDiffCramped) 일 때 표시
+                                // [SwipeView for mobile/cramped]
                                 ArrowNav {
                                     visible: isNarrow || isDiffCramped 
                                     targetView: diffSwipe
@@ -392,31 +893,83 @@ Item {
                                         anchors.fill: parent
                                         clip: false; spacing: 15
                                         
-                                        DiffCard { diffName: "PST"; diffLevel: "5"; score: "10,000,550"; diffColor: "#00A0E9" }
-                                        DiffCard { diffName: "PRS"; diffLevel: "8"; score: "10,000,020"; diffColor: "#50C050" }
-                                        DiffCard { diffName: "FTR"; diffLevel: "11"; score: "9,985,420"; diffColor: "#A060FF"; isSelected: true }
-                                        DiffCard { diffName: "BYD"; diffLevel: "12"; score: "9,650,200"; diffColor: "#E04040" }
+                                        Repeater {
+                                            model: difficultiesToShow
+                                            
+                                            DiffCard {
+                                                diffName: modelData.difficultyName || ""
+                                                diffLevel: modelData.level || ""
+                                                diffColor: modelData.difficultyColor || "#888"
+                                                score: modelData.bestScore || 0
+                                                rank: modelData.rank || ""
+                                                pure: modelData.pure || 0
+                                                shinyPure: modelData.shinyPure || 0
+                                                far: modelData.far || 0
+                                                lost: modelData.lost || 0
+                                                clearType: modelData.bestClearType || 0
+                                                difficulty: modelData.difficulty || 0
+                                                isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
+                                                
+                                                onClicked: function(diff) {
+                                                    if (statisticsHandler) {
+                                                        statisticsHandler.setSelectedDifficulty(diff)
+                                                        diffSwipe.currentIndex = index
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
 
                                 PageIndicator {
-                                    visible: isNarrow || isDiffCramped
-                                    count: 4; currentIndex: diffSwipe.currentIndex
-                                    anchors.bottom: parent.bottom; anchors.horizontalCenter: parent.horizontalCenter
+                                    visible: (isNarrow || isDiffCramped) && difficultiesToShow.length > 1
+                                    count: difficultiesToShow.length
+                                    currentIndex: diffSwipe.currentIndex
+                                    anchors.bottom: parent.bottom
+                                    anchors.horizontalCenter: parent.horizontalCenter
                                     delegate: Rectangle { width: 8; height: 8; radius: 4; color: index === diffSwipe.currentIndex ? "#6A0DAD" : "#DDD" }
                                 }
 
                                 // [Desktop] RowLayout
-                                // 조건: 완전한 데스크탑 모드일 때만 표시 (!isNarrow 그리고 !isDiffCramped)
                                 RowLayout {
                                     anchors.fill: parent
                                     visible: !isNarrow && !isDiffCramped
                                     spacing: 15
-                                    DiffCard { diffName: "PST"; diffLevel: "5"; score: "10,000,550"; diffColor: "#00A0E9" }
-                                    DiffCard { diffName: "PRS"; diffLevel: "8"; score: "10,000,020"; diffColor: "#50C050" }
-                                    DiffCard { diffName: "FTR"; diffLevel: "11"; score: "9,985,420"; diffColor: "#A060FF"; isSelected: true }
-                                    DiffCard { diffName: "BYD"; diffLevel: "12"; score: "9,650,200"; diffColor: "#E04040" }
+                                    
+                                    Repeater {
+                                        model: difficultiesToShow
+                                        
+                                        DiffCard {
+                                            diffName: modelData.difficultyName || ""
+                                            diffLevel: modelData.level || ""
+                                            diffColor: modelData.difficultyColor || "#888"
+                                            score: modelData.bestScore || 0
+                                            rank: modelData.rank || ""
+                                            pure: modelData.pure || 0
+                                            shinyPure: modelData.shinyPure || 0
+                                            far: modelData.far || 0
+                                            lost: modelData.lost || 0
+                                            clearType: modelData.bestClearType || 0
+                                            difficulty: modelData.difficulty || 0
+                                            isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
+                                            
+                                            onClicked: function(diff) {
+                                                if (statisticsHandler) {
+                                                    statisticsHandler.setSelectedDifficulty(diff)
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
+                            }
+                            
+                            // Empty state when no song selected
+                            Text {
+                                visible: !currentSong
+                                text: "Select a song from the list to view details"
+                                color: "#999"
+                                font.pixelSize: 16
+                                Layout.alignment: Qt.AlignHCenter
                             }
                         }
                     }
@@ -424,16 +977,668 @@ Item {
             }
         }
     }
+    
+    // =========================================================================
+    // Filter Popup
+    // =========================================================================
+    Popup {
+        id: filterPopup
+        width: 400
+        height: 500
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        
+        property bool initialized: false  // Prevent filter updates during initialization
+        
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        
+        Component.onCompleted: {
+            // Mark as initialized after all components are ready
+            initialized = true
+        }
+        
+        background: Rectangle {
+            color: "#FFFFFF"
+            radius: 15
+            border.color: "#E0E0E0"
+            border.width: 1
+            
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowHorizontalOffset: 0
+                shadowVerticalOffset: 4
+                shadowBlur: 1.0 // Normalized value roughly corresponding to radius
+                shadowColor: "#40000000"
+            }
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 20
+            
+            // Header
+            RowLayout {
+                Layout.fillWidth: true
+                Text { text: "Filters"; font.pixelSize: 20; font.bold: true; color: "#333" }
+                Item { Layout.fillWidth: true }
+                Text { 
+                    text: "Reset All"
+                    font.pixelSize: 12
+                    color: "#6A0DAD"
+                    font.underline: true
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            // Reset all filters
+                            if (statisticsHandler) {
+                                statisticsHandler.setFilter("difficulties", [0, 1, 2, 3, 4])
+                                statisticsHandler.setFilter("clear_types", [0, 1, 2, 3, 4, 5])
+                            }
+                            pstCheck.checked = true
+                            prsCheck.checked = true
+                            ftrCheck.checked = true
+                            etrCheck.checked = true
+                            bydCheck.checked = true
+                            
+                            // Reset Range Slider
+                            rangeSlider.bpMode = false
+                            rangeSlider.handleAIndex = 0
+                            rangeSlider.handleBIndex = rangeSlider.currentList.length > 0 ? rangeSlider.currentList.length - 1 : 0
+                            filterPopup.updateRangeFilter()  // Apply the reset to backend
+                            
+                            ignoreFlagSegment.selectedIndex = 1 // Show
+                            skillFlagSegment.selectedIndex = 1 // Show
+                            slowFlagSegment.selectedIndex = 1 // Show
+                            
+                            clearType0.checked = true
+                            clearType1.checked = true
+                            clearType2.checked = true
+                            clearType3.checked = true
+                            clearType4.checked = true
+                            clearType5.checked = true
+                        }
+                    }
+                }
+            }
+            
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                contentWidth: availableWidth
+                clip: true
+                
+                ColumnLayout {
+                    width: parent.width - 24  // Right padding for scroll indicator
+                    spacing: 20
+                    
+                    // Difficulty Filter
+                    Column {
+                        spacing: 10
+                        Layout.fillWidth: true
+                        
+                        Text { text: "Difficulties"; font.pixelSize: 14; font.bold: true; color: "#333" }
+                        
+                        GridLayout {
+                            columns: 5
+                            columnSpacing: 15
+                            rowSpacing: 8
+                            
+                            CheckBox {
+                                id: pstCheck
+                                text: "PST"
+                                checked: true
+                                onCheckedChanged: filterPopup.updateDifficultyFilter()
+                            }
+                            CheckBox {
+                                id: prsCheck
+                                text: "PRS"
+                                checked: true
+                                onCheckedChanged: filterPopup.updateDifficultyFilter()
+                            }
+                            CheckBox {
+                                id: ftrCheck
+                                text: "FTR"
+                                checked: true
+                                onCheckedChanged: filterPopup.updateDifficultyFilter()
+                            }
+                            CheckBox {
+                                id: etrCheck
+                                text: "ETR"
+                                checked: true
+                                onCheckedChanged: filterPopup.updateDifficultyFilter()
+                            }
+                            CheckBox {
+                                id: bydCheck
+                                text: "BYD"
+                                checked: true
+                                onCheckedChanged: filterPopup.updateDifficultyFilter()
+                            }
+                        }
+                    }
+                    
+                    // Level/BP Range Filter
+                    Column {
+                        spacing: 10
+                        Layout.fillWidth: true
+                        
+                        // Header with Mode Toggle
+                        RowLayout {
+                            width: parent.width
+                            
+                            Text { text: "Range Filter"; font.pixelSize: 14; font.bold: true; color: "#333" }
+                            
+                            Item { Layout.fillWidth: true }
+                            
+                            // Level/BP Toggle
+                            Rectangle {
+                                width: 100; height: 28
+                                radius: 4
+                                color: "#F0F0F0"
+                                
+                                RowLayout {
+                                    anchors.fill: parent
+                                    spacing: 0
+                                    
+                                    Rectangle {
+                                        Layout.fillWidth: true; Layout.fillHeight: true
+                                        radius: 4; color: !rangeSlider.bpMode ? "#6A0DAD" : "transparent"
+                                        Text { anchors.centerIn: parent; text: "Level"; font.pixelSize: 11; color: !rangeSlider.bpMode ? "white" : "#666" }
+                                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: rangeSlider.setBpMode(false) }
+                                    }
+                                    Rectangle {
+                                        Layout.fillWidth: true; Layout.fillHeight: true
+                                        radius: 4; color: rangeSlider.bpMode ? "#6A0DAD" : "transparent"
+                                        Text { anchors.centerIn: parent; text: "BP"; font.pixelSize: 11; color: rangeSlider.bpMode ? "white" : "#666" }
+                                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: rangeSlider.setBpMode(true) }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Range Slider
+                        Item {
+                            id: rangeSlider
+                            width: parent.width
+                            height: 60
+                            
+                            property bool bpMode: false
+                            property var levels: statisticsHandler ? statisticsHandler.availableLevels : []
+                            property var bps: statisticsHandler ? statisticsHandler.availableBPs : []
+                            property var currentList: bpMode ? bps : levels
+                            
+                            // Independent handle indices (not constrained to be lower/upper)
+                            property int handleAIndex: 0
+                            property int handleBIndex: currentList.length > 0 ? currentList.length - 1 : 0
+                            
+                            // Computed min/max based on handle values
+                            property int minIndex: Math.min(handleAIndex, handleBIndex)
+                            property int maxIndex: Math.max(handleAIndex, handleBIndex)
 
-    ListModel {
-        id: songListModel
-        ListElement { title: "dWxygfnsJW"; artist: "txPXRrNa"; score: "10,000,985"; rank: "EX+"; colorCode: "#AEEEEE" }
-        ListElement { title: "QKZrpaaiKecM"; artist: "UtsYpPVAHssHhE vs bBX"; score: "9,985,420"; rank: "EX"; colorCode: "#4B0082" }
-        ListElement { title: "DjhDyAdKqCwkqhb"; artist: "XjtADQrRNEvEMJp"; score: "9,750,110"; rank: "AA"; colorCode: "#0000FF" }
-        ListElement { title: "woJipkFq"; artist: "tA"; score: "9,920,300"; rank: "EX"; colorCode: "#87CEEB" }
-        ListElement { title: "bEymYYgBBjKtsG"; artist: "nt+p"; score: "10,001,220"; rank: "PM"; colorCode: "#FF0000" }
-        ListElement { title: "LdmToDXYVx"; artist: "UtsYpPVAHssHhE"; score: "9,998,500"; rank: "EX+"; colorCode: "#8B0000" }
-        ListElement { title: "cMcXKxLfuPAn"; artist: "NEvE"; score: "9,450,660"; rank: "A"; colorCode: "#FFFFFF" }
-        ListElement { title: "nPmDdkgHg"; artist: "UtsYpPVAHssHhE vs waEj"; score: "9,890,123"; rank: "EX"; colorCode: "#FFD700" }
+                            property var levelBoundaries: statisticsHandler ? statisticsHandler.levelBoundaries : ({})
+                            
+                            function setBpMode(mode) {
+                                if (mode !== bpMode) {
+                                    // Convert current selection to new mode
+                                    var oldMinIdx = minIndex
+                                    var oldMaxIdx = maxIndex
+                                    
+                                    if (mode) {
+                                        // Level -> BP conversion
+                                        var minLevel = levels[oldMinIdx]
+                                        var maxLevel = levels[oldMaxIdx]
+                                        
+                                        // Get BP range from levelBoundaries
+                                        var minBp = levelBoundaries[minLevel] ? levelBoundaries[minLevel].min : bps[0]
+                                        var maxBp = levelBoundaries[maxLevel] ? levelBoundaries[maxLevel].max : bps[bps.length - 1]
+                                        
+                                        // Find indices in BP list
+                                        bpMode = true  // Change mode first so currentList updates
+                                        handleAIndex = findClosestIndex(bps, minBp, true)
+                                        handleBIndex = findClosestIndex(bps, maxBp, false)
+                                    } else {
+                                        // BP -> Level conversion
+                                        var selectedMinBp = bps[oldMinIdx]
+                                        var selectedMaxBp = bps[oldMaxIdx]
+                                        
+                                        // Find levels that contain this BP range
+                                        var newMinLevelIdx = 0
+                                        var newMaxLevelIdx = levels.length - 1
+                                        
+                                        for (var i = 0; i < levels.length; i++) {
+                                            var lvl = levels[i]
+                                            var bounds = levelBoundaries[lvl]
+                                            if (bounds) {
+                                                if (bounds.min <= selectedMinBp && bounds.max >= selectedMinBp) {
+                                                    newMinLevelIdx = i
+                                                    break
+                                                }
+                                            }
+                                        }
+                                        
+                                        for (var j = levels.length - 1; j >= 0; j--) {
+                                            var lvl2 = levels[j]
+                                            var bounds2 = levelBoundaries[lvl2]
+                                            if (bounds2) {
+                                                if (bounds2.min <= selectedMaxBp && bounds2.max >= selectedMaxBp) {
+                                                    newMaxLevelIdx = j
+                                                    break
+                                                }
+                                            }
+                                        }
+                                        
+                                        bpMode = false
+                                        handleAIndex = newMinLevelIdx
+                                        handleBIndex = newMaxLevelIdx
+                                    }
+                                    
+                                    filterPopup.updateRangeFilter()
+                                }
+                            }
+                            
+                            function findClosestIndex(list, value, isMin) {
+                                if (!list || list.length === 0) return 0
+                                
+                                var closest = 0
+                                var minDiff = Math.abs(list[0] - value)
+                                
+                                for (var i = 1; i < list.length; i++) {
+                                    var diff = Math.abs(list[i] - value)
+                                    if (diff < minDiff) {
+                                        minDiff = diff
+                                        closest = i
+                                    } else if (diff === minDiff) {
+                                        // For equal distance, prefer lower for min, higher for max
+                                        closest = isMin ? Math.min(closest, i) : Math.max(closest, i)
+                                    }
+                                }
+                                return closest
+                            }
+                            
+                            function getDisplayValue(idx) {
+                                if (idx >= 0 && idx < currentList.length) {
+                                    var val = currentList[idx]
+                                    // Format BP values with 1 decimal place
+                                    if (bpMode && typeof val === 'number') {
+                                        return val.toFixed(1)
+                                    }
+                                    return val.toString()
+                                }
+                                return ""
+                            }
+                            
+                            // Track
+                            Rectangle {
+                                id: track
+                                anchors.left: parent.left; anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.verticalCenterOffset: -10
+                                height: 6; radius: 3
+                                color: "#E0E0E0"
+                                
+                                // Tick marks
+                                Repeater {
+                                    model: rangeSlider.currentList.length
+                                    
+                                    Rectangle {
+                                        visible: rangeSlider.shouldShowTick(index)
+                                        // Use same calculation as handles: offset by half handle width
+                                        x: rangeSlider.currentList.length > 1 ? 
+                                            10 + (index / (rangeSlider.currentList.length - 1)) * (parent.width - 20) - 1 : 0
+                                        y: -3
+                                        width: 2; height: 12
+                                        radius: 1
+                                        color: "#C0C0C0"
+                                    }
+                                }
+                                
+                                // Active region
+                                Rectangle {
+                                    x: rangeSlider.currentList.length > 1 ? (rangeSlider.minIndex / (rangeSlider.currentList.length - 1)) * parent.width : 0
+                                    width: rangeSlider.currentList.length > 1 ? 
+                                        ((rangeSlider.maxIndex - rangeSlider.minIndex) / (rangeSlider.currentList.length - 1)) * parent.width : parent.width
+                                    height: parent.height; radius: 3
+                                    color: "#6A0DAD"
+                                }
+                            }
+                            
+                            // Determine if a tick mark should be shown at given index
+                            function shouldShowTick(idx) {
+                                if (currentList.length <= 1) return false
+                                // Skip endpoints - removed as per request
+                                // if (idx === 0 || idx === currentList.length - 1) return false
+                                
+                                var value = currentList[idx]
+                                
+                                if (bpMode) {
+                                    // BP mode: show at .0 for all, and .5 only for values > 8.0
+                                    if (typeof value === 'number') {
+                                        var decimal = value - Math.floor(value)
+                                        var isInteger = Math.abs(decimal) < 0.01
+                                        var isHalf = Math.abs(decimal - 0.5) < 0.01
+                                        
+                                        if (value <= 8.0) {
+                                            return isInteger
+                                        } else {
+                                            return isInteger || isHalf
+                                        }
+                                    }
+                                    return false
+                                } else {
+                                    // Level mode: show at non-plus levels only (e.g., "9", "10", not "9+")
+                                    if (typeof value === 'string') {
+                                        return value.indexOf('+') === -1
+                                    }
+                                    return false
+                                }
+                            }
+                            
+                            // Helper function to snap handle position to discrete index
+                            function snapToIndex(pixelX) {
+                                if (currentList.length <= 1) return 0
+                                var ratio = pixelX / (track.width - 20)  // 20 = handle width
+                                var idx = Math.round(ratio * (currentList.length - 1))
+                                return Math.max(0, Math.min(idx, currentList.length - 1))
+                            }
+                            
+                            function getSnapPosition(idx) {
+                                if (currentList.length <= 1) return 0
+                                return (idx / (currentList.length - 1)) * (track.width - 20)
+                            }
+                            
+                            // Handle A (independent)
+                            Rectangle {
+                                id: handleA
+                                width: 20; height: 20; radius: 10
+                                color: handleAMouse.pressed ? "#5A0D9D" : "#6A0DAD"
+                                border.color: "white"; border.width: 2
+                                x: rangeSlider.currentList.length > 1 ? 
+                                    (rangeSlider.handleAIndex / (rangeSlider.currentList.length - 1)) * (track.width - width) : 0
+                                anchors.verticalCenter: track.verticalCenter
+                                
+                                Text {
+                                    id: handleALabel
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    // Show above if: handles are close AND this handle is to the right
+                                    property bool tooClose: Math.abs(handleA.x - handleB.x) < 20
+                                    property bool isRightHandle: handleA.x > handleB.x
+                                    property bool showAbove: tooClose && isRightHandle
+                                    y: showAbove ? -height - 4 : parent.height + 4
+                                    text: rangeSlider.getDisplayValue(rangeSlider.handleAIndex)
+                                    font.pixelSize: 10; font.bold: true; color: "#333"
+                                }
+                                
+                                MouseArea {
+                                    id: handleAMouse
+                                    anchors.fill: parent
+                                    anchors.topMargin: -20; anchors.bottomMargin: -20
+                                    anchors.leftMargin: 0; anchors.rightMargin: 0
+                                    preventStealing: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    
+                                    property int startIndex: 0
+                                    property real pressGlobalX: 0
+                                    
+                                    onPressed: (mouse) => {
+                                        startIndex = rangeSlider.handleAIndex
+                                        // Map to track coordinates for stable reference
+                                        var mapped = mapToItem(track, mouse.x, mouse.y)
+                                        pressGlobalX = mapped.x
+                                    }
+                                    
+                                    onPositionChanged: (mouse) => {
+                                        if (pressed && rangeSlider.currentList.length > 1) {
+                                            var mapped = mapToItem(track, mouse.x, mouse.y)
+                                            var deltaX = mapped.x - pressGlobalX
+                                            
+                                            // Calculate how many index steps this delta represents
+                                            var stepWidth = (track.width - parent.width) / (rangeSlider.currentList.length - 1)
+                                            var indexDelta = Math.round(deltaX / stepWidth)
+                                            
+                                            var newIdx = Math.max(0, Math.min(startIndex + indexDelta, rangeSlider.currentList.length - 1))
+                                            rangeSlider.handleAIndex = newIdx
+                                        }
+                                    }
+                                    
+                                    onReleased: {
+                                        filterPopup.updateRangeFilter()
+                                    }
+                                }
+                            }
+                            
+                            // Handle B (independent)
+                            Rectangle {
+                                id: handleB
+                                width: 20; height: 20; radius: 10
+                                color: handleBMouse.pressed ? "#5A0D9D" : "#6A0DAD"
+                                border.color: "white"; border.width: 2
+                                x: rangeSlider.currentList.length > 1 ? 
+                                    (rangeSlider.handleBIndex / (rangeSlider.currentList.length - 1)) * (track.width - width) : track.width - width
+                                anchors.verticalCenter: track.verticalCenter
+                                
+                                Text {
+                                    id: handleBLabel
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    // Show above if: handles are close AND this handle is to the right
+                                    property bool tooClose: Math.abs(handleA.x - handleB.x) < 20
+                                    property bool isRightHandle: handleB.x > handleA.x
+                                    property bool showAbove: tooClose && isRightHandle
+                                    y: showAbove ? -height - 4 : parent.height + 4
+                                    text: rangeSlider.getDisplayValue(rangeSlider.handleBIndex)
+                                    font.pixelSize: 10; font.bold: true; color: "#333"
+                                }
+                                
+                                MouseArea {
+                                    id: handleBMouse
+                                    anchors.fill: parent
+                                    anchors.topMargin: -20; anchors.bottomMargin: -20
+                                    anchors.leftMargin: 0; anchors.rightMargin: 0
+                                    preventStealing: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    
+                                    property int startIndex: 0
+                                    property real pressGlobalX: 0
+                                    
+                                    onPressed: (mouse) => {
+                                        startIndex = rangeSlider.handleBIndex
+                                        var mapped = mapToItem(track, mouse.x, mouse.y)
+                                        pressGlobalX = mapped.x
+                                    }
+                                    
+                                    onPositionChanged: (mouse) => {
+                                        if (pressed && rangeSlider.currentList.length > 1) {
+                                            var mapped = mapToItem(track, mouse.x, mouse.y)
+                                            var deltaX = mapped.x - pressGlobalX
+                                            
+                                            var stepWidth = (track.width - parent.width) / (rangeSlider.currentList.length - 1)
+                                            var indexDelta = Math.round(deltaX / stepWidth)
+                                            
+                                            var newIdx = Math.max(0, Math.min(startIndex + indexDelta, rangeSlider.currentList.length - 1))
+                                            rangeSlider.handleBIndex = newIdx
+                                        }
+                                    }
+                                    
+                                    onReleased: {
+                                        filterPopup.updateRangeFilter()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Rectangle { height: 1; Layout.fillWidth: true; color: "#E0E0E0" }
+                    
+                    // Chart Flags
+                    Column {
+                        spacing: 10
+                        Layout.fillWidth: true
+                        
+                        Text { text: "Consultant Sheet Flags"; font.pixelSize: 14; font.bold: true; color: "#333" }
+                        
+                        // Flag filter helper component
+                        // (Moved to root)
+                            
+
+                        
+                        Column {
+                            spacing: 8
+                            
+                            FlagSegmentedControl {
+                                id: ignoreFlagSegment
+                                flagName: "⛔ trap"
+                                selectedIndex: 1  // Default: Show
+                                onIndexChanged: filterPopup.updateFlagFilter()
+                            }
+                            
+                            FlagSegmentedControl {
+                                id: skillFlagSegment
+                                flagName: "⚠️ individual"
+                                selectedIndex: 1  // Default: Show
+                                onIndexChanged: filterPopup.updateFlagFilter()
+                            }
+                            
+                            FlagSegmentedControl {
+                                id: slowFlagSegment
+                                flagName: "🔀 bpm"
+                                selectedIndex: 1  // Default: Show
+                                onIndexChanged: filterPopup.updateFlagFilter()
+                            }
+                        }
+                    }
+                    
+                    Rectangle { height: 1; Layout.fillWidth: true; color: "#E0E0E0" }
+                    
+                    // Clear Type Filter
+                    Column {
+                        spacing: 10
+                        Layout.fillWidth: true
+                        
+                        Text { text: "Clear Types"; font.pixelSize: 14; font.bold: true; color: "#333" }
+                        
+                        GridLayout {
+                            columns: 2
+                            columnSpacing: 15
+                            rowSpacing: 8
+                            
+                            CheckBox {
+                                id: clearType0
+                                text: "Track Lost"
+                                checked: true
+                                onCheckedChanged: filterPopup.updateClearTypeFilter()
+                            }
+                            CheckBox {
+                                id: clearType1
+                                text: "Track Complete"
+                                checked: true
+                                onCheckedChanged: filterPopup.updateClearTypeFilter()
+                            }
+                            CheckBox {
+                                id: clearType2
+                                text: "Full Recall"
+                                checked: true
+                                onCheckedChanged: filterPopup.updateClearTypeFilter()
+                            }
+                            CheckBox {
+                                id: clearType3
+                                text: "Pure Memory"
+                                checked: true
+                                onCheckedChanged: filterPopup.updateClearTypeFilter()
+                            }
+                            CheckBox {
+                                id: clearType4
+                                text: "Easy Clear"
+                                checked: true
+                                onCheckedChanged: filterPopup.updateClearTypeFilter()
+                            }
+                            CheckBox {
+                                id: clearType5
+                                text: "Hard Clear"
+                                checked: true
+                                onCheckedChanged: filterPopup.updateClearTypeFilter()
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Footer buttons
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                
+                Button {
+                    text: "Close"
+                    onClicked: filterPopup.close()
+                }
+            }
+        }
+        
+        function updateDifficultyFilter() {
+            if (!initialized) return  // Skip during initialization
+            
+            var diffs = []
+            if (pstCheck.checked) diffs.push(0)
+            if (prsCheck.checked) diffs.push(1)
+            if (ftrCheck.checked) diffs.push(2)
+            if (bydCheck.checked) diffs.push(3)
+            if (etrCheck.checked) diffs.push(4)
+            
+            if (statisticsHandler) {
+                statisticsHandler.setFilter("difficulties", diffs)
+            }
+        }
+        
+        function updateRangeFilter() {
+            if (!initialized) return
+            
+            if (statisticsHandler && rangeSlider.currentList.length > 0) {
+                var minVal = rangeSlider.currentList[rangeSlider.minIndex]
+                var maxVal = rangeSlider.currentList[rangeSlider.maxIndex]
+                
+                if (rangeSlider.bpMode) {
+                    statisticsHandler.setFilter("bp_mode", true)
+                    statisticsHandler.setFilter("bp_min", minVal)
+                    statisticsHandler.setFilter("bp_max", maxVal)
+                } else {
+                    statisticsHandler.setFilter("bp_mode", false)
+                    // Convert level string to numeric for filtering
+                    statisticsHandler.setFilter("level_min_str", minVal)
+                    statisticsHandler.setFilter("level_max_str", maxVal)
+                }
+            }
+        }
+        
+        function updateFlagFilter() {
+            if (!initialized) return
+            
+            // Map: 0=Hide(off), 1=Show(contain), 2=Only(only)
+            var map = ["off", "contain", "only"]
+            
+            if (statisticsHandler) {
+                statisticsHandler.setFilter("ignore_chart", map[ignoreFlagSegment.selectedIndex])
+                statisticsHandler.setFilter("skill_issues", map[skillFlagSegment.selectedIndex])
+                statisticsHandler.setFilter("contain_slowspeed", map[slowFlagSegment.selectedIndex])
+            }
+        }
+
+        function updateClearTypeFilter() {
+            if (!initialized) return  // Skip during initialization
+            
+            var types = []
+            if (clearType0.checked) types.push(0)
+            if (clearType1.checked) types.push(1)
+            if (clearType2.checked) types.push(2)
+            if (clearType3.checked) types.push(3)
+            if (clearType4.checked) types.push(4)
+            if (clearType5.checked) types.push(5)
+            
+            if (statisticsHandler) {
+                statisticsHandler.setFilter("clear_types", types)
+            }
+        }
     }
 }
