@@ -677,13 +677,119 @@ Item {
                                                 }
                                             }
                                             
-                                            // Dynamic display value (based on sort mode)
-                                            Text {
-                                                text: itemData.displayValue || ""
-                                                font.bold: true
-                                                font.pixelSize: 13
-                                                color: "#6A0DAD"
+                                            // Dynamic display value (based on sort mode) with difficulty info
+                                            Column {
                                                 Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                                                spacing: 2
+                                                
+                                                // Helper properties for sort mode checks
+                                                property bool isTitleSort: statisticsHandler && statisticsHandler.sortMode === "title"
+                                                property bool isLevelSort: statisticsHandler && statisticsHandler.sortMode === "level"
+                                                // Standalone modes: title and level sort show difficulty as main display
+                                                property bool isStandaloneMode: isTitleSort || isLevelSort
+                                                
+                                                // Display value (score, play count, etc.) - hidden in standalone modes
+                                                Text {
+                                                    anchors.right: parent.right
+                                                    text: itemData.displayValue || ""
+                                                    font.bold: true
+                                                    font.pixelSize: 13
+                                                    color: "#7A6090"
+                                                    visible: !parent.isStandaloneMode && itemData.displayValue && itemData.displayValue !== ""
+                                                }
+                                                
+                                                // Song mode: show all difficulty levels with colors
+                                                // In standalone modes: main display (font 13), otherwise secondary info (font 11)
+                                                // In specific sort modes, only highlight the "best" difficulty
+                                                Row {
+                                                    id: difficultyRow
+                                                    anchors.right: parent.right
+                                                    spacing: 0
+                                                    visible: statisticsHandler && statisticsHandler.displayMode === "song" && itemData.filteredDifficulties
+                                                    
+                                                    // Helper function to get the best difficulty for current sort mode
+                                                    // Returns -1 for modes that should highlight all difficulties
+                                                    function getBestDiffForSort() {
+                                                        if (!statisticsHandler) return -1
+                                                        var mode = statisticsHandler.sortMode
+                                                        // Check if value is a valid difficulty (>=0), -1 means no data
+                                                        if (mode === "score" && itemData.bestDiffForScore >= 0) return itemData.bestDiffForScore
+                                                        if (mode === "max" && itemData.bestDiffForMax >= 0) return itemData.bestDiffForMax
+                                                        if (mode === "recent_played" && itemData.bestDiffForRecent >= 0) return itemData.bestDiffForRecent
+                                                        if (mode === "level" && itemData.bestDiffForLevel >= 0) return itemData.bestDiffForLevel
+                                                        if (mode === "s_bp" && itemData.bestDiffForSBp >= 0) return itemData.bestDiffForSBp
+                                                        if (mode === "perceived_bp" && itemData.bestDiffForPerceivedBp >= 0) return itemData.bestDiffForPerceivedBp
+                                                        return -1  // No highlighting for other modes (title, total_play_count, length)
+                                                    }
+                                                    
+                                                    property int bestDiff: getBestDiffForSort()
+                                                    property bool isStandaloneMode: statisticsHandler && (statisticsHandler.sortMode === "title" || statisticsHandler.sortMode === "level")
+                                                    property bool isLevelSort: statisticsHandler && statisticsHandler.sortMode === "level"
+                                                    
+                                                    Repeater {
+                                                        model: itemData.filteredDifficulties || []
+                                                        
+                                                        Row {
+                                                            property bool isHighlighted: {
+                                                                // In title sort or modes without best tracking, highlight all
+                                                                if (difficultyRow.bestDiff < 0) return true
+                                                                // Otherwise, only highlight if this is the best difficulty
+                                                                return modelData.difficulty === difficultyRow.bestDiff
+                                                            }
+                                                            spacing: 0
+                                                            // Separator (before each item except the first)
+                                                            Text {
+                                                                text: " / "
+                                                                font.pixelSize: difficultyRow.isStandaloneMode ? 13 : 11
+                                                                color: "#AAA"
+                                                                visible: index > 0
+                                                            }
+                                                            // Level with difficulty color (or gray if not highlighted)
+                                                            Text {
+                                                                text: modelData.level || ""
+                                                                font.bold: true
+                                                                font.pixelSize: difficultyRow.isStandaloneMode ? 13 : 11
+                                                                color: parent.isHighlighted ? (modelData.difficultyColor || "#888") : "#BBB"
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    // BP value in parentheses for level sort (song mode)
+                                                    Text {
+                                                        text: " (" + (itemData.bp ? itemData.bp.toFixed(1) : "0.0") + ")"
+                                                        font.bold: true
+                                                        font.pixelSize: 13
+                                                        color: "#7A6090"
+                                                        visible: difficultyRow.isLevelSort
+                                                    }
+                                                }
+                                                
+                                                // Chart mode: show "BYD 9+" format with optional BP
+                                                // In standalone modes: main display (font 13), otherwise secondary info (font 11)
+                                                Row {
+                                                    anchors.right: parent.right
+                                                    spacing: 0
+                                                    visible: statisticsHandler && statisticsHandler.displayMode === "chart"
+                                                    
+                                                    property bool isStandaloneMode: statisticsHandler && (statisticsHandler.sortMode === "title" || statisticsHandler.sortMode === "level")
+                                                    property bool isLevelSort: statisticsHandler && statisticsHandler.sortMode === "level"
+                                                    
+                                                    Text {
+                                                        text: (itemData.difficultyName || "") + " " + (itemData.level || "")
+                                                        font.bold: true
+                                                        font.pixelSize: parent.isStandaloneMode ? 13 : 11
+                                                        color: itemData.difficultyColor || "#888"
+                                                    }
+                                                    
+                                                    // BP value in parentheses for level sort (chart mode)
+                                                    Text {
+                                                        text: " (" + (itemData.bp ? itemData.bp.toFixed(1) : "0.0") + ")"
+                                                        font.bold: true
+                                                        font.pixelSize: 13
+                                                        color: "#7A6090"
+                                                        visible: parent.isLevelSort
+                                                    }
+                                                }
                                             }
                                         }
                                         

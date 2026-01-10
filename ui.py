@@ -386,6 +386,14 @@ class StatisticsHandler(QObject):
         recent_time_played = 0
         best_score_below_max = 0
         
+        # Track which difficulty has the best value for each sort criteria
+        best_diff_for_score = -1
+        best_diff_for_max = -1
+        best_diff_for_recent = -1
+        best_diff_for_level = -1
+        best_diff_for_s_bp = -1
+        best_diff_for_perceived_bp = -1
+        
         diff_details = []
         
         for diff in DIFFICULTY_ORDER:
@@ -399,26 +407,32 @@ class StatisticsHandler(QObject):
             chart_item = self._build_chart_item(arcaea_id, song_data, diff, chart_data)
             diff_details.append(chart_item)
             
-            # Aggregate values
+            # Aggregate values and track best difficulty
             if chart_data.get('bp', 0) > best_bp:
                 best_bp = chart_data.get('bp', 0)
                 best_level = chart_data.get('level', '')
+                best_diff_for_level = diff
             if chart_data.get('s_bp', 0) > best_s_bp:
                 best_s_bp = chart_data.get('s_bp', 0)
+                best_diff_for_s_bp = diff
             if chart_data.get('perceived_bp', 0) > best_perceived_bp:
                 best_perceived_bp = chart_data.get('perceived_bp', 0)
+                best_diff_for_perceived_bp = diff
             
             if chart_item['bestScore'] > best_score:
                 best_score = chart_item['bestScore']
                 best_rank = chart_item['rank']
+                best_diff_for_score = diff
             
             total_play_count += chart_item['totalPlayCount']
             
             if chart_item['timePlayed'] > recent_time_played:
                 recent_time_played = chart_item['timePlayed']
+                best_diff_for_recent = diff
             
             if chart_item['scoreBelowMax'] > best_score_below_max:
                 best_score_below_max = chart_item['scoreBelowMax']
+                best_diff_for_max = diff
         
         return {
             'arcaeaId': arcaea_id,
@@ -437,6 +451,13 @@ class StatisticsHandler(QObject):
             'scoreBelowMax': best_score_below_max,
             'filteredDifficulties': diff_details,
             'displayValue': '',
+            # Best difficulty for each sort mode
+            'bestDiffForScore': best_diff_for_score,
+            'bestDiffForMax': best_diff_for_max,
+            'bestDiffForRecent': best_diff_for_recent,
+            'bestDiffForLevel': best_diff_for_level,
+            'bestDiffForSBp': best_diff_for_s_bp,
+            'bestDiffForPerceivedBp': best_diff_for_perceived_bp,
         }
     
     def _get_sort_key(self, item):
