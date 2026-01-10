@@ -109,26 +109,47 @@ class StatsHandler(QObject):
     def getMostPlayed(self):
         return get_top_10_most_played()
 
-    @pyqtSlot(str, result=str)
-    def getThumbnailPath(self, arcaea_id: str) -> str:
-        """
-        주어진 arcaea_id에 해당하는 썸네일 경로를 반환
-        FTR > BYD > ETR > PRS > PST 순서로 검색
-        """
-        if not arcaea_id:
-            return ""
-        
-        # 난이도 우선순위: FTR, BYD, ETR, PRS, PST
+    def _find_thumbnail_by_priority(self, arcaea_id: str) -> str:
+        """우선순위에 따라 썸네일 검색: FTR > BYD > ETR > PRS > PST"""
         difficulty_priority = ['ftr', 'byd', 'etr', 'prs', 'pst']
         
         for diff in difficulty_priority:
             filename = f"{arcaea_id}_{diff}.jpg"
             filepath = os.path.join(self._thumbnails_dir, filename)
             if os.path.exists(filepath):
-                # QML에서 사용할 수 있도록 file:// URL 반환
                 return QUrl.fromLocalFile(filepath).toString()
         
         return ""
+    
+    @pyqtSlot(str, result=str)
+    def getThumbnailPath(self, arcaea_id: str) -> str:
+        """arcaea_id만으로 썸네일 경로 반환 (우선순위 검색)"""
+        if not arcaea_id:
+            return ""
+        return self._find_thumbnail_by_priority(arcaea_id)
+    
+    @pyqtSlot(str, int, result=str)
+    def getThumbnailPathForDifficulty(self, arcaea_id: str, difficulty: int) -> str:
+        """
+        주어진 arcaea_id와 difficulty에 해당하는 썸네일 경로를 반환
+        해당 난이도 썸네일이 없으면 우선순위로 fallback
+        """
+        if not arcaea_id:
+            return ""
+        
+        # 난이도 번호 -> 파일명 난이도 코드 매핑
+        diff_code_map = {0: 'pst', 1: 'prs', 2: 'ftr', 3: 'byd', 4: 'etr'}
+        
+        if difficulty >= 0 and difficulty in diff_code_map:
+            # 특정 난이도의 썸네일 검색
+            diff_code = diff_code_map[difficulty]
+            filename = f"{arcaea_id}_{diff_code}.jpg"
+            filepath = os.path.join(self._thumbnails_dir, filename)
+            if os.path.exists(filepath):
+                return QUrl.fromLocalFile(filepath).toString()
+            # 해당 난이도 썸네일이 없으면 우선순위로 fallback
+        
+        return self._find_thumbnail_by_priority(arcaea_id)
 
     @pyqtSlot()
     def refreshStats(self):
@@ -394,6 +415,10 @@ class StatisticsHandler(QObject):
         best_diff_for_s_bp = -1
         best_diff_for_perceived_bp = -1
         
+        # Track highest difficulty for thumbnail (priority: BYD(3) > ETR(4) > FTR(2) > PRS(1) > PST(0))
+        thumbnail_difficulty = -1
+        THUMBNAIL_PRIORITY = {3: 0, 4: 1, 2: 2, 1: 3, 0: 4}  # Lower value = higher priority
+        
         diff_details = []
         
         for diff in DIFFICULTY_ORDER:
@@ -406,6 +431,10 @@ class StatisticsHandler(QObject):
             
             chart_item = self._build_chart_item(arcaea_id, song_data, diff, chart_data)
             diff_details.append(chart_item)
+            
+            # Track highest difficulty for thumbnail
+            if thumbnail_difficulty == -1 or THUMBNAIL_PRIORITY.get(diff, 99) < THUMBNAIL_PRIORITY.get(thumbnail_difficulty, 99):
+                thumbnail_difficulty = diff
             
             # Aggregate values and track best difficulty
             if chart_data.get('bp', 0) > best_bp:
@@ -451,6 +480,8 @@ class StatisticsHandler(QObject):
             'scoreBelowMax': best_score_below_max,
             'filteredDifficulties': diff_details,
             'displayValue': '',
+            # Thumbnail: highest difficulty among filtered
+            'thumbnailDifficulty': thumbnail_difficulty,
             # Best difficulty for each sort mode
             'bestDiffForScore': best_diff_for_score,
             'bestDiffForMax': best_diff_for_max,

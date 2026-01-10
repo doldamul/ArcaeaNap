@@ -641,7 +641,7 @@ Item {
                                                     id: thumbImage
                                                     anchors.fill: parent
                                                     anchors.margins: -1 // Slight negative margin to avoid edge artifacts
-                                                    source: statsHandler ? statsHandler.getThumbnailPath(itemData.arcaeaId || "") : ""
+                                                    source: statsHandler ? statsHandler.getThumbnailPathForDifficulty(itemData.arcaeaId || "", itemData.thumbnailDifficulty !== undefined ? itemData.thumbnailDifficulty : itemData.difficulty) : ""
                                                     fillMode: Image.PreserveAspectCrop
                                                     smooth: true
                                                     visible: status === Image.Ready
@@ -909,7 +909,7 @@ Item {
                                     Image {
                                         anchors.fill: parent
                                         anchors.margins: -1 // Slight negative margin to avoid edge artifacts
-                                        source: statsHandler && currentSong ? statsHandler.getThumbnailPath(currentSong.arcaeaId || "") : ""
+                                        source: statsHandler && currentSong ? statsHandler.getThumbnailPathForDifficulty(currentSong.arcaeaId || "", currentSong.thumbnailDifficulty !== undefined ? currentSong.thumbnailDifficulty : currentSong.difficulty) : ""
                                         fillMode: Image.PreserveAspectCrop
                                         smooth: true
                                         visible: status === Image.Ready
