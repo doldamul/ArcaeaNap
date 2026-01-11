@@ -168,6 +168,10 @@ DIFFICULTY_ORDER = [0, 1, 2, 4, 3]
 DIFFICULTY_NAMES = {0: 'PST', 1: 'PRS', 2: 'FTR', 3: 'BYD', 4: 'ETR'}
 DIFFICULTY_COLORS = {0: '#00A0E9', 1: '#50C050', 2: '#A060FF', 3: '#E04040', 4: '#808080'}
 
+# Score rank grades in order (for Score Range filter)
+# '-' = no score, then grades up to PM
+SCORE_RANKS = ['-', 'D', 'C', 'B', 'A', 'AA', 'EX', 'EX+', '99.5%', '99.8%', 'PM']
+
 
 class StatisticsHandler(QObject):
     dataChanged = pyqtSignal()
@@ -191,6 +195,8 @@ class StatisticsHandler(QObject):
         self._filter_ignore_chart = "contain"  # "off", "contain", "only"
         self._filter_skill_issues = "contain"
         self._filter_contain_slowspeed = "contain"
+        self._filter_score_min_rank = 0  # Index in SCORE_RANKS (0 = '-')
+        self._filter_score_max_rank = len(SCORE_RANKS) - 1  # Index in SCORE_RANKS (last = 'PM')
         self._filter_clear_types = [0, 1, 2, 3, 4, 5]  # All clear types
         
         # Raw data caches
@@ -357,7 +363,38 @@ class StatisticsHandler(QObject):
             if clear_type not in self._filter_clear_types:
                 return False
         
+        # Score rank filter
+        score = score_data.get('score', 0) if score_data else 0
+        rank_idx = self._get_score_rank_index(score)
+        if rank_idx < self._filter_score_min_rank or rank_idx > self._filter_score_max_rank:
+            return False
+        
         return True
+    
+    def _get_score_rank_index(self, score):
+        """Convert a score to its rank index in SCORE_RANKS."""
+        if score <= 0:
+            return 0  # '-' (no score)
+        elif score < 8600000:
+            return 1  # 'D'
+        elif score < 8900000:
+            return 2  # 'C'
+        elif score < 9200000:
+            return 3  # 'B'
+        elif score < 9500000:
+            return 4  # 'A'
+        elif score < 9800000:
+            return 5  # 'AA'
+        elif score < 9900000:
+            return 6  # 'EX'
+        elif score < 9950000:
+            return 7  # 'EX+'
+        elif score < 9980000:
+            return 8  # '99.5%'
+        elif score < 10000000:
+            return 9  # '99.8%'
+        else:
+            return 10  # 'PM'
     
     def _build_chart_item(self, arcaea_id, song_data, difficulty, chart_data):
         """Build a chart item for the list model."""
@@ -666,6 +703,10 @@ class StatisticsHandler(QObject):
     def levelBoundaries(self):
         return self._level_boundaries
     
+    @pyqtProperty('QVariantList', notify=dataChanged)
+    def scoreRanks(self):
+        return SCORE_RANKS
+    
     @pyqtProperty(int, notify=selectedItemChanged)
     def selectedDifficulty(self):
         return self._selected_difficulty
@@ -750,6 +791,10 @@ class StatisticsHandler(QObject):
             self._filter_contain_slowspeed = str(value) if value else 'off'
         elif filter_type == 'clear_types':
             self._filter_clear_types = list(value) if value else []
+        elif filter_type == 'score_min_rank':
+            self._filter_score_min_rank = int(value) if value is not None else 0
+        elif filter_type == 'score_max_rank':
+            self._filter_score_max_rank = int(value) if value is not None else len(SCORE_RANKS) - 1
         
         self._rebuild_list()
     

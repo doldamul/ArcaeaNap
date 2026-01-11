@@ -1203,11 +1203,16 @@ Item {
                             etrCheck.checked = true
                             bydCheck.checked = true
                             
-                            // Reset Range Slider
+                            // Reset Level/BP Range Slider
                             rangeSlider.bpMode = false
                             rangeSlider.handleAIndex = 0
                             rangeSlider.handleBIndex = rangeSlider.currentList.length > 0 ? rangeSlider.currentList.length - 1 : 0
                             filterPopup.updateRangeFilter()  // Apply the reset to backend
+                            
+                            // Reset Score Range Slider
+                            scoreRangeSlider.handleAIndex = 0
+                            scoreRangeSlider.handleBIndex = scoreRangeSlider.scoreGrades.length > 0 ? scoreRangeSlider.scoreGrades.length - 1 : 0
+                            filterPopup.updateScoreRangeFilter()  // Apply the reset to backend
                             
                             ignoreFlagSegment.selectedIndex = 1 // Show
                             skillFlagSegment.selectedIndex = 1 // Show
@@ -1216,7 +1221,6 @@ Item {
                             clearType0.checked = true
                             clearType1.checked = true
                             clearType2.checked = true
-                            clearType3.checked = true
                             clearType4.checked = true
                             clearType5.checked = true
                         }
@@ -1804,6 +1808,292 @@ Item {
                     
                     Rectangle { height: 1; Layout.fillWidth: true; color: "#E0E0E0" }
                     
+                    // Score Range Filter
+                    Column {
+                        spacing: 10
+                        Layout.fillWidth: true
+                        
+                        Text { text: "Score Range"; font.pixelSize: 14; font.bold: true; color: "#333" }
+                        
+                        // Score Range Slider
+                        Item {
+                            id: scoreRangeSlider
+                            width: parent.width
+                            height: 60
+                            
+                            // Score grades: -, D, C, B, A, AA, EX, EX+, 99.5%, 99.8%, PM
+                            property var scoreGrades: statisticsHandler ? statisticsHandler.scoreRanks : ["-", "D", "C", "B", "A", "AA", "EX", "EX+", "99.5%", "99.8%", "PM"]
+                            
+                            // Independent handle indices
+                            property int handleAIndex: 0
+                            property int handleBIndex: scoreGrades.length > 0 ? scoreGrades.length - 1 : 0
+                            
+                            // Computed min/max based on handle values
+                            property int minIndex: Math.min(handleAIndex, handleBIndex)
+                            property int maxIndex: Math.max(handleAIndex, handleBIndex)
+                            
+                            function getDisplayValue(idx) {
+                                if (idx >= 0 && idx < scoreGrades.length) {
+                                    return scoreGrades[idx]
+                                }
+                                return ""
+                            }
+                            
+                            // Color mapping for Score Range gradient
+                            // D (0/10) = burgundy #80354A
+                            // A (4/10) = brighter purple #9B6BB5
+                            // EX (6/10) = brighter blue-gray #6A8CAA
+                            // PM (10/10) = brighter teal #4AA8A8
+                            function getColorForScoreIndex(idx) {
+                                if (scoreGrades.length <= 1) return "#80354A"
+                                
+                                var ratio = idx / (scoreGrades.length - 1)  // 0.0 to 1.0
+                                
+                                // Key color points (positions on 0-1 scale)
+                                // D at 0 (idx 1, but we start from 0)
+                                // A at 0.4 (idx 4)
+                                // EX at 0.6 (idx 6)
+                                // PM at 1.0 (idx 10)
+                                var dColor = {r: 0x80, g: 0x35, b: 0x4A}      // D - burgundy
+                                var aColor = {r: 0x9B, g: 0x6B, b: 0xB5}      // A - brighter purple
+                                var exColor = {r: 0x6A, g: 0x8C, b: 0xAA}     // EX - brighter blue-gray
+                                var pmColor = {r: 0x4A, g: 0xA8, b: 0xA8}     // PM - brighter teal
+                                
+                                var r, g, b, t
+                                
+                                if (ratio <= 0.4) {
+                                    // D -> A gradient (0 to 0.4)
+                                    t = ratio / 0.4
+                                    r = Math.round(dColor.r + (aColor.r - dColor.r) * t)
+                                    g = Math.round(dColor.g + (aColor.g - dColor.g) * t)
+                                    b = Math.round(dColor.b + (aColor.b - dColor.b) * t)
+                                } else if (ratio <= 0.6) {
+                                    // A -> EX gradient (0.4 to 0.6)
+                                    t = (ratio - 0.4) / 0.2
+                                    r = Math.round(aColor.r + (exColor.r - aColor.r) * t)
+                                    g = Math.round(aColor.g + (exColor.g - aColor.g) * t)
+                                    b = Math.round(aColor.b + (exColor.b - aColor.b) * t)
+                                } else {
+                                    // EX -> PM gradient (0.6 to 1.0)
+                                    t = (ratio - 0.6) / 0.4
+                                    r = Math.round(exColor.r + (pmColor.r - exColor.r) * t)
+                                    g = Math.round(exColor.g + (pmColor.g - exColor.g) * t)
+                                    b = Math.round(exColor.b + (pmColor.b - exColor.b) * t)
+                                }
+                                
+                                return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')
+                            }
+                            
+                            // Track with gradient
+                            Rectangle {
+                                id: scoreTrack
+                                anchors.left: parent.left; anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.verticalCenterOffset: -10
+                                height: 6; radius: 3
+                                color: "#E0E0E0"
+                                
+                                // Tick marks for each grade
+                                Repeater {
+                                    model: scoreRangeSlider.scoreGrades.length
+                                    
+                                    Rectangle {
+                                        x: scoreRangeSlider.scoreGrades.length > 1 ? 
+                                            10 + (index / (scoreRangeSlider.scoreGrades.length - 1)) * (parent.width - 20) - 1 : 0
+                                        y: -3
+                                        width: 2; height: 12
+                                        radius: 1
+                                        color: "#C0C0C0"
+                                    }
+                                }
+                                
+                                // Active region with canvas-based gradient
+                                Item {
+                                    id: scoreActiveRegion
+                                    property real handleWidth: 20
+                                    property real trackUsableWidth: parent.width - handleWidth
+                                    property real minPos: scoreRangeSlider.scoreGrades.length > 1 ? 
+                                        (handleWidth / 2) + (scoreRangeSlider.minIndex / (scoreRangeSlider.scoreGrades.length - 1)) * trackUsableWidth : 0
+                                    property real maxPos: scoreRangeSlider.scoreGrades.length > 1 ? 
+                                        (handleWidth / 2) + (scoreRangeSlider.maxIndex / (scoreRangeSlider.scoreGrades.length - 1)) * trackUsableWidth : parent.width
+                                    
+                                    x: minPos
+                                    width: maxPos - minPos
+                                    height: parent.height
+                                    clip: true
+                                    
+                                    Canvas {
+                                        id: scoreGradientCanvas
+                                        property real handleWidth: 20
+                                        property real trackUsableWidth: scoreTrack.width - handleWidth
+                                        
+                                        x: (handleWidth / 2) - scoreActiveRegion.x
+                                        width: trackUsableWidth
+                                        height: parent.height
+                                        
+                                        property var dataList: scoreRangeSlider.scoreGrades
+                                        onDataListChanged: requestPaint()
+                                        onWidthChanged: requestPaint()
+                                        
+                                        onPaint: {
+                                            var ctx = getContext("2d")
+                                            ctx.reset()
+                                            
+                                            var n = scoreRangeSlider.scoreGrades.length
+                                            if (n <= 1) {
+                                                var singleColor = scoreRangeSlider.getColorForScoreIndex(0)
+                                                ctx.fillStyle = singleColor
+                                                ctx.beginPath()
+                                                ctx.roundedRect(0, 0, width, height, 3)
+                                                ctx.fill()
+                                                return
+                                            }
+                                            
+                                            // Draw gradient segments
+                                            for (var i = 0; i < n - 1; i++) {
+                                                var x0 = (i / (n - 1)) * width
+                                                var x1 = ((i + 1) / (n - 1)) * width
+                                                
+                                                var color0 = scoreRangeSlider.getColorForScoreIndex(i)
+                                                var color1 = scoreRangeSlider.getColorForScoreIndex(i + 1)
+                                                
+                                                var grad = ctx.createLinearGradient(x0, 0, x1, 0)
+                                                grad.addColorStop(0, color0)
+                                                grad.addColorStop(1, color1)
+                                                
+                                                ctx.fillStyle = grad
+                                                ctx.fillRect(x0, 0, x1 - x0 + 1, height)
+                                            }
+                                            
+                                            // Round corners
+                                            ctx.globalCompositeOperation = "destination-in"
+                                            ctx.fillStyle = "black"
+                                            ctx.beginPath()
+                                            ctx.roundedRect(0, 0, width, height, 3)
+                                            ctx.fill()
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Handle A
+                            Rectangle {
+                                id: scoreHandleA
+                                width: 20; height: 20; radius: 10
+                                property string baseColor: scoreRangeSlider.getColorForScoreIndex(scoreRangeSlider.handleAIndex)
+                                color: scoreHandleAMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
+                                border.color: "white"; border.width: 2
+                                x: scoreRangeSlider.scoreGrades.length > 1 ? 
+                                    (scoreRangeSlider.handleAIndex / (scoreRangeSlider.scoreGrades.length - 1)) * (scoreTrack.width - width) : 0
+                                anchors.verticalCenter: scoreTrack.verticalCenter
+                                
+                                Text {
+                                    id: scoreHandleALabel
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    property bool tooClose: Math.abs(scoreHandleA.x - scoreHandleB.x) < 25
+                                    property bool isRightHandle: scoreHandleA.x > scoreHandleB.x
+                                    property bool showAbove: tooClose && isRightHandle
+                                    y: showAbove ? -height - 4 : parent.height + 4
+                                    text: scoreRangeSlider.getDisplayValue(scoreRangeSlider.handleAIndex)
+                                    font.pixelSize: 10; font.bold: true; color: "#333"
+                                }
+                                
+                                MouseArea {
+                                    id: scoreHandleAMouse
+                                    anchors.fill: parent
+                                    anchors.topMargin: -20; anchors.bottomMargin: -20
+                                    preventStealing: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    
+                                    property int startIndex: 0
+                                    property real pressGlobalX: 0
+                                    
+                                    onPressed: (mouse) => {
+                                        startIndex = scoreRangeSlider.handleAIndex
+                                        var mapped = mapToItem(scoreTrack, mouse.x, mouse.y)
+                                        pressGlobalX = mapped.x
+                                    }
+                                    
+                                    onPositionChanged: (mouse) => {
+                                        if (pressed && scoreRangeSlider.scoreGrades.length > 1) {
+                                            var mapped = mapToItem(scoreTrack, mouse.x, mouse.y)
+                                            var deltaX = mapped.x - pressGlobalX
+                                            
+                                            var stepWidth = (scoreTrack.width - parent.width) / (scoreRangeSlider.scoreGrades.length - 1)
+                                            var indexDelta = Math.round(deltaX / stepWidth)
+                                            
+                                            var newIdx = Math.max(0, Math.min(startIndex + indexDelta, scoreRangeSlider.scoreGrades.length - 1))
+                                            scoreRangeSlider.handleAIndex = newIdx
+                                        }
+                                    }
+                                    
+                                    onReleased: {
+                                        filterPopup.updateScoreRangeFilter()
+                                    }
+                                }
+                            }
+                            
+                            // Handle B
+                            Rectangle {
+                                id: scoreHandleB
+                                width: 20; height: 20; radius: 10
+                                property string baseColor: scoreRangeSlider.getColorForScoreIndex(scoreRangeSlider.handleBIndex)
+                                color: scoreHandleBMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
+                                border.color: "white"; border.width: 2
+                                x: scoreRangeSlider.scoreGrades.length > 1 ? 
+                                    (scoreRangeSlider.handleBIndex / (scoreRangeSlider.scoreGrades.length - 1)) * (scoreTrack.width - width) : scoreTrack.width - width
+                                anchors.verticalCenter: scoreTrack.verticalCenter
+                                
+                                Text {
+                                    id: scoreHandleBLabel
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    property bool tooClose: Math.abs(scoreHandleA.x - scoreHandleB.x) < 25
+                                    property bool isRightHandle: scoreHandleB.x > scoreHandleA.x
+                                    property bool showAbove: tooClose && isRightHandle
+                                    y: showAbove ? -height - 4 : parent.height + 4
+                                    text: scoreRangeSlider.getDisplayValue(scoreRangeSlider.handleBIndex)
+                                    font.pixelSize: 10; font.bold: true; color: "#333"
+                                }
+                                
+                                MouseArea {
+                                    id: scoreHandleBMouse
+                                    anchors.fill: parent
+                                    anchors.topMargin: -20; anchors.bottomMargin: -20
+                                    preventStealing: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    
+                                    property int startIndex: 0
+                                    property real pressGlobalX: 0
+                                    
+                                    onPressed: (mouse) => {
+                                        startIndex = scoreRangeSlider.handleBIndex
+                                        var mapped = mapToItem(scoreTrack, mouse.x, mouse.y)
+                                        pressGlobalX = mapped.x
+                                    }
+                                    
+                                    onPositionChanged: (mouse) => {
+                                        if (pressed && scoreRangeSlider.scoreGrades.length > 1) {
+                                            var mapped = mapToItem(scoreTrack, mouse.x, mouse.y)
+                                            var deltaX = mapped.x - pressGlobalX
+                                            
+                                            var stepWidth = (scoreTrack.width - parent.width) / (scoreRangeSlider.scoreGrades.length - 1)
+                                            var indexDelta = Math.round(deltaX / stepWidth)
+                                            
+                                            var newIdx = Math.max(0, Math.min(startIndex + indexDelta, scoreRangeSlider.scoreGrades.length - 1))
+                                            scoreRangeSlider.handleBIndex = newIdx
+                                        }
+                                    }
+                                    
+                                    onReleased: {
+                                        filterPopup.updateScoreRangeFilter()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Rectangle { height: 1; Layout.fillWidth: true; color: "#E0E0E0" }
+                    
                     // Chart Flags
                     Column {
                         spacing: 10
@@ -1871,12 +2161,6 @@ Item {
                             CheckBox {
                                 id: clearType2
                                 text: "Full Recall"
-                                checked: true
-                                onCheckedChanged: filterPopup.updateClearTypeFilter()
-                            }
-                            CheckBox {
-                                id: clearType3
-                                text: "Pure Memory"
                                 checked: true
                                 onCheckedChanged: filterPopup.updateClearTypeFilter()
                             }
@@ -1964,12 +2248,20 @@ Item {
             if (clearType0.checked) types.push(0)
             if (clearType1.checked) types.push(1)
             if (clearType2.checked) types.push(2)
-            if (clearType3.checked) types.push(3)
             if (clearType4.checked) types.push(4)
             if (clearType5.checked) types.push(5)
             
             if (statisticsHandler) {
                 statisticsHandler.setFilter("clear_types", types)
+            }
+        }
+        
+        function updateScoreRangeFilter() {
+            if (!initialized) return
+            
+            if (statisticsHandler && scoreRangeSlider.scoreGrades.length > 0) {
+                statisticsHandler.setFilter("score_min_rank", scoreRangeSlider.minIndex)
+                statisticsHandler.setFilter("score_max_rank", scoreRangeSlider.maxIndex)
             }
         }
     }
