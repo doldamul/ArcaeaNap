@@ -214,7 +214,59 @@ Item {
         }
     }
 
-    // 1-4. 난이도 카드
+    // 1-3. 난이도 필터 체크박스 (Diamond)
+    component DiffFilterCheckbox: Column {
+        id: diffCheckRoot
+        property bool checked: true
+        property string text: ""
+        property color diffColor: "#000000"
+        
+        spacing: 8
+        
+        // Diamond Indicator using Shape for proper anti-aliasing
+        Item {
+            width: 32; height: 32
+            anchors.horizontalCenter: parent.horizontalCenter
+            
+            Shape {
+                anchors.fill: parent
+                antialiasing: true
+                
+                ShapePath {
+                    strokeWidth: 2
+                    strokeColor: diffCheckRoot.diffColor
+                    fillColor: diffCheckRoot.checked ? diffCheckRoot.diffColor : "transparent"
+                    joinStyle: ShapePath.MiterJoin
+                    
+                    // Diamond: top -> right -> bottom -> left -> top
+                    startX: 16; startY: 4
+                    PathLine { x: 28; y: 16 }
+                    PathLine { x: 16; y: 28 }
+                    PathLine { x: 4; y: 16 }
+                    PathLine { x: 16; y: 4 }
+                }
+            }
+            
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    diffCheckRoot.checked = !diffCheckRoot.checked
+                }
+            }
+        }
+        
+        // Label
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: diffCheckRoot.text
+            font.bold: true
+            font.pixelSize: 12
+            color: diffCheckRoot.checked ? diffCheckRoot.diffColor : "#AAA"
+        }
+    }
+
+    // 1-4. 막대 그래프
     component DiffCard: Rectangle {
         property string diffName: "FTR"
         property string diffLevel: "11"
@@ -1189,38 +1241,43 @@ Item {
                         
                         Text { text: "Difficulties"; font.pixelSize: 14; font.bold: true; color: "#333" }
                         
-                        GridLayout {
-                            columns: 5
-                            columnSpacing: 15
-                            rowSpacing: 8
+                        RowLayout {
+                            spacing: 20
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignHCenter
                             
-                            CheckBox {
+                            DiffFilterCheckbox {
                                 id: pstCheck
                                 text: "PST"
+                                diffColor: "#00A0E9"
                                 checked: true
                                 onCheckedChanged: filterPopup.updateDifficultyFilter()
                             }
-                            CheckBox {
+                            DiffFilterCheckbox {
                                 id: prsCheck
                                 text: "PRS"
+                                diffColor: "#50C050"
                                 checked: true
                                 onCheckedChanged: filterPopup.updateDifficultyFilter()
                             }
-                            CheckBox {
+                            DiffFilterCheckbox {
                                 id: ftrCheck
                                 text: "FTR"
+                                diffColor: "#A060FF"
                                 checked: true
                                 onCheckedChanged: filterPopup.updateDifficultyFilter()
                             }
-                            CheckBox {
+                            DiffFilterCheckbox {
                                 id: etrCheck
                                 text: "ETR"
+                                diffColor: "#808080"  // Gray for ETR
                                 checked: true
                                 onCheckedChanged: filterPopup.updateDifficultyFilter()
                             }
-                            CheckBox {
+                            DiffFilterCheckbox {
                                 id: bydCheck
                                 text: "BYD"
+                                diffColor: "#E04040"
                                 checked: true
                                 onCheckedChanged: filterPopup.updateDifficultyFilter()
                             }
