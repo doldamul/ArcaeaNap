@@ -33,7 +33,7 @@ ApplicationWindow {
         // 1. 로고 (왼쪽 고정)
         Text {
             id: logoText
-            text: "Arcaea Stats"
+            text: "ArcaeaNap"
             font.pixelSize: 20
             font.bold: true
             color: "#1A1A1A"
