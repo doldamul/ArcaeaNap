@@ -1293,31 +1293,51 @@ Item {
                         RowLayout {
                             width: parent.width
                             
-                            Text { text: "Range Filter"; font.pixelSize: 14; font.bold: true; color: "#333" }
+                            Text { text: rangeSlider.bpMode ? "BP Range" : "Level Range"; font.pixelSize: 14; font.bold: true; color: "#333" }
                             
                             Item { Layout.fillWidth: true }
                             
-                            // Level/BP Toggle
-                            Rectangle {
-                                width: 100; height: 28
-                                radius: 4
-                                color: "#F0F0F0"
+                            // Level/BP Toggle (Text Only Style)
+                            Row {
+                                spacing: 15
                                 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    spacing: 0
+                                // Level Item
+                                MouseArea {
+                                    width: levelRow.width; height: 24
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: rangeSlider.setBpMode(false)
                                     
-                                    Rectangle {
-                                        Layout.fillWidth: true; Layout.fillHeight: true
-                                        radius: 4; color: !rangeSlider.bpMode ? "#6A0DAD" : "transparent"
-                                        Text { anchors.centerIn: parent; text: "Level"; font.pixelSize: 11; color: !rangeSlider.bpMode ? "white" : "#666" }
-                                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: rangeSlider.setBpMode(false) }
+                                    Row {
+                                        id: levelRow
+                                        spacing: 4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        
+                                        Text {
+                                            text: "Level"
+                                            font.pixelSize: 13
+                                            font.bold: !rangeSlider.bpMode
+                                            color: !rangeSlider.bpMode ? "#6A0DAD" : "#9E9E9E"
+                                        }
                                     }
-                                    Rectangle {
-                                        Layout.fillWidth: true; Layout.fillHeight: true
-                                        radius: 4; color: rangeSlider.bpMode ? "#6A0DAD" : "transparent"
-                                        Text { anchors.centerIn: parent; text: "BP"; font.pixelSize: 11; color: rangeSlider.bpMode ? "white" : "#666" }
-                                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: rangeSlider.setBpMode(true) }
+                                }
+                                
+                                // BP Item
+                                MouseArea {
+                                    width: bpRow.width; height: 24
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: rangeSlider.setBpMode(true)
+                                    
+                                    Row {
+                                        id: bpRow
+                                        spacing: 4
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        
+                                        Text {
+                                            text: "BP"
+                                            font.pixelSize: 13
+                                            font.bold: rangeSlider.bpMode
+                                            color: rangeSlider.bpMode ? "#6A0DAD" : "#9E9E9E"
+                                        }
                                     }
                                 }
                             }
@@ -1434,7 +1454,86 @@ Item {
                                 return ""
                             }
                             
-                            // Track
+                            // Color utility functions for position-based handle colors
+                            // Difficulty colors: PST=#00A0E9, PRS=#50C050, FTR=#A060FF, BYD=#E04040
+                            // Map: Level 1 (BP 1.0) = PST, Level 5 (BP 5.0) = PRS, Level 8 (BP 8.0) = FTR, Level 12 (BP 12.0) = BYD
+                            
+                            function getLevelValue(idx) {
+                                if (currentList.length <= 1 || idx < 0) return 1
+                                var val = currentList[idx]
+                                if (bpMode) {
+                                    return typeof val === 'number' ? val : 1.0
+                                } else {
+                                    // Level mode: parse level string (e.g., "9", "9+", "10")
+                                    if (typeof val === 'string') {
+                                        var numStr = val.replace('+', '')
+                                        var num = parseFloat(numStr)
+                                        // Add 0.5 for "+" levels
+                                        if (val.indexOf('+') >= 0) num += 0.5
+                                        return isNaN(num) ? 1 : num
+                                    }
+                                    return typeof val === 'number' ? val : 1
+                                }
+                            }
+                            
+                            function getColorForLevel(level) {
+                                // Key color points with smooth interpolation:
+                                // Level 1: PST blue
+                                // Level 5: PRS green (pure)
+                                // Level 7: Dark PRS (darker green)
+                                // Level 8: Light FTR (lighter purple)
+                                // Level 10: FTR purple (pure)
+                                // Level 12: BYD red
+                                
+                                var pst = {r: 0x00, g: 0xA0, b: 0xE9}       // Level 1
+                                var prs = {r: 0x50, g: 0xC0, b: 0x50}       // Level 5
+                                var prsDark = {r: 0x40, g: 0x9A, b: 0x40}   // Level 7 (darker PRS)
+                                var ftrLight = {r: 0xB8, g: 0x88, b: 0xFF}  // Level 8 (lighter FTR)
+                                var ftr = {r: 0xA0, g: 0x60, b: 0xFF}       // Level 10
+                                var byd = {r: 0xE0, g: 0x40, b: 0x40}       // Level 12
+                                
+                                var r, g, b, t
+                                
+                                if (level <= 1) {
+                                    return "#00A0E9"  // PST
+                                } else if (level <= 5) {
+                                    // PST -> PRS gradient (Level 1-5)
+                                    t = (level - 1) / 4
+                                    r = Math.round(pst.r + (prs.r - pst.r) * t)
+                                    g = Math.round(pst.g + (prs.g - pst.g) * t)
+                                    b = Math.round(pst.b + (prs.b - pst.b) * t)
+                                } else if (level <= 7) {
+                                    // PRS -> Dark PRS gradient (Level 5-7)
+                                    t = (level - 5) / 2
+                                    r = Math.round(prs.r + (prsDark.r - prs.r) * t)
+                                    g = Math.round(prs.g + (prsDark.g - prs.g) * t)
+                                    b = Math.round(prs.b + (prsDark.b - prs.b) * t)
+                                } else if (level <= 8) {
+                                    // Dark PRS -> Light FTR gradient (Level 7-8)
+                                    t = (level - 7) / 1
+                                    r = Math.round(prsDark.r + (ftrLight.r - prsDark.r) * t)
+                                    g = Math.round(prsDark.g + (ftrLight.g - prsDark.g) * t)
+                                    b = Math.round(prsDark.b + (ftrLight.b - prsDark.b) * t)
+                                } else if (level <= 10) {
+                                    // Light FTR -> FTR gradient (Level 8-10)
+                                    t = (level - 8) / 2
+                                    r = Math.round(ftrLight.r + (ftr.r - ftrLight.r) * t)
+                                    g = Math.round(ftrLight.g + (ftr.g - ftrLight.g) * t)
+                                    b = Math.round(ftrLight.b + (ftr.b - ftrLight.b) * t)
+                                } else if (level <= 12) {
+                                    // FTR -> BYD gradient (Level 10-12)
+                                    t = (level - 10) / 2
+                                    r = Math.round(ftr.r + (byd.r - ftr.r) * t)
+                                    g = Math.round(ftr.g + (byd.g - ftr.g) * t)
+                                    b = Math.round(ftr.b + (byd.b - ftr.b) * t)
+                                } else {
+                                    return "#E04040"  // BYD
+                                }
+                                
+                                return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')
+                            }
+                            
+                            // Track with gradient
                             Rectangle {
                                 id: track
                                 anchors.left: parent.left; anchors.right: parent.right
@@ -1459,13 +1558,81 @@ Item {
                                     }
                                 }
                                 
-                                // Active region
-                                Rectangle {
-                                    x: rangeSlider.currentList.length > 1 ? (rangeSlider.minIndex / (rangeSlider.currentList.length - 1)) * parent.width : 0
-                                    width: rangeSlider.currentList.length > 1 ? 
-                                        ((rangeSlider.maxIndex - rangeSlider.minIndex) / (rangeSlider.currentList.length - 1)) * parent.width : parent.width
-                                    height: parent.height; radius: 3
-                                    color: "#6A0DAD"
+                                // Active region with canvas-based gradient
+                                Item {
+                                    id: activeRegion
+                                    // Position aligned with handle centers (handles are 20px wide, offset by 10)
+                                    property real handleWidth: 20
+                                    property real trackUsableWidth: parent.width - handleWidth
+                                    property real minPos: rangeSlider.currentList.length > 1 ? 
+                                        (handleWidth / 2) + (rangeSlider.minIndex / (rangeSlider.currentList.length - 1)) * trackUsableWidth : 0
+                                    property real maxPos: rangeSlider.currentList.length > 1 ? 
+                                        (handleWidth / 2) + (rangeSlider.maxIndex / (rangeSlider.currentList.length - 1)) * trackUsableWidth : parent.width
+                                    
+                                    x: minPos
+                                    width: maxPos - minPos
+                                    height: parent.height
+                                    clip: true
+                                    
+                                    Canvas {
+                                        id: gradientCanvas
+                                        // Position canvas to align with handle centers
+                                        property real handleWidth: 20
+                                        property real trackUsableWidth: track.width - handleWidth
+                                        
+                                        x: (handleWidth / 2) - activeRegion.x
+                                        width: trackUsableWidth
+                                        height: parent.height
+                                        
+                                        // Trigger repaint when data changes
+                                        property var dataList: rangeSlider.currentList
+                                        property bool isBpMode: rangeSlider.bpMode
+                                        onDataListChanged: requestPaint()
+                                        onIsBpModeChanged: requestPaint()
+                                        onWidthChanged: requestPaint()
+                                        
+                                        onPaint: {
+                                            var ctx = getContext("2d")
+                                            ctx.reset()
+                                            
+                                            var n = rangeSlider.currentList.length
+                                            if (n <= 1) {
+                                                // Single item: fill entire width with its color
+                                                var singleColor = rangeSlider.getColorForLevel(rangeSlider.getLevelValue(0))
+                                                ctx.fillStyle = singleColor
+                                                ctx.beginPath()
+                                                ctx.roundedRect(0, 0, width, height, 3)
+                                                ctx.fill()
+                                                return
+                                            }
+                                            
+                                            // Draw gradient segments between each pair of indices
+                                            for (var i = 0; i < n - 1; i++) {
+                                                var x0 = (i / (n - 1)) * width
+                                                var x1 = ((i + 1) / (n - 1)) * width
+                                                
+                                                var level0 = rangeSlider.getLevelValue(i)
+                                                var level1 = rangeSlider.getLevelValue(i + 1)
+                                                var color0 = rangeSlider.getColorForLevel(level0)
+                                                var color1 = rangeSlider.getColorForLevel(level1)
+                                                
+                                                // Create linear gradient for this segment
+                                                var grad = ctx.createLinearGradient(x0, 0, x1, 0)
+                                                grad.addColorStop(0, color0)
+                                                grad.addColorStop(1, color1)
+                                                
+                                                ctx.fillStyle = grad
+                                                ctx.fillRect(x0, 0, x1 - x0 + 1, height)  // +1 to avoid gaps
+                                            }
+                                            
+                                            // Round the corners by clipping
+                                            ctx.globalCompositeOperation = "destination-in"
+                                            ctx.fillStyle = "black"
+                                            ctx.beginPath()
+                                            ctx.roundedRect(0, 0, width, height, 3)
+                                            ctx.fill()
+                                        }
+                                    }
                                 }
                             }
                             
@@ -1517,7 +1684,8 @@ Item {
                             Rectangle {
                                 id: handleA
                                 width: 20; height: 20; radius: 10
-                                color: handleAMouse.pressed ? "#5A0D9D" : "#6A0DAD"
+                                property string baseColor: rangeSlider.getColorForLevel(rangeSlider.getLevelValue(rangeSlider.handleAIndex))
+                                color: handleAMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
                                 border.color: "white"; border.width: 2
                                 x: rangeSlider.currentList.length > 1 ? 
                                     (rangeSlider.handleAIndex / (rangeSlider.currentList.length - 1)) * (track.width - width) : 0
@@ -1577,7 +1745,8 @@ Item {
                             Rectangle {
                                 id: handleB
                                 width: 20; height: 20; radius: 10
-                                color: handleBMouse.pressed ? "#5A0D9D" : "#6A0DAD"
+                                property string baseColor: rangeSlider.getColorForLevel(rangeSlider.getLevelValue(rangeSlider.handleBIndex))
+                                color: handleBMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
                                 border.color: "white"; border.width: 2
                                 x: rangeSlider.currentList.length > 1 ? 
                                     (rangeSlider.handleBIndex / (rangeSlider.currentList.length - 1)) * (track.width - width) : track.width - width
