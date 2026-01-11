@@ -1173,6 +1173,35 @@ Item {
             }
         }
         
+        // X Close Button (positioned at top-right corner)
+        Rectangle {
+            id: closeButton
+            width: 40; height: 40; radius: 20
+            color: closeButtonMouse.containsMouse ? "#F0F0F0" : "#E8E8E8"
+            z: 100  // Above all content
+            
+            // Position so the center is at the popup's top-right corner
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.rightMargin: -32  // to center on corner
+            anchors.topMargin: -32    // to center on corner
+            
+            Text {
+                anchors.centerIn: parent
+                text: "✕"
+                font.pixelSize: 18
+                color: "#666"
+            }
+            
+            MouseArea {
+                id: closeButtonMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: filterPopup.close()
+            }
+        }
+        
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 20
@@ -1184,10 +1213,10 @@ Item {
                 Text { text: "Filters"; font.pixelSize: 20; font.bold: true; color: "#333" }
                 Item { Layout.fillWidth: true }
                 Text { 
-                    text: "Reset All"
-                    font.pixelSize: 12
+                    text: "↺"
+                    font.pixelSize: 26
+                    font.bold: true
                     color: "#6A0DAD"
-                    font.underline: true
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
@@ -2178,17 +2207,6 @@ Item {
                             }
                         }
                     }
-                }
-            }
-            
-            // Footer buttons
-            RowLayout {
-                Layout.fillWidth: true
-                Item { Layout.fillWidth: true }
-                
-                Button {
-                    text: "Close"
-                    onClicked: filterPopup.close()
                 }
             }
         }
