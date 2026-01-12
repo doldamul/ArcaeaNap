@@ -12,7 +12,8 @@ from web_consultantsheet import open_sheet
 from web_wiki import open_wiki
 from db_utils import (
     get_db_path, calculate_user_stats, get_top_10_most_played,
-    get_all_songs_with_charts, get_best_scores_per_chart, get_play_counts, calculate_rank
+    get_all_songs_with_charts, get_best_scores_per_chart, get_play_counts, 
+    get_this_year_play_counts, calculate_rank
 )
 
 class StartupHandler(QObject):
@@ -203,6 +204,7 @@ class StatisticsHandler(QObject):
         self._songs_data = {}
         self._scores_data = {}
         self._play_counts = {}
+        self._this_year_play_counts = {}
         
         # Processed list
         self._list_model = []
@@ -229,6 +231,7 @@ class StatisticsHandler(QObject):
         raw_songs = get_all_songs_with_charts()
         raw_scores = get_best_scores_per_chart()
         raw_play_counts = get_play_counts()
+        raw_this_year_play_counts = get_this_year_play_counts()
         
         # Normalize songs data (ensure diff keys are int)
         self._songs_data = {}
@@ -257,6 +260,14 @@ class StatisticsHandler(QObject):
                 self._play_counts[(aid, int(diff))] = count
             except:
                 self._play_counts[(aid, diff)] = count
+        
+        # Normalize this year play counts
+        self._this_year_play_counts = {}
+        for (aid, diff), count in raw_this_year_play_counts.items():
+            try:
+                self._this_year_play_counts[(aid, int(diff))] = count
+            except:
+                self._this_year_play_counts[(aid, diff)] = count
         
         # Calculate Level/BP boundaries
         self._calculate_level_bp_boundaries()
@@ -400,6 +411,7 @@ class StatisticsHandler(QObject):
         """Build a chart item for the list model."""
         score_data = self._scores_data.get((arcaea_id, difficulty), {})
         play_count = self._play_counts.get((arcaea_id, difficulty), 0)
+        this_year_play_count = self._this_year_play_counts.get((arcaea_id, difficulty), 0)
         
         score = score_data.get('score', 0)
         rank = calculate_rank(score) if score > 0 else ""
@@ -428,6 +440,7 @@ class StatisticsHandler(QObject):
             'timePlayed': score_data.get('time_played', 0),
             'scoreBelowMax': score_data.get('score_below_max', 0),
             'totalPlayCount': play_count,
+            'thisYearPlayCount': this_year_play_count,
             'displayValue': '',  # Will be set based on sort mode
         }
     
@@ -447,6 +460,7 @@ class StatisticsHandler(QObject):
         best_max_shiny = 0
         best_max_far = 0
         best_max_lost = 0
+        total_this_year_play_count = 0
         
         # Track which difficulty has the best value for each sort criteria
         best_diff_for_score = -1
@@ -495,6 +509,7 @@ class StatisticsHandler(QObject):
                 best_diff_for_score = diff
             
             total_play_count += chart_item['totalPlayCount']
+            total_this_year_play_count += chart_item['thisYearPlayCount']
             
             if chart_item['timePlayed'] > recent_time_played:
                 recent_time_played = chart_item['timePlayed']
@@ -527,6 +542,7 @@ class StatisticsHandler(QObject):
             'bestScore': best_score,
             'rank': best_rank,
             'totalPlayCount': total_play_count,
+            'thisYearPlayCount': total_this_year_play_count,
             'timePlayed': recent_time_played,
             'scoreBelowMax': best_score_below_max,
             'pure': best_max_pure,
@@ -566,6 +582,8 @@ class StatisticsHandler(QObject):
             return (primary_key, item.get('scoreBelowMax', 0))
         elif mode == "total_play_count":
             return item.get('totalPlayCount', 0)
+        elif mode == "this_year_play_count":
+            return item.get('thisYearPlayCount', 0)
         elif mode == "recent_played":
             return item.get('timePlayed', 0)
         elif mode == "level":
@@ -606,6 +624,9 @@ class StatisticsHandler(QObject):
             return f"MAX-{display_val}" if display_val > 0 else "MAX"
         elif mode == "total_play_count":
             count = item.get('totalPlayCount', 0)
+            return f"{count} plays"
+        elif mode == "this_year_play_count":
+            count = item.get('thisYearPlayCount', 0)
             return f"{count} plays"
         elif mode == "recent_played":
             ts = item.get('timePlayed', 0)

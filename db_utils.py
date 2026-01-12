@@ -443,6 +443,42 @@ def get_play_counts():
         conn.close()
 
 
+def get_this_year_play_counts():
+    """
+    Fetches play count for the current year for each (arcaea_id, difficulty).
+    Returns:
+        dict: {(arcaea_id, difficulty): this_year_play_count}
+    """
+    from datetime import datetime
+    
+    scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
+    if not os.path.exists(scores_db_path):
+        return {}
+
+    conn = sqlite3.connect(scores_db_path)
+    try:
+        cursor = conn.cursor()
+        current_year = datetime.now().year
+        
+        cursor.execute("""
+            SELECT arcaea_id, difficulty, yearly_play_count
+            FROM play_count
+            WHERE year = ?
+        """, (current_year,))
+        
+        result = {}
+        for row in cursor.fetchall():
+            key = (row[0], row[1])
+            result[key] = row[2] or 0
+        
+        return result
+    except Exception as e:
+        print(f"Error fetching this year play counts: {e}")
+        return {}
+    finally:
+        conn.close()
+
+
 def get_top_10_most_played():
     """
     Returns the top 10 most played songs across all difficulties.
