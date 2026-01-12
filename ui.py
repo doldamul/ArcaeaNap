@@ -443,6 +443,10 @@ class StatisticsHandler(QObject):
         total_play_count = 0
         recent_time_played = 0
         best_score_below_max = 0
+        best_max_pure = 0
+        best_max_shiny = 0
+        best_max_far = 0
+        best_max_lost = 0
         
         # Track which difficulty has the best value for each sort criteria
         best_diff_for_score = -1
@@ -496,9 +500,19 @@ class StatisticsHandler(QObject):
                 recent_time_played = chart_item['timePlayed']
                 best_diff_for_recent = diff
             
-            if chart_item['scoreBelowMax'] > best_score_below_max:
-                best_score_below_max = chart_item['scoreBelowMax']
-                best_diff_for_max = diff
+            # MAX sort: find chart with smallest (perfect + near + miss - shiny_perfect) value
+            # Only consider charts that have been played
+            if chart_item['bestScore'] > 0:
+                chart_max_val = chart_item['pure'] + chart_item['far'] + chart_item['lost'] - chart_item['shinyPure']
+                current_best_max_val = best_max_pure + best_max_far + best_max_lost - best_max_shiny
+                # Use smallest value, or if first played chart
+                if best_diff_for_max == -1 or chart_max_val < current_best_max_val or (chart_max_val == current_best_max_val and chart_item['scoreBelowMax'] < best_score_below_max):
+                    best_score_below_max = chart_item['scoreBelowMax']
+                    best_diff_for_max = diff
+                    best_max_pure = chart_item['pure']
+                    best_max_shiny = chart_item['shinyPure']
+                    best_max_far = chart_item['far']
+                    best_max_lost = chart_item['lost']
         
         return {
             'arcaeaId': arcaea_id,
@@ -515,6 +529,10 @@ class StatisticsHandler(QObject):
             'totalPlayCount': total_play_count,
             'timePlayed': recent_time_played,
             'scoreBelowMax': best_score_below_max,
+            'pure': best_max_pure,
+            'shinyPure': best_max_shiny,
+            'far': best_max_far,
+            'lost': best_max_lost,
             'filteredDifficulties': diff_details,
             'displayValue': '',
             # Thumbnail: highest difficulty among filtered
@@ -536,7 +554,16 @@ class StatisticsHandler(QObject):
         elif mode == "score":
             return item.get('bestScore', 0)
         elif mode == "max":
-            return item.get('scoreBelowMax', 0)
+            # Unplayed records: treat as highest MAX value (positive infinity)
+            if item.get('bestScore', 0) <= 0:
+                return (float('inf'), float('inf'))
+            # Primary: perfect + near + miss - shiny_perfect, Secondary: scoreBelowMax
+            pure = item.get('pure', 0)
+            shiny = item.get('shinyPure', 0)
+            far = item.get('far', 0)
+            lost = item.get('lost', 0)
+            primary_key = pure + far + lost - shiny
+            return (primary_key, item.get('scoreBelowMax', 0))
         elif mode == "total_play_count":
             return item.get('totalPlayCount', 0)
         elif mode == "recent_played":
@@ -567,8 +594,16 @@ class StatisticsHandler(QObject):
             rank = item.get('rank', '')
             return f"{score:,} ({rank})" if score > 0 else ""
         elif mode == "max":
-            sbm = item.get('scoreBelowMax', 0)
-            return f"-{sbm}" if sbm > 0 else "MAX"
+            # Display value: perfect + near + miss - shiny_perfect
+            # Show "-" for unplayed records
+            if item.get('bestScore', 0) <= 0:
+                return "-"
+            pure = item.get('pure', 0)
+            shiny = item.get('shinyPure', 0)
+            far = item.get('far', 0)
+            lost = item.get('lost', 0)
+            display_val = pure + far + lost - shiny
+            return f"MAX-{display_val}" if display_val > 0 else "MAX"
         elif mode == "total_play_count":
             count = item.get('totalPlayCount', 0)
             return f"{count} plays"
