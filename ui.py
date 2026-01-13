@@ -615,7 +615,9 @@ class StatisticsHandler(QObject):
         elif mode == "score":
             score = item.get('bestScore', 0)
             rank = item.get('rank', '')
-            return f"{score:,} ({rank})" if score > 0 else ""
+            if score > 0:
+                return f"{score:,} ({rank})"
+            return "-"
         elif mode == "max":
             # Display value: perfect + near + miss - shiny_perfect
             # Show "-" for unplayed records
@@ -629,12 +631,18 @@ class StatisticsHandler(QObject):
             return f"MAX-{display_val}" if display_val > 0 else "MAX"
         elif mode == "total_play_count":
             count = item.get('totalPlayCount', 0)
+            if count <= 0:
+                return "Never played"
             return f"{count} plays"
         elif mode == "this_year_play_count":
             count = item.get('thisYearPlayCount', 0)
+            if count <= 0:
+                return "Never played"
             return f"{count} plays"
         elif mode == "recent_played":
             ts = item.get('timePlayed', 0)
+            if not ts or ts <= 0:
+                return "Never played"
             return self._format_time(ts)
         elif mode == "level":
             if is_chart_mode:
@@ -643,11 +651,19 @@ class StatisticsHandler(QObject):
                 return f"{level} ({bp:.1f})"
             return item.get('level', '')
         elif mode == "s_bp":
-            return f"{item.get('s_bp', 0):.2f}"
+            s_bp = item.get('s_bp', 0)
+            if s_bp <= 0:
+                return "?"
+            return f"{s_bp:.2f}"
         elif mode == "perceived_bp":
-            return f"{item.get('perceived_bp', 0):.2f}"
+            perceived_bp = item.get('perceived_bp', 0)
+            if perceived_bp <= 0:
+                return "?"
+            return f"{perceived_bp:.2f}"
         elif mode == "length":
             length = item.get('length', 0)
+            if length <= 0:
+                return "?"
             return f"{length // 60}:{length % 60:02d}"
         return ""
     
