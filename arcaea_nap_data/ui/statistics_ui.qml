@@ -20,7 +20,7 @@ Item {
     // Data from statisticsHandler
     property var listData: statisticsHandler ? statisticsHandler.getListModel() : []
     property var currentSong: statisticsHandler ? statisticsHandler.getSelectedItem() : null
-    property int currentSongIndex: -1
+    property int currentSongIndex: statisticsHandler ? statisticsHandler.selectedIndex : -1
     property string searchText: ""  // Search text managed at root level
     
     // Search debounce timer
@@ -655,6 +655,20 @@ Item {
                                     
                                     ScrollBar.vertical: listVerticalBar
                                     
+                                    // Auto-scroll to selected item when list data changes (sort/filter/mode)
+                                    Connections {
+                                        target: statisticsHandler
+                                        function onDataChanged() {
+                                            // Use Qt.callLater to ensure model is updated before scrolling
+                                            Qt.callLater(function() {
+                                                var idx = statisticsHandler.selectedIndex
+                                                if (idx >= 0 && idx < songListView.count) {
+                                                    songListView.positionViewAtIndex(idx, ListView.Center)
+                                                }
+                                            })
+                                        }
+                                    }
+                                    
                                     delegate: Rectangle {
                                         width: ListView.view.width
                                         height: 70
@@ -851,8 +865,9 @@ Item {
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
                                             onClicked: {
-                                                statsRoot.currentSongIndex = index
                                                 if (statisticsHandler) statisticsHandler.selectItem(index)
+                                                // Scroll just enough to fully show the item if partially visible at edges
+                                                songListView.positionViewAtIndex(index, ListView.Contain)
                                                 if (isNarrow) mobileStack.push(detailPageComponent)
                                             }
                                         }

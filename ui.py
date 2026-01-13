@@ -753,7 +753,58 @@ class StatisticsHandler(QObject):
             item['displayValue'] = self._format_display_value(item)
         
         self._list_model = items
+        
+        # Handle selection based on selection_mode (set by caller)
+        old_selected_index = self._selected_index
+        self._selected_index = -1
+        self._selected_item = None
+        
+        selection_mode = getattr(self, '_pending_selection_mode', 'restore')
+        self._pending_selection_mode = 'restore'  # Reset to default
+        
+        if selection_mode == 'first':
+            # Select first item (for sort/search changes)
+            if self._list_model:
+                self._selected_index = 0
+                self._selected_item = self._list_model[0]
+                self._selected_song_id = self._selected_item.get('arcaeaId')
+                if self._display_mode == "chart":
+                    self._selected_difficulty = self._selected_item.get('difficulty', 2)
+        elif selection_mode == 'adjacent_fallback':
+            # Try to restore, if failed, just clear selection (for filter changes)
+            if self._selected_song_id:
+                for i, item in enumerate(self._list_model):
+                    if item.get('arcaeaId') == self._selected_song_id:
+                        if self._display_mode == "chart":
+                            if item.get('difficulty') == self._selected_difficulty:
+                                self._selected_index = i
+                                self._selected_item = item
+                                break
+                        else:
+                            self._selected_index = i
+                            self._selected_item = item
+                            break
+            # If item not found, selection stays cleared (-1, None)
+        else:
+            # Default 'restore' mode - try to restore selection (for mode changes)
+            if self._selected_song_id:
+                for i, item in enumerate(self._list_model):
+                    if item.get('arcaeaId') == self._selected_song_id:
+                        if self._display_mode == "chart":
+                            if item.get('difficulty') == self._selected_difficulty:
+                                self._selected_index = i
+                                self._selected_item = item
+                                break
+                        else:
+                            self._selected_index = i
+                            self._selected_item = item
+                            break
+        
         self.dataChanged.emit()
+        
+        # Emit selectedItemChanged if selection changed
+        if self._selected_index != old_selected_index:
+            self.selectedItemChanged.emit()
     
     # === QML Properties ===
     @pyqtProperty(str, notify=dataChanged)
@@ -792,48 +843,35 @@ class StatisticsHandler(QObject):
     def selectedSongId(self):
         return self._selected_song_id or ""
     
+    @pyqtProperty(int, notify=selectedItemChanged)
+    def selectedIndex(self):
+        return self._selected_index
+    
     # === QML Slots ===
     @pyqtSlot(str)
     def setDisplayMode(self, mode):
         if mode in ["song", "chart"] and mode != self._display_mode:
-            old_mode = self._display_mode
             self._display_mode = mode
             self._rebuild_list()
-            
-            # Restore selection based on stored song_id and difficulty
-            if self._selected_song_id:
-                for i, item in enumerate(self._list_model):
-                    if item.get('arcaeaId') == self._selected_song_id:
-                        # In chart mode, also match difficulty
-                        if mode == "chart":
-                            if item.get('difficulty') == self._selected_difficulty:
-                                self._selected_index = i
-                                self._selected_item = item
-                                self.selectedItemChanged.emit()
-                                break
-                        else:
-                            # Song mode: just match song
-                            self._selected_index = i
-                            self._selected_item = item
-                            self.selectedItemChanged.emit()
-                            break
-            
     
     @pyqtSlot(str)
     def setSortMode(self, mode):
         if mode != self._sort_mode:
             self._sort_mode = mode
+            self._pending_selection_mode = 'first'
             self._rebuild_list()
     
     @pyqtSlot()
     def toggleSortOrder(self):
         self._sort_ascending = not self._sort_ascending
+        self._pending_selection_mode = 'first'
         self._rebuild_list()
     
     @pyqtSlot(str)
     def setSearchText(self, text):
         if text != self._search_text:
             self._search_text = text
+            self._pending_selection_mode = 'first'
             self._rebuild_list()
     
     @pyqtSlot(str, 'QVariant')
@@ -873,6 +911,7 @@ class StatisticsHandler(QObject):
         elif filter_type == 'score_max_rank':
             self._filter_score_max_rank = int(value) if value is not None else len(SCORE_RANKS) - 1
         
+        self._pending_selection_mode = 'adjacent_fallback'
         self._rebuild_list()
     
     @pyqtSlot(int)
