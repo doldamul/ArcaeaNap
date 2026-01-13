@@ -573,13 +573,18 @@ class StatisticsHandler(QObject):
             # Unplayed records: treat as highest MAX value (positive infinity)
             if item.get('bestScore', 0) <= 0:
                 return (float('inf'), float('inf'))
-            # Primary: perfect + near + miss - shiny_perfect, Secondary: scoreBelowMax
+            # Primary: perfect + near + miss - shiny_perfect
+            # For MAX records (primary=0), higher BP is better
+            # For non-MAX records, lower scoreBelowMax is better
             pure = item.get('pure', 0)
             shiny = item.get('shinyPure', 0)
             far = item.get('far', 0)
             lost = item.get('lost', 0)
             primary_key = pure + far + lost - shiny
-            return (primary_key, item.get('scoreBelowMax', 0))
+            if primary_key == 0:
+                return (primary_key, -item.get('bp', 0))
+            else:
+                return (primary_key, item.get('scoreBelowMax', 0))
         elif mode == "total_play_count":
             return item.get('totalPlayCount', 0)
         elif mode == "this_year_play_count":
