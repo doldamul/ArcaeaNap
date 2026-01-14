@@ -803,7 +803,8 @@ class StatisticsHandler(QObject):
         self.dataChanged.emit()
         
         # Emit selectedItemChanged if selection changed
-        if self._selected_index != old_selected_index:
+        # For 'first' and 'restore_always_emit' modes, always emit since the item content may have changed
+        if selection_mode in ('first', 'restore_always_emit') or self._selected_index != old_selected_index:
             self.selectedItemChanged.emit()
     
     # === QML Properties ===
@@ -852,6 +853,7 @@ class StatisticsHandler(QObject):
     def setDisplayMode(self, mode):
         if mode in ["song", "chart"] and mode != self._display_mode:
             self._display_mode = mode
+            self._pending_selection_mode = 'restore_always_emit'
             self._rebuild_list()
     
     @pyqtSlot(str)
