@@ -266,7 +266,7 @@ Item {
         }
     }
 
-    // 1-4. 막대 그래프
+    // 1-4. Difficulty Card (for detailed view)
     component DiffCard: Rectangle {
         property string diffName: "FTR"
         property string diffLevel: "11"
@@ -280,11 +280,38 @@ Item {
         property int clearType: 0
         property bool isSelected: false
         property int difficulty: 2  // Numeric difficulty for click handling
+        property bool isFiltered: false  // True if excluded by current filter
         
         signal clicked(int diff)
         
+        // Filtered state: keep colors but muted, not fully gray
+        // Blend original color with gray for a desaturated look
+        function blendWithGray(hexColor, amount) {
+            // amount: 0 = original, 1 = full gray
+            var r = parseInt(hexColor.substring(1, 3), 16)
+            var g = parseInt(hexColor.substring(3, 5), 16)
+            var b = parseInt(hexColor.substring(5, 7), 16)
+            var grayVal = 160  // Target gray
+            r = Math.round(r + (grayVal - r) * amount)
+            g = Math.round(g + (grayVal - g) * amount)
+            b = Math.round(b + (grayVal - b) * amount)
+            return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')
+        }
+        
+        // Computed colors: filtered = slight desaturation (30%), not full gray
+        property string effectiveTextColor: isFiltered ? "#666" : "#333"
+        property string effectiveDiffColor: isFiltered ? blendWithGray(diffColor, 0.35) : diffColor
+        property string effectiveSubTextColor: isFiltered ? "#999" : "#888"
+        
         // Helper function for rank color
         function getRankColor(r) {
+            if (isFiltered) {
+                // Keep rank colors but muted
+                if (r === "PM") return "#C9B060"  // Muted gold
+                if (r === "EX+" || r === "EX") return "#B090D0"  // Muted purple
+                if (r === "AA") return "#7AA8C8"  // Muted blue
+                return "#888"
+            }
             if (r === "PM") return "#FFD700"
             if (r === "EX+" || r === "EX") return "#A060FF"
             if (r === "AA") return "#4A90E2"
@@ -303,19 +330,59 @@ Item {
                 default: return ""
             }
         }
+        
+        // Background color based on state - filtered keeps tint but muted
+        function getBackgroundColor() {
+            if (isFiltered) {
+                switch(diffName) {
+                    case "PST": return "#F8FAFA"  // Very light blue-gray
+                    case "PRS": return "#F8FAF8"  // Very light green-gray
+                    case "ETR": return "#F8F8F8"  // Light gray
+                    default: return "#FAF8F8"    // Very light red-gray
+                }
+            }
+            if (isSelected) return "#FFFFFF"
+            switch(diffName) {
+                case "PST": return "#F5FCFF"
+                case "PRS": return "#F0FFF0"
+                case "ETR": return "#F5F0F5"
+                default: return "#FFF5F5"
+            }
+        }
 
         Layout.fillWidth: true
         Layout.preferredHeight: 280
         radius: 15
-        color: isSelected ? "#FFFFFF" : (diffName === "PST" ? "#F5FCFF" : (diffName === "PRS" ? "#F0FFF0" : (diffName === "ETR" ? "#F5F0F5" : "#FFF5F5")))
-        border.color: isSelected ? diffColor : "#E0E0E0"
-        border.width: isSelected ? 2 : 1
+        color: getBackgroundColor()
+        border.color: isFiltered ? blendWithGray(diffColor, 0.5) : (isSelected ? diffColor : "#E0E0E0")
+        border.width: (isSelected && !isFiltered) ? 2 : 1
         
-        // Clickable area for radio-button behavior
+        // Clickable area for radio-button behavior (disabled when filtered)
         MouseArea {
             anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
+            cursorShape: isFiltered ? Qt.ArrowCursor : Qt.PointingHandCursor
+            enabled: !isFiltered
             onClicked: parent.clicked(parent.difficulty)
+        }
+        
+        // Diagonal stripes overlay for filtered state (subtle disabled indicator)
+        Canvas {
+            anchors.fill: parent
+            visible: isFiltered
+            opacity: 0.03
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.reset()
+                ctx.strokeStyle = "#000000"
+                ctx.lineWidth = 1
+                var spacing = 12
+                for (var i = -height; i < width + height; i += spacing) {
+                    ctx.beginPath()
+                    ctx.moveTo(i, 0)
+                    ctx.lineTo(i + height, height)
+                    ctx.stroke()
+                }
+            }
         }
 
         ColumnLayout {
@@ -324,18 +391,18 @@ Item {
             // Header: Difficulty Name + Level
             RowLayout {
                 Layout.fillWidth: true
-                Text { text: diffName; color: diffColor; font.bold: true; font.pixelSize: 18 }
+                Text { text: diffName; color: effectiveDiffColor; font.bold: true; font.pixelSize: 18 }
                 Item { Layout.fillWidth: true }
-                Text { text: getClearTypeText(clearType); color: "#888"; font.pixelSize: 10; visible: score > 0 }
+                Text { text: getClearTypeText(clearType); color: effectiveSubTextColor; font.pixelSize: 10; visible: score > 0 }
             }
-            Text { text: "LEVEL " + diffLevel; color: "#999"; font.pixelSize: 10 }
+            Text { text: "LEVEL " + diffLevel; color: effectiveSubTextColor; font.pixelSize: 10 }
             
             Item { Layout.preferredHeight: 10 }
             
             // Score + Rank
             Text { 
                 text: score > 0 ? score : "-"
-                font.bold: true; font.pixelSize: 24; color: "#333" 
+                font.bold: true; font.pixelSize: 24; color: effectiveTextColor 
             }
             Text { 
                 text: rank
@@ -353,29 +420,30 @@ Item {
                 rowSpacing: 6
                 columnSpacing: 10
                 
-                Text { text: "Pure"; color: "#888"; font.pixelSize: 12 }
+                Text { text: "Pure"; color: effectiveSubTextColor; font.pixelSize: 12 }
                 Text { 
                     text: score > 0 ? pure + (shinyPure > 0 ? " (" + shinyPure + ")" : "") : "-"
-                    color: "#333"; font.bold: true; font.pixelSize: 12
+                    color: effectiveTextColor; font.bold: true; font.pixelSize: 12
                     Layout.alignment: Qt.AlignRight
                 }
                 
-                Text { text: "Far"; color: "#888"; font.pixelSize: 12 }
+                Text { text: "Far"; color: effectiveSubTextColor; font.pixelSize: 12 }
                 Text { 
                     text: score > 0 ? far.toString() : "-"
-                    color: "#E0A000"; font.bold: true; font.pixelSize: 12
+                    color: isFiltered ? "#C0A060" : "#E0A000"; font.bold: true; font.pixelSize: 12
                     Layout.alignment: Qt.AlignRight
                 }
                 
-                Text { text: "Lost"; color: "#888"; font.pixelSize: 12 }
+                Text { text: "Lost"; color: effectiveSubTextColor; font.pixelSize: 12 }
                 Text { 
                     text: score > 0 ? lost.toString() : "-"
-                    color: "#E04040"; font.bold: true; font.pixelSize: 12
+                    color: isFiltered ? "#C08080" : "#E04040"; font.bold: true; font.pixelSize: 12
                     Layout.alignment: Qt.AlignRight
                 }
             }
         }
     }
+
 
     // =========================================================================
     // [2] 메인 뷰 (Root View)
@@ -667,6 +735,15 @@ Item {
                                                 }
                                             })
                                         }
+                                        function onSelectedItemChanged() {
+                                            // Also scroll when selection changes (e.g., difficulty change in Chart mode)
+                                            Qt.callLater(function() {
+                                                var idx = statisticsHandler.selectedIndex
+                                                if (idx >= 0 && idx < songListView.count) {
+                                                    songListView.positionViewAtIndex(idx, ListView.Contain)
+                                                }
+                                            })
+                                        }
                                     }
                                     
                                     delegate: Rectangle {
@@ -920,15 +997,15 @@ Item {
             radius: isNarrow ? 0 : 20
             clip: true
             
-            // Get difficulties to display (filteredDifficulties for Song mode, single item for Chart mode)
+            // Get ALL difficulties to display (regardless of Song/Chart mode or filter)
+            // Filtered charts will be shown with isFiltered=true for gray styling
             property var difficultiesToShow: {
                 if (!currentSong) return []
-                // In song mode, use filteredDifficulties
-                if (currentSong.filteredDifficulties) {
-                    return currentSong.filteredDifficulties
+                // Always use allDifficulties to show all charts (with isFiltered flag)
+                if (currentSong.allDifficulties) {
+                    return currentSong.allDifficulties
                 }
-                // In chart mode, currentSong IS the chart, so wrap it in array
-                return [currentSong]
+                return []
             }
 
             ColumnLayout {
@@ -1082,6 +1159,7 @@ Item {
                                                 clearType: modelData.bestClearType || 0
                                                 difficulty: modelData.difficulty || 0
                                                 isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
+                                                isFiltered: modelData.isFiltered || false
                                                 
                                                 onClicked: function(diff) {
                                                     if (statisticsHandler) {
@@ -1125,6 +1203,7 @@ Item {
                                             clearType: modelData.bestClearType || 0
                                             difficulty: modelData.difficulty || 0
                                             isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
+                                            isFiltered: modelData.isFiltered || false
                                             
                                             onClicked: function(diff) {
                                                 if (statisticsHandler) {

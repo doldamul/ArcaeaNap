@@ -444,6 +444,32 @@ class StatisticsHandler(QObject):
             'displayValue': '',  # Will be set based on sort mode
         }
     
+    def _build_all_difficulty_details(self, arcaea_id, song_data):
+        """Build details for ALL difficulties of a song, with isFiltered flag.
+        
+        Used for detailed view to show all difficulties regardless of filter.
+        """
+        all_details = []
+        
+        for diff in DIFFICULTY_ORDER:
+            chart_data = song_data.get('charts', {}).get(diff)
+            if not chart_data:
+                continue
+            
+            score_data = self._scores_data.get((arcaea_id, diff), {})
+            
+            # Check if this chart is filtered out
+            is_filtered = not self._matches_filter(chart_data, score_data, diff)
+            
+            # Build the chart item
+            chart_item = self._build_chart_item(arcaea_id, song_data, diff, chart_data)
+            chart_item['isFiltered'] = is_filtered
+            
+            all_details.append(chart_item)
+        
+        return all_details
+    
+
     def _build_song_item(self, arcaea_id, song_data, filtered_difficulties):
         """Build a song item aggregating filtered difficulties."""
         # Find best values among filtered difficulties
@@ -550,6 +576,7 @@ class StatisticsHandler(QObject):
             'far': best_max_far,
             'lost': best_max_lost,
             'filteredDifficulties': diff_details,
+            'allDifficulties': self._build_all_difficulty_details(arcaea_id, song_data),
             'displayValue': '',
             # Thumbnail: highest difficulty among filtered
             'thumbnailDifficulty': thumbnail_difficulty,
@@ -733,6 +760,8 @@ class StatisticsHandler(QObject):
                     chart_data = song_data['charts'].get(diff, {})
                     if chart_data:
                         item = self._build_chart_item(arcaea_id, song_data, diff, chart_data)
+                        # Add allDifficulties for detailed view (shows all song difficulties regardless of mode)
+                        item['allDifficulties'] = self._build_all_difficulty_details(arcaea_id, song_data)
                         items.append(item)
             else:
                 # Add song with aggregated data
@@ -771,19 +800,53 @@ class StatisticsHandler(QObject):
                 if self._display_mode == "chart":
                     self._selected_difficulty = self._selected_item.get('difficulty', 2)
         elif selection_mode == 'adjacent_fallback':
-            # Try to restore, if failed, just clear selection (for filter changes)
+            # Try to restore selection, with fallback to other difficulties if filtered out
             if self._selected_song_id:
+                found = False
+                fallback_item = None
+                fallback_index = -1
+                
                 for i, item in enumerate(self._list_model):
                     if item.get('arcaeaId') == self._selected_song_id:
                         if self._display_mode == "chart":
+                            # Exact match (same song + difficulty)
                             if item.get('difficulty') == self._selected_difficulty:
                                 self._selected_index = i
                                 self._selected_item = item
+                                found = True
                                 break
+                            # Track first item of same song as fallback
+                            elif fallback_item is None:
+                                fallback_item = item
+                                fallback_index = i
                         else:
+                            # Song mode: found the song
                             self._selected_index = i
                             self._selected_item = item
+                            found = True
+                            # Check if selected difficulty is still available (not filtered)
+                            all_diffs = item.get('allDifficulties', [])
+                            current_diff_available = any(
+                                d.get('difficulty') == self._selected_difficulty and not d.get('isFiltered', False)
+                                for d in all_diffs
+                            )
+                            if not current_diff_available:
+                                # Find highest non-filtered difficulty (BYD, ETR, FTR, PRS, PST)
+                                for diff_num in [3, 4, 2, 1, 0]:
+                                    for d in all_diffs:
+                                        if d.get('difficulty') == diff_num and not d.get('isFiltered', False):
+                                            self._selected_difficulty = diff_num
+                                            break
+                                    else:
+                                        continue
+                                    break
                             break
+                
+                # Chart mode: use fallback if exact match not found
+                if not found and self._display_mode == "chart" and fallback_item:
+                    self._selected_index = fallback_index
+                    self._selected_item = fallback_item
+                    self._selected_difficulty = fallback_item.get('difficulty', 2)
             # If item not found, selection stays cleared (-1, None)
         else:
             # Default 'restore' mode - try to restore selection (for mode changes)
@@ -802,9 +865,10 @@ class StatisticsHandler(QObject):
         
         self.dataChanged.emit()
         
-        # Emit selectedItemChanged if selection changed
-        # For 'first' and 'restore_always_emit' modes, always emit since the item content may have changed
-        if selection_mode in ('first', 'restore_always_emit') or self._selected_index != old_selected_index:
+        # Emit selectedItemChanged if selection changed OR if filter/mode could affect detailed view
+        # For 'first', 'restore_always_emit', and 'adjacent_fallback' modes, always emit 
+        # since the item content or isFiltered status may have changed
+        if selection_mode in ('first', 'restore_always_emit', 'adjacent_fallback') or self._selected_index != old_selected_index:
             self.selectedItemChanged.emit()
     
     # === QML Properties ===
@@ -928,15 +992,50 @@ class StatisticsHandler(QObject):
             # In chart mode, also track the difficulty
             if self._display_mode == "chart":
                 self._selected_difficulty = self._selected_item.get('difficulty', 2)
+            else:
+                # Song mode: check if current selected difficulty is available for this song
+                all_diffs = self._selected_item.get('allDifficulties', [])
+                current_diff_available = any(
+                    d.get('difficulty') == self._selected_difficulty and not d.get('isFiltered', False)
+                    for d in all_diffs
+                )
+                if not current_diff_available and all_diffs:
+                    # Find highest non-filtered difficulty (reverse order: BYD, ETR, FTR, PRS, PST)
+                    # DIFFICULTY_ORDER is [0, 1, 2, 4, 3] = PST, PRS, FTR, ETR, BYD
+                    # Reverse: [3, 4, 2, 1, 0] = BYD, ETR, FTR, PRS, PST
+                    for diff_num in [3, 4, 2, 1, 0]:
+                        for d in all_diffs:
+                            if d.get('difficulty') == diff_num and not d.get('isFiltered', False):
+                                self._selected_difficulty = diff_num
+                                break
+                        else:
+                            continue
+                        break
             
             self.selectedItemChanged.emit()
     
     @pyqtSlot(int)
     def setSelectedDifficulty(self, diff):
-        """Set the selected difficulty (called when clicking DiffCard in Song Mode)."""
-        if diff in [0, 1, 2, 3, 4]:
-            self._selected_difficulty = diff
-            self.selectedItemChanged.emit()
+        """Set the selected difficulty (called when clicking DiffCard).
+        
+        In Chart mode, this also updates the list selection to the matching chart.
+        """
+        if diff not in [0, 1, 2, 3, 4]:
+            return
+        
+        old_difficulty = self._selected_difficulty
+        self._selected_difficulty = diff
+        
+        # In Chart mode, find and select the matching item in the list
+        if self._display_mode == "chart" and self._selected_song_id:
+            for i, item in enumerate(self._list_model):
+                if (item.get('arcaeaId') == self._selected_song_id and 
+                    item.get('difficulty') == diff):
+                    self._selected_index = i
+                    self._selected_item = item
+                    break
+        
+        self.selectedItemChanged.emit()
     
     
     @pyqtSlot(result='QVariant')
