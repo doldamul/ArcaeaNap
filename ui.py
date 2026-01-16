@@ -271,7 +271,9 @@ class StatisticsHandler(QObject):
         
         # Calculate Level/BP boundaries
         self._calculate_level_bp_boundaries()
-                
+        
+        # Select first item when data is loaded (app startup)
+        self._pending_selection_mode = 'first'
         self._rebuild_list()
     
     def _calculate_level_bp_boundaries(self):
