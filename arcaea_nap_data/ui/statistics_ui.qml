@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Controls.Basic as Basic
 import QtQuick.Window
 import QtQuick.Shapes 1.15
 import QtQuick.Effects
@@ -501,8 +502,49 @@ Item {
                         Layout.fillWidth: isNarrow 
                         Layout.fillHeight: true
                         color: "#FFFFFF"; radius: 20
+
+                        // Independent Scrollbar in Padding Area
+                        Basic.ScrollBar {
+                            id: listVerticalBar
+                            z: 10
+                            anchors.right: parent.right
+                            anchors.rightMargin: 4
+                            y: songListContentLayout.y + listWrapper.y
+                            height: listWrapper.height
+                            width: 10
+                            
+                            policy: ScrollBar.AlwaysOn
+                            size: songListView.visibleArea.heightRatio
+                            position: songListView.visibleArea.yPosition
+                            
+                            onPositionChanged: {
+                                if (pressed) songListView.contentY = position * songListView.contentHeight
+                            }
+                            
+                            property bool showScrollbar: songListView.moving || hideTimer.running || listVerticalBar.hovered || listVerticalBar.pressed
+                            hoverEnabled: true
+                            active: true
+                            
+                            Timer { id: hideTimer; interval: 1000 }
+                            Connections {
+                                target: songListView
+                                function onMovingChanged() { if (!songListView.moving) hideTimer.restart() }
+                            }
+                            onPressedChanged: { if (!pressed && !songListView.moving) hideTimer.restart() }
+                            
+                            opacity: showScrollbar ? 1.0 : 0.0
+                            Behavior on opacity { NumberAnimation { duration: 200 } }
+                            
+                            background: Rectangle { color: "transparent" }
+                            contentItem: Rectangle {
+                                implicitWidth: 6; implicitHeight: 100; radius: 3
+                                color: "#B090D0"
+                                opacity: listVerticalBar.pressed ? 1.0 : (listVerticalBar.hovered ? 1.0 : 0.6)
+                            }
+                        }
                         
                         ColumnLayout {
+                            id: songListContentLayout
                             anchors.fill: parent; anchors.margins: 20; spacing: 12
                             
                             // Search Bar
@@ -623,7 +665,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                                 
                                 // Sort Dropdown
-                                ComboBox {
+                                Basic.ComboBox {
                                     id: sortCombo
                                     Layout.preferredWidth: 100
                                     Layout.preferredHeight: 32
@@ -711,42 +753,51 @@ Item {
                             
                             // Song/Chart ListView Wrapper
                             Item {
+                                id: listWrapper
                                 Layout.fillWidth: true; Layout.fillHeight: true
 
                                 ListView {
                                     id: songListView
                                     anchors.fill: parent
-                                    anchors.rightMargin: 14 // Make room for scrollbar
+                                    // lists items expanded to full width (no margin)
                                     clip: true
                                     model: listData
                                     spacing: 8
                                     
-                                    ScrollBar.vertical: listVerticalBar
+                                    delegate: listDelegate
                                     
-                                    // Auto-scroll to selected item when list data changes (sort/filter/mode)
-                                    Connections {
-                                        target: statisticsHandler
-                                        function onDataChanged() {
-                                            // Use Qt.callLater to ensure model is updated before scrolling
-                                            Qt.callLater(function() {
-                                                var idx = statisticsHandler.selectedIndex
-                                                if (idx >= 0 && idx < songListView.count) {
-                                                    songListView.positionViewAtIndex(idx, ListView.Center)
-                                                }
-                                            })
-                                        }
-                                        function onSelectedItemChanged() {
-                                            // Also scroll when selection changes (e.g., difficulty change in Chart mode)
-                                            Qt.callLater(function() {
-                                                var idx = statisticsHandler.selectedIndex
-                                                if (idx >= 0 && idx < songListView.count) {
-                                                    songListView.positionViewAtIndex(idx, ListView.Contain)
-                                                }
-                                            })
-                                        }
+                                    // No attached ScrollBar to avoid layout conflicts
+                                }
+                                
+
+                                
+                                // Auto-scroll to selected item when list data changes (sort/filter/mode)
+                                Connections {
+                                    target: statisticsHandler
+                                    function onDataChanged() {
+                                        // Use Qt.callLater to ensure model is updated before scrolling
+                                        Qt.callLater(function() {
+                                            var idx = statisticsHandler.selectedIndex
+                                            if (idx >= 0 && idx < songListView.count) {
+                                                songListView.positionViewAtIndex(idx, ListView.Center)
+                                            }
+                                        })
                                     }
-                                    
-                                    delegate: Rectangle {
+                                    function onSelectedItemChanged() {
+                                        // Also scroll when selection changes (e.g., difficulty change in Chart mode)
+                                        Qt.callLater(function() {
+                                            var idx = statisticsHandler.selectedIndex
+                                            if (idx >= 0 && idx < songListView.count) {
+                                                songListView.positionViewAtIndex(idx, ListView.Contain)
+                                            }
+                                        })
+                                    }
+                                }
+                                
+                                // Delegate Component for ListView
+                                Component {
+                                    id: listDelegate
+                                    Rectangle {
                                         width: ListView.view.width
                                         height: 70
                                         color: (!isNarrow && index === currentSongIndex) ? "#F8F0FF" : (delegateMouse.containsMouse ? "#FAFAFA" : "transparent")
@@ -949,26 +1000,15 @@ Item {
                                             }
                                         }
                                     }
-                                    
-                                    // Empty state
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "No songs found"
-                                        color: "#999"
-                                        font.pixelSize: 14
-                                        visible: listData.length === 0
-                                    }
                                 }
-
-                                // Independent ScrollBar anchored to the container
-                                ScrollBar {
-                                    id: listVerticalBar
-                                    anchors.top: parent.top
-                                    anchors.bottom: parent.bottom
-                                    anchors.right: parent.right
-                                    anchors.rightMargin: 0
-                                    active: true
-                                    width: 12
+                                
+                                // Empty state
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "No songs found"
+                                    color: "#999"
+                                    font.pixelSize: 14
+                                    visible: listData.length === 0
                                 }
                             }
                         }
