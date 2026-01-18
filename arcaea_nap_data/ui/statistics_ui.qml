@@ -337,6 +337,19 @@ Item {
             }
         }
         
+        // Helper function for abbreviated clear type text
+        function getAbbreviatedClearTypeText(t) {
+            switch(t) {
+                case 0: return "Lost"
+                case 1: return "N. Clear"
+                case 2: return "FR"
+                case 3: return "PM"
+                case 4: return "E. Clear"
+                case 5: return "H. Clear"
+                default: return ""
+            }
+        }
+        
         // Background color based on state - filtered keeps tint but muted
         function getBackgroundColor() {
             if (isFiltered) {
@@ -357,11 +370,13 @@ Item {
         }
 
         Layout.fillWidth: true
+        Layout.fillHeight: true
         Layout.preferredHeight: 320
         radius: 15
         color: getBackgroundColor()
         border.color: isFiltered ? blendWithGray(diffColor, 0.5) : (isSelected ? diffColor : "#E0E0E0")
         border.width: (isSelected && !isFiltered) ? 2 : 1
+        clip: true  // Prevent content from overflowing card boundaries
         
         // Clickable area for radio-button behavior (disabled when filtered)
         MouseArea {
@@ -392,81 +407,127 @@ Item {
         }
 
         ColumnLayout {
-            anchors.fill: parent; anchors.margins: 20; spacing: 8
+            id: cardContent
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 8
             
             // Header: Difficulty Name + Level
-            Item {
+            RowLayout {
+                id: headerRow
                 Layout.fillWidth: true
                 Layout.preferredHeight: 22
+                spacing: 0
                 
                 Text { 
+                    id: diffTitleText
                     text: diffName + " " + diffLevel
                     color: effectiveDiffColor; font.bold: true; font.pixelSize: 18
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
+                    
+                    Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
+                    // Allow shrinking to prevent layout blowout, ensuring proper width reporting
+                    Layout.minimumWidth: 0
+                    elide: Text.ElideRight
+                }
+
+                Item { Layout.fillWidth: true }
+                
+                // Metrics for Title (Bold 18px)
+                TextMetrics {
+                    id: titleMetrics
+                    font: diffTitleText.font
+                    text: diffTitleText.text
                 }
                 
-                Text { 
+                // Metrics for Clear Text (Regular 10px)
+                TextMetrics {
+                    id: clearTextMeasure
                     text: getClearTypeText(clearType)
+                    font.pixelSize: 10
+                }
+
+                Text { 
+                    id: clearTypeDisplay
+                    // Calculate if we need to abbreviate based on accurate metrics
+                    // Using implicitWidth vs width is key; titleMetrics provides unelided width
+                    property real safetyPadding: 25
+                    property bool performAbbreviation: (titleMetrics.width + safetyPadding + clearTextMeasure.width) > headerRow.width
+                    
+                    text: performAbbreviation ? getAbbreviatedClearTypeText(clearType) : getClearTypeText(clearType)
                     color: effectiveSubTextColor; font.pixelSize: 10
                     visible: score > 0 
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.bottom: parent.bottom; anchors.bottomMargin: 3 // Slight offset for baseline alignment attempt
+                    
+                    Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+                    Layout.bottomMargin: -2 
                 }
             }
             
             // BP Metrics (Takes place of previous Level text)
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 20
+                spacing: 0
                 
                 // BP
-                Column {
-                    spacing: 0
-                    Text { 
-                        text: bp > 0 ? bp.toFixed(1) : "-"
-                        font.bold: true; font.pixelSize: 12; color: effectiveTextColor
-                        anchors.horizontalCenter: parent.horizontalCenter
-                    }
-                    Text { 
-                        text: "BP"
-                        font.pixelSize: 10; color: effectiveSubTextColor
-                        anchors.horizontalCenter: parent.horizontalCenter
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: childrenRect.height
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 0
+                        Text { 
+                            text: bp > 0 ? bp.toFixed(1) : "-"
+                            font.bold: true; font.pixelSize: 12; color: effectiveTextColor
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        Text { 
+                            text: "BP"
+                            font.pixelSize: 10; color: effectiveSubTextColor
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
                     }
                 }
                 
                 // Shiny
-                Column {
-                    spacing: 0
-                    Text { 
-                        text: shinyBp > 0 ? shinyBp.toFixed(1) : "-"
-                        font.bold: true; font.pixelSize: 12; color: effectiveTextColor
-                        anchors.horizontalCenter: parent.horizontalCenter
-                    }
-                    Text { 
-                        text: "Shiny"
-                        font.pixelSize: 10; color: effectiveSubTextColor
-                        anchors.horizontalCenter: parent.horizontalCenter
+                Item {
+                    id: shinyWrapper
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: childrenRect.height
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 0
+                        Text { 
+                            text: shinyBp > 0 ? shinyBp.toFixed(1) : "-"
+                            font.bold: true; font.pixelSize: 12; color: effectiveTextColor
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        Text { 
+                            text: shinyWrapper.width < 50 ? "S-BP" : "Shiny"
+                            font.pixelSize: 10; color: effectiveSubTextColor
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
                     }
                 }
                 
                 // Perceived
-                Column {
-                    spacing: 0
-                    Text { 
-                        text: perceivedBp > 0 ? perceivedBp.toFixed(1) : "-"
-                        font.bold: true; font.pixelSize: 12; color: effectiveTextColor
-                        anchors.horizontalCenter: parent.horizontalCenter
-                    }
-                    Text { 
-                        text: "Perceived"
-                        font.pixelSize: 10; color: effectiveSubTextColor
-                        anchors.horizontalCenter: parent.horizontalCenter
+                Item {
+                    id: perceivedWrapper
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: childrenRect.height
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 0
+                        Text { 
+                            text: perceivedBp > 0 ? perceivedBp.toFixed(1) : "-"
+                            font.bold: true; font.pixelSize: 12; color: effectiveTextColor
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        Text { 
+                            text: perceivedWrapper.width < 50 ? "P-BP" : "Perceived"
+                            font.pixelSize: 10; color: effectiveSubTextColor
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
                     }
                 }
-                
-                Item { Layout.fillWidth: true }
             }
             
             Item { Layout.preferredHeight: 2 }
@@ -554,7 +615,7 @@ Item {
                     return playCount + " plays"
                 }
                 color: isFiltered ? effectiveSubTextColor : "#666"
-                font.pixelSize: 11
+                font.pixelSize: 12
                 font.bold: true
             }
         }
@@ -1410,7 +1471,7 @@ Item {
                             // [난이도 패널] SwipeView vs RowLayout
                             Item {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 330
+                                Layout.preferredHeight: (isNarrow || isDiffCramped) ? 360 : 330
                                 visible: difficultiesToShow.length > 0
                                 
                                 // [SwipeView for mobile/cramped]
@@ -1468,6 +1529,7 @@ Item {
 
                                 // [Desktop] RowLayout
                                 RowLayout {
+                                    id: desktopRow
                                     anchors.fill: parent
                                     visible: !isNarrow && !isDiffCramped
                                     spacing: 15
@@ -2460,7 +2522,7 @@ Item {
                                 Text {
                                     id: scoreHandleBLabel
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    property bool tooClose: Math.abs(scoreHandleA.x - scoreHandleB.x) < 25
+                                    property bool tooClose: Math.abs(scoreHandleA.x - scoreHandleB.x) < 30
                                     property bool isRightHandle: scoreHandleB.x > scoreHandleA.x
                                     property bool showAbove: tooClose && isRightHandle
                                     y: showAbove ? -height - 4 : parent.height + 4
