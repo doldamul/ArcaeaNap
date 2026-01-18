@@ -287,6 +287,7 @@ Item {
         property real bp: 0
         property real shinyBp: 0
         property real perceivedBp: 0
+        property bool hasScore: false  // True if this chart has been played
         
         signal clicked(int diff)
         
@@ -455,7 +456,7 @@ Item {
                     
                     text: performAbbreviation ? getAbbreviatedClearTypeText(clearType) : getClearTypeText(clearType)
                     color: effectiveSubTextColor; font.pixelSize: 10
-                    visible: score > 0 
+                    visible: hasScore 
                     
                     Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
                     Layout.bottomMargin: -2 
@@ -534,7 +535,7 @@ Item {
             
             // Score + Rank
             Text { 
-                text: score > 0 ? score : "-"
+                text: hasScore ? score : "-"
                 font.bold: true; font.pixelSize: 24; color: effectiveTextColor 
             }
             Text { 
@@ -556,21 +557,21 @@ Item {
                 
                 Text { text: "Pure"; color: effectiveSubTextColor; font.pixelSize: 12 }
                 Text { 
-                    text: score > 0 ? pure + (shinyPure > 0 ? " (" + shinyPure + ")" : "") : "-"
+                    text: hasScore ? pure + (shinyPure > 0 ? " (" + shinyPure + ")" : "") : "-"
                     color: effectiveTextColor; font.bold: true; font.pixelSize: 12
                     Layout.fillWidth: true; horizontalAlignment: Text.AlignRight
                 }
                 
                 Text { text: "Far"; color: effectiveSubTextColor; font.pixelSize: 12 }
                 Text { 
-                    text: score > 0 ? far.toString() : "-"
+                    text: hasScore ? far.toString() : "-"
                     color: isFiltered ? "#C0A060" : "#E0A000"; font.bold: true; font.pixelSize: 12
                     Layout.fillWidth: true; horizontalAlignment: Text.AlignRight
                 }
                 
                 Text { text: "Lost"; color: effectiveSubTextColor; font.pixelSize: 12 }
                 Text { 
-                    text: score > 0 ? lost.toString() : "-"
+                    text: hasScore ? lost.toString() : "-"
                     color: isFiltered ? "#C08080" : "#E04040"; font.bold: true; font.pixelSize: 12
                     Layout.fillWidth: true; horizontalAlignment: Text.AlignRight
                 }
@@ -590,7 +591,7 @@ Item {
                     Layout.columnSpan: 2
                     Layout.alignment: Qt.AlignRight
                     text: {
-                        if (score <= 0) return "-"
+                        if (!hasScore) return "-"
                         var val = pure + far + lost - shinyPure
                         return val > 0 ? "MAX-" + val : "MAX"
                     }
@@ -601,7 +602,7 @@ Item {
                 Text {
                     Layout.columnSpan: 2
                     Layout.alignment: Qt.AlignRight
-                    text: score > 0 ? lastPlayedDate : "-"
+                    text: hasScore ? lastPlayedDate : "-"
                     color: isFiltered ? effectiveSubTextColor : "#666"
                     font.pixelSize: 11
                 }
@@ -1504,6 +1505,7 @@ Item {
                                                 bp: modelData.bp || 0
                                                 shinyBp: modelData.s_bp || 0
                                                 perceivedBp: modelData.perceived_bp || 0
+                                                hasScore: modelData.hasScore || false
                                                 isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                                 isFiltered: modelData.isFiltered || false
                                                 
@@ -1554,6 +1556,7 @@ Item {
                                             bp: modelData.bp || 0
                                             shinyBp: modelData.s_bp || 0
                                             perceivedBp: modelData.perceived_bp || 0
+                                            hasScore: modelData.hasScore || false
                                             isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                             isFiltered: modelData.isFiltered || false
                                             

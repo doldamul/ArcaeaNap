@@ -438,16 +438,26 @@ class StatisticsHandler(QObject):
         
         # Score rank filter
         score = score_data.get('score', 0) if score_data else 0
-        rank_idx = self._get_score_rank_index(score)
+        time_played = score_data.get('time_played', 0) if score_data else 0
+        has_score = time_played > 0
+        rank_idx = self._get_score_rank_index(score, has_score)
         if rank_idx < self._filter_score_min_rank or rank_idx > self._filter_score_max_rank:
             return False
         
         return True
     
-    def _get_score_rank_index(self, score):
-        """Convert a score to its rank index in SCORE_RANKS."""
-        if score <= 0:
-            return 0  # '-' (no score)
+    def _get_score_rank_index(self, score, has_score=None):
+        """Convert a score to its rank index in SCORE_RANKS.
+        
+        Args:
+            score: The score value
+            has_score: If True, score=0 means 'D' grade (Track Lost). If None, falls back to score > 0 check.
+        """
+        # Determine if this is an actual play record
+        is_played = has_score if has_score is not None else (score > 0)
+        
+        if not is_played:
+            return 0  # '-' (no score/never played)
         elif score < 8600000:
             return 1  # 'D'
         elif score < 8900000:
@@ -476,7 +486,10 @@ class StatisticsHandler(QObject):
         this_year_play_count = self._this_year_play_counts.get((arcaea_id, difficulty), 0)
         
         score = score_data.get('score', 0)
-        rank = calculate_rank(score) if score > 0 else ""
+        time_played = score_data.get('time_played', 0)
+        # hasScore: True if there's actual play data (time_played > 0 means a record exists)
+        has_score = time_played > 0
+        rank = calculate_rank(score) if has_score else ""
         
         return {
             'arcaeaId': arcaea_id,
@@ -493,14 +506,15 @@ class StatisticsHandler(QObject):
             'perceived_bp': chart_data.get('perceived_bp', 0),
             'noteCount': chart_data.get('note_count', 0),
             'bestScore': score,
+            'hasScore': has_score,
             'rank': rank,
             'pure': score_data.get('perfect', 0),
             'shinyPure': score_data.get('shiny_perfect', 0),
             'far': score_data.get('near', 0),
             'lost': score_data.get('miss', 0),
             'bestClearType': score_data.get('best_clear_type', 0),
-            'timePlayed': score_data.get('time_played', 0),
-            'lastPlayedDate': self._format_full_datetime(score_data.get('time_played', 0)),
+            'timePlayed': time_played,
+            'lastPlayedDate': self._format_full_datetime(time_played),
             'scoreBelowMax': score_data.get('score_below_max', 0),
             'totalPlayCount': play_count,
             'thisYearPlayCount': this_year_play_count,
@@ -621,8 +635,8 @@ class StatisticsHandler(QObject):
                 best_diff_for_recent = diff
             
             # MAX sort: find chart with smallest (perfect + near + miss - shiny_perfect) value
-            # Only consider charts that have been played
-            if chart_item['bestScore'] > 0:
+            # Only consider charts that have been played (hasScore is True)
+            if chart_item['hasScore']:
                 chart_max_val = chart_item['pure'] + chart_item['far'] + chart_item['lost'] - chart_item['shinyPure']
                 current_best_max_val = best_max_pure + best_max_far + best_max_lost - best_max_shiny
                 # Use smallest value, or if first played chart
@@ -633,6 +647,9 @@ class StatisticsHandler(QObject):
                     best_max_shiny = chart_item['shinyPure']
                     best_max_far = chart_item['far']
                     best_max_lost = chart_item['lost']
+        
+        # hasScore for song: True if any chart has been played
+        has_score = recent_time_played > 0
         
         return {
             'arcaeaId': arcaea_id,
@@ -645,6 +662,7 @@ class StatisticsHandler(QObject):
             's_bp': best_s_bp,
             'perceived_bp': best_perceived_bp,
             'bestScore': best_score,
+            'hasScore': has_score,
             'rank': best_rank,
             'totalPlayCount': total_play_count,
             'thisYearPlayCount': total_this_year_play_count,
@@ -674,10 +692,12 @@ class StatisticsHandler(QObject):
         if mode == "title":
             return item.get('title', '').lower()
         elif mode == "score":
-            return item.get('bestScore', 0)
+            # Sort by (hasScore, bestScore) so played records (even score=0) > unplayed records
+            has_score = item.get('hasScore', False)
+            return (1 if has_score else 0, item.get('bestScore', 0))
         elif mode == "max":
             # Unplayed records: treat as highest MAX value (positive infinity)
-            if item.get('bestScore', 0) <= 0:
+            if not item.get('hasScore', False):
                 return (float('inf'), float('inf'))
             # Primary: perfect + near + miss - shiny_perfect
             # For MAX records (primary=0), higher BP is better
@@ -721,13 +741,14 @@ class StatisticsHandler(QObject):
         elif mode == "score":
             score = item.get('bestScore', 0)
             rank = item.get('rank', '')
-            if score > 0:
+            has_score = item.get('hasScore', False)
+            if has_score:
                 return f"{score:,} ({rank})"
             return "-"
         elif mode == "max":
             # Display value: perfect + near + miss - shiny_perfect
             # Show "-" for unplayed records
-            if item.get('bestScore', 0) <= 0:
+            if not item.get('hasScore', False):
                 return "-"
             pure = item.get('pure', 0)
             shiny = item.get('shinyPure', 0)
