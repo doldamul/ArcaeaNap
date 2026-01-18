@@ -282,6 +282,11 @@ Item {
         property bool isSelected: false
         property int difficulty: 2  // Numeric difficulty for click handling
         property bool isFiltered: false  // True if excluded by current filter
+        property int playCount: 0
+        property string lastPlayedDate: "-"
+        property real bp: 0
+        property real shinyBp: 0
+        property real perceivedBp: 0
         
         signal clicked(int diff)
         
@@ -352,7 +357,7 @@ Item {
         }
 
         Layout.fillWidth: true
-        Layout.preferredHeight: 280
+        Layout.preferredHeight: 320
         radius: 15
         color: getBackgroundColor()
         border.color: isFiltered ? blendWithGray(diffColor, 0.5) : (isSelected ? diffColor : "#E0E0E0")
@@ -390,15 +395,81 @@ Item {
             anchors.fill: parent; anchors.margins: 20; spacing: 8
             
             // Header: Difficulty Name + Level
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 22
+                
+                Text { 
+                    text: diffName + " " + diffLevel
+                    color: effectiveDiffColor; font.bold: true; font.pixelSize: 18
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                
+                Text { 
+                    text: getClearTypeText(clearType)
+                    color: effectiveSubTextColor; font.pixelSize: 10
+                    visible: score > 0 
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.bottom: parent.bottom; anchors.bottomMargin: 3 // Slight offset for baseline alignment attempt
+                }
+            }
+            
+            // BP Metrics (Takes place of previous Level text)
             RowLayout {
                 Layout.fillWidth: true
-                Text { text: diffName; color: effectiveDiffColor; font.bold: true; font.pixelSize: 18 }
+                spacing: 20
+                
+                // BP
+                Column {
+                    spacing: 0
+                    Text { 
+                        text: bp > 0 ? bp.toFixed(1) : "-"
+                        font.bold: true; font.pixelSize: 12; color: effectiveTextColor
+                        anchors.horizontalCenter: parent.horizontalCenter
+                    }
+                    Text { 
+                        text: "BP"
+                        font.pixelSize: 10; color: effectiveSubTextColor
+                        anchors.horizontalCenter: parent.horizontalCenter
+                    }
+                }
+                
+                // Shiny
+                Column {
+                    spacing: 0
+                    Text { 
+                        text: shinyBp > 0 ? shinyBp.toFixed(1) : "-"
+                        font.bold: true; font.pixelSize: 12; color: effectiveTextColor
+                        anchors.horizontalCenter: parent.horizontalCenter
+                    }
+                    Text { 
+                        text: "Shiny"
+                        font.pixelSize: 10; color: effectiveSubTextColor
+                        anchors.horizontalCenter: parent.horizontalCenter
+                    }
+                }
+                
+                // Perceived
+                Column {
+                    spacing: 0
+                    Text { 
+                        text: perceivedBp > 0 ? perceivedBp.toFixed(1) : "-"
+                        font.bold: true; font.pixelSize: 12; color: effectiveTextColor
+                        anchors.horizontalCenter: parent.horizontalCenter
+                    }
+                    Text { 
+                        text: "Perceived"
+                        font.pixelSize: 10; color: effectiveSubTextColor
+                        anchors.horizontalCenter: parent.horizontalCenter
+                    }
+                }
+                
                 Item { Layout.fillWidth: true }
-                Text { text: getClearTypeText(clearType); color: effectiveSubTextColor; font.pixelSize: 10; visible: score > 0 }
             }
-            Text { text: "LEVEL " + diffLevel; color: effectiveSubTextColor; font.pixelSize: 10 }
             
-            Item { Layout.preferredHeight: 10 }
+            Item { Layout.preferredHeight: 2 }
             
             // Score + Rank
             Text { 
@@ -406,10 +477,10 @@ Item {
                 font.bold: true; font.pixelSize: 24; color: effectiveTextColor 
             }
             Text { 
-                text: rank
+                text: rank !== "" ? rank : "PM"
                 font.bold: true; font.pixelSize: 14
                 color: getRankColor(rank)
-                visible: rank !== ""
+                opacity: rank !== "" ? 1.0 : 0.0
             }
             
             Item { Layout.fillHeight: true }
@@ -417,6 +488,7 @@ Item {
             // Stats Grid: Pure, Far, Lost
             GridLayout {
                 Layout.fillWidth: true
+                Layout.maximumWidth: Math.min(parent.width * 0.9, parent.width * 0.5 + 50)
                 columns: 2
                 rowSpacing: 6
                 columnSpacing: 10
@@ -425,22 +497,65 @@ Item {
                 Text { 
                     text: score > 0 ? pure + (shinyPure > 0 ? " (" + shinyPure + ")" : "") : "-"
                     color: effectiveTextColor; font.bold: true; font.pixelSize: 12
-                    Layout.alignment: Qt.AlignRight
+                    Layout.fillWidth: true; horizontalAlignment: Text.AlignRight
                 }
                 
                 Text { text: "Far"; color: effectiveSubTextColor; font.pixelSize: 12 }
                 Text { 
                     text: score > 0 ? far.toString() : "-"
                     color: isFiltered ? "#C0A060" : "#E0A000"; font.bold: true; font.pixelSize: 12
-                    Layout.alignment: Qt.AlignRight
+                    Layout.fillWidth: true; horizontalAlignment: Text.AlignRight
                 }
                 
                 Text { text: "Lost"; color: effectiveSubTextColor; font.pixelSize: 12 }
                 Text { 
                     text: score > 0 ? lost.toString() : "-"
                     color: isFiltered ? "#C08080" : "#E04040"; font.bold: true; font.pixelSize: 12
-                    Layout.alignment: Qt.AlignRight
+                    Layout.fillWidth: true; horizontalAlignment: Text.AlignRight
                 }
+                
+                // Divider
+                Rectangle {
+                    Layout.columnSpan: 2
+                    Layout.fillWidth: true
+                    height: 1
+                    color: isFiltered ? "#EFEFEF" : "#E0E0E0"
+                    Layout.topMargin: 4
+                    Layout.bottomMargin: 4
+                }
+                
+                // MAX Value
+                Text {
+                    Layout.columnSpan: 2
+                    Layout.alignment: Qt.AlignRight
+                    text: {
+                        if (score <= 0) return "-"
+                        var val = pure + far + lost - shinyPure
+                        return val > 0 ? "MAX-" + val : "MAX"
+                    }
+                    color: isFiltered ? effectiveSubTextColor : "#666"
+                    font.pixelSize: 11
+                }
+                // Play Date Value
+                Text {
+                    Layout.columnSpan: 2
+                    Layout.alignment: Qt.AlignRight
+                    text: score > 0 ? lastPlayedDate : "-"
+                    color: isFiltered ? effectiveSubTextColor : "#666"
+                    font.pixelSize: 11
+                }
+            }
+            
+            // Play Count Value - Separate to avoid Grid layout influence
+            Text {
+                Layout.alignment: Qt.AlignRight
+                text: {
+                    if (playCount <= 0) return "-"
+                    return playCount + " plays"
+                }
+                color: isFiltered ? effectiveSubTextColor : "#666"
+                font.pixelSize: 11
+                font.bold: true
             }
         }
     }
@@ -1076,27 +1191,139 @@ Item {
                         width: parent.width; spacing: 0
                         
                         // Song info header
-                        Rectangle {
+                        Item {
+                            id: headerContainer
                             Layout.fillWidth: true; Layout.preferredHeight: 200
-                            gradient: Gradient { GradientStop { position: 0.0; color: "#2A1040" } GradientStop { position: 1.0; color: "#1A0520" } }
-                            
-                            RowLayout {
-                                anchors.fill: parent; anchors.margins: isNarrow ? 20 : 40; spacing: isNarrow ? 20 : 30
-                                
-                                // Thumbnail with real image
-                                Rectangle {
-                                    width: isNarrow ? 120 : 260; height: isNarrow ? 120 : 260; radius: 15
-                                    color: currentSong ? (currentSong.difficultyColor || "#6A0DAD") : "#6A0DAD"
-                                    border.color: "white"; border.width: 2
-                                    clip: true
+
+                            // Background with Top-Rounded Corners
+                            Item {
+                                anchors.fill: parent
+                                clip: true // Hide bottom overflow
+
+                                // Mask for rounded corners (Following home_ui.qml pattern)
+                                Item {
+                                    id: headerMaskItem
+                                    width: parent.width
+                                    height: parent.height + (isNarrow ? 0 : 20)
+                                    visible: false
+                                    layer.enabled: true
+                                    layer.smooth: true
+                                    layer.samples: 4
                                     
-                                    Image {
+                                    Rectangle {
                                         anchors.fill: parent
-                                        anchors.margins: -1 // Slight negative margin to avoid edge artifacts
+                                        radius: isNarrow ? 0 : 20
+                                        color: "black"
+                                        antialiasing: true
+                                        smooth: true
+                                    }
+                                }
+
+                                // Content with Blur + Mask Effect
+                                Item {
+                                    id: headerContentWrapper
+                                    width: parent.width
+                                    height: parent.height + (isNarrow ? 0 : 20)
+                                    
+                                    layer.enabled: true
+                                    layer.smooth: true
+                                    layer.samples: 4
+                                    layer.effect: MultiEffect {
+                                        maskEnabled: true
+                                        maskSource: headerMaskItem
+                                        maskThresholdMin: 0.3
+                                        maskSpreadAtMin: 0.2
+                                    }
+
+                                    // Fallback Background
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        color: "#2A1040"
+                                    }
+
+                                    // Blurred Background Image
+                                    Image {
+                                        id: bgImage
+                                        anchors.fill: parent
+                                        anchors.margins: -20
                                         source: statsHandler && currentSong ? statsHandler.getThumbnailPathForDifficulty(currentSong.arcaeaId || "", currentSong.thumbnailDifficulty !== undefined ? currentSong.thumbnailDifficulty : currentSong.difficulty) : ""
                                         fillMode: Image.PreserveAspectCrop
-                                        smooth: true
+                                        antialiasing: true
                                         visible: status === Image.Ready
+                                        
+                                        layer.enabled: visible
+                                        layer.effect: MultiEffect {
+                                            blurEnabled: true
+                                            blur: 0.6
+                                            saturation: 0.8
+                                        }
+                                    }
+
+                                    // Dimming Overlay
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        color: "black"
+                                        opacity: 0.5
+                                    }
+                                }
+                            }
+                            
+                            RowLayout {
+                                anchors.fill: parent; anchors.margins: isNarrow ? 15 : 24; spacing: isNarrow ? 15 : 24
+                                
+                                // Thumbnail with real image + Custom Colored Shadow
+                                Item {
+                                    Layout.preferredWidth: isNarrow ? 120 : 152
+                                    Layout.preferredHeight: isNarrow ? 120 : 152
+                                    
+                                    // 1. Shadow Layer (Behind) - Implemented as a blurred glowing rectangle
+                                    Item {
+                                        id: shadowContainer
+                                        width: mainThumbRect.width + 20
+                                        height: mainThumbRect.height + 20
+                                        anchors.centerIn: mainThumbRect
+                                        anchors.verticalCenterOffset: 6
+                                        
+                                        // Properties for efficient shadow updates
+                                        property var arcaeaId: statsHandler && currentSong ? (currentSong.arcaeaId || "") : ""
+                                        property int diff: statsHandler && currentSong ? (currentSong.thumbnailDifficulty !== undefined ? currentSong.thumbnailDifficulty : currentSong.difficulty) : 0
+                                        property string shadowColorString: statsHandler ? statsHandler.getThumbnailColor(arcaeaId, diff) : "#FFFFFF"
+                                        property color shadowColor: shadowColorString
+                                        
+                                        layer.enabled: true
+                                        layer.effect: MultiEffect {
+                                            blurEnabled: true
+                                            blur: 1.0
+                                            blurMax: 48 // Very high blur for wide dispersion
+                                            saturation: 0.1
+                                            brightness: 0.1
+                                        }
+                                        
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            color: parent.shadowColor
+                                            radius: 4
+                                            opacity: 0.35 // Very soft opacity
+                                        }
+                                    }
+
+                                    // 2. Main Thumbnail (Foreground)
+                                    Rectangle {
+                                        id: mainThumbRect
+                                        anchors.fill: parent
+                                        radius: 15
+                                        color: currentSong ? (currentSong.difficultyColor || "#6A0DAD") : "#6A0DAD"
+                                        border.color: "white"; border.width: 2
+                                        clip: true
+                                        
+                                        Image {
+                                            anchors.fill: parent
+                                            anchors.margins: -1 // Slight negative margin to avoid edge artifacts
+                                            source: statsHandler && currentSong ? statsHandler.getThumbnailPathForDifficulty(currentSong.arcaeaId || "", currentSong.thumbnailDifficulty !== undefined ? currentSong.thumbnailDifficulty : currentSong.difficulty) : ""
+                                            fillMode: Image.PreserveAspectCrop
+                                            smooth: true
+                                            visible: status === Image.Ready
+                                        }
                                     }
                                 }
                                 
@@ -1154,6 +1381,21 @@ Item {
                                     }
                                 }
                             }
+
+                            Text {
+                                text: {
+                                    if (!currentSong) return ""
+                                    var count = currentSong.totalPlayCount
+                                    if (!count || count <= 0) return "Never played"
+                                    return count + " plays"
+                                }
+                                color: "#CCC"
+                                font.pixelSize: 13
+                                font.bold: true
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                anchors.margins: isNarrow ? 15 : 24
+                            }
                         }
 
                         // [Body] 난이도 카드 섹션
@@ -1165,12 +1407,10 @@ Item {
                             
                             visible: currentSong !== null
 
-                            Text { text: "📊 Difficulty Breakdown"; font.bold: true; font.pixelSize: 18; color: "#333" }
-
                             // [난이도 패널] SwipeView vs RowLayout
                             Item {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 300
+                                Layout.preferredHeight: 330
                                 visible: difficultiesToShow.length > 0
                                 
                                 // [SwipeView for mobile/cramped]
@@ -1198,6 +1438,11 @@ Item {
                                                 lost: modelData.lost || 0
                                                 clearType: modelData.bestClearType || 0
                                                 difficulty: modelData.difficulty || 0
+                                                playCount: modelData.totalPlayCount || 0
+                                                lastPlayedDate: modelData.lastPlayedDate || "-"
+                                                bp: modelData.bp || 0
+                                                shinyBp: modelData.s_bp || 0
+                                                perceivedBp: modelData.perceived_bp || 0
                                                 isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                                 isFiltered: modelData.isFiltered || false
                                                 
@@ -1242,6 +1487,11 @@ Item {
                                             lost: modelData.lost || 0
                                             clearType: modelData.bestClearType || 0
                                             difficulty: modelData.difficulty || 0
+                                            playCount: modelData.totalPlayCount || 0
+                                            lastPlayedDate: modelData.lastPlayedDate || "-"
+                                            bp: modelData.bp || 0
+                                            shinyBp: modelData.s_bp || 0
+                                            perceivedBp: modelData.perceived_bp || 0
                                             isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                             isFiltered: modelData.isFiltered || false
                                             

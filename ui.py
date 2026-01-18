@@ -7,6 +7,7 @@ from datetime import datetime
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtCore import QUrl, QObject, pyqtSlot, pyqtSignal, pyqtProperty, QVariant
+from PyQt6.QtGui import QImage, QColor
 from web_arcaeaonline import ArcaeaOnline
 from web_consultantsheet import open_sheet
 from web_wiki import open_wiki
@@ -151,6 +152,60 @@ class StatsHandler(QObject):
             # 해당 난이도 썸네일이 없으면 우선순위로 fallback
         
         return self._find_thumbnail_by_priority(arcaea_id)
+
+    @pyqtSlot(str, int, result=str)
+    def getThumbnailColor(self, arcaea_id: str, difficulty: int) -> str:
+        """
+        Calculates the representative color of the thumbnail for the given song and difficulty.
+        Returns a hex color string (e.g. "#FF0000").
+        The color is boosted in brightness and saturation to ensure it glows against dark backgrounds.
+        """
+        path_url = self.getThumbnailPathForDifficulty(arcaea_id, difficulty)
+        if not path_url:
+            return "#FFFFFF" # Default white glow if no thumbnail
+
+        # path_url is like "file:///C:/..." or just path string depending on how it's constructed
+        # QImage needs a local file path
+        local_path = QUrl(path_url).toLocalFile()
+        if not local_path:
+            local_path = path_url # Try direct path if not a URL
+            
+        if not os.path.exists(local_path):
+            return "#FFFFFF"
+            
+        try:
+            image = QImage(local_path)
+            if image.isNull():
+                return "#FFFFFF"
+                
+            # Scale to 1x1 to get average color
+            pixel = image.scaled(1, 1).pixel(0, 0)
+            color = QColor(pixel)
+            
+            # Boost Color: Ensure high brightness and decent saturation
+            # 1. Convert to HSV
+            h, s, v, a = color.getHsv()
+            
+            # 2. Boost Value (Brightness) to ensure visibility on dark background
+            # Target range: 200-255
+            v = max(v, 220)
+            
+            # 3. Boost Saturation if it's not completely grayscale
+            # If it's too desaturated, it might look washed out white, so give it some color if possible
+            # But if the image is truly B&W, forcing saturation might look weird.
+            # Let's just ensure it's not too dark.
+            # If saturation is very low (< 20), treating it as grayscale -> make it white/bright gray
+            if s > 20: 
+                s = max(s, 180) # Boost saturation for colored images
+            else:
+                s = 0 # Keep it grayscale (but bright due to V boost)
+            
+            color.setHsv(h, s, v)
+            
+            return color.name()
+            
+        except Exception:
+            return "#FFFFFF"
 
     @pyqtSlot()
     def refreshStats(self):
@@ -440,11 +495,28 @@ class StatisticsHandler(QObject):
             'lost': score_data.get('miss', 0),
             'bestClearType': score_data.get('best_clear_type', 0),
             'timePlayed': score_data.get('time_played', 0),
+            'lastPlayedDate': self._format_full_datetime(score_data.get('time_played', 0)),
             'scoreBelowMax': score_data.get('score_below_max', 0),
             'totalPlayCount': play_count,
             'thisYearPlayCount': this_year_play_count,
             'displayValue': '',  # Will be set based on sort mode
         }
+    
+    def _format_full_datetime(self, timestamp):
+        """Format timestamp to YYYY-MM-DD HH:MM."""
+        if not timestamp or timestamp <= 0:
+            return "-"
+        
+        try:
+            timestamp = float(timestamp)
+            # If timestamp is in milliseconds (13+ digits), convert to seconds
+            if timestamp > 100000000000: 
+                timestamp = timestamp / 1000.0
+            
+            dt = datetime.fromtimestamp(timestamp)
+            return dt.strftime("%Y-%m-%d %H:%M")
+        except (OSError, ValueError, OverflowError):
+            return "-"
     
     def _build_all_difficulty_details(self, arcaea_id, song_data):
         """Build details for ALL difficulties of a song, with isFiltered flag.
