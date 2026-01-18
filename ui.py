@@ -60,6 +60,7 @@ class StartupHandler(QObject):
 
 class AnalysisHandler(QObject):
     logAdded = pyqtSignal(str, arguments=['message'])
+    dataUpdated = pyqtSignal()  # Emitted when user_scores.db or thumbnails are updated
 
     def __init__(self):
         super().__init__()
@@ -75,6 +76,7 @@ class AnalysisHandler(QObject):
         print("Starting analysis thread...")
         self.analyzer = ArcaeaOnline()
         self.analyzer.set_log_callback(self.emit_log)
+        self.analyzer.set_data_changed_callback(self.emit_data_updated)
         
         self.thread = threading.Thread(target=self.analyzer.start, daemon=True)
         self.thread.start()
@@ -88,6 +90,9 @@ class AnalysisHandler(QObject):
 
     def emit_log(self, message):
         self.logAdded.emit(message)
+    
+    def emit_data_updated(self):
+        self.dataUpdated.emit()
 
 class StatsHandler(QObject):
     statsChanged = pyqtSignal()

@@ -238,10 +238,30 @@ ApplicationWindow {
         }
         function onLoadingFinished() {
             window.isLoading = false
+            // Refresh all handlers after database is created
+            if (statsHandler) {
+                statsHandler.refreshStats()
+            }
+            if (statisticsHandler) {
+                statisticsHandler.refreshData()
+            }
         }
         function onErrorOccurred(msg) {
             console.log("Loading error: " + msg)
             window.isLoading = false
+        }
+    }
+    
+    // Refresh Home/Statistics tabs when Arcaea Online data is saved
+    Connections {
+        target: analysisHandler
+        function onDataUpdated() {
+            if (statsHandler) {
+                statsHandler.refreshStats()
+            }
+            if (statisticsHandler) {
+                statisticsHandler.refreshData()
+            }
         }
     }
 

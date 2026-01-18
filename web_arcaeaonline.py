@@ -41,6 +41,7 @@ class ArcaeaOnline:
         self.status = AnalysisStatus()
         self.driver = None
         self.log_callback = None
+        self.data_changed_callback = None  # Called when data is saved to DB or thumbnails are saved
         
         # State variables
         self.previous_user_data = None
@@ -58,6 +59,17 @@ class ArcaeaOnline:
 
     def set_log_callback(self, callback):
         self.log_callback = callback
+    
+    def set_data_changed_callback(self, callback):
+        self.data_changed_callback = callback
+    
+    def notify_data_changed(self):
+        """Notify that data has been saved (DB records or thumbnails)"""
+        if self.data_changed_callback:
+            try:
+                self.data_changed_callback()
+            except Exception as e:
+                self.log(f"Data changed callback error: {e}")
 
     def start(self):
         self.status.is_running = True
@@ -609,8 +621,9 @@ class ArcaeaOnline:
                         self.rise_all_saved_flag(difficulty)
 
                     conn.commit()
-                    if cursor.rowcount > 0:
-                        self.log(f"Saved/Updated {cursor.rowcount} records in '{score_filepath}'")
+                    if len(play_score_updates) > 0:
+                        self.log(f"Saved/Updated {len(play_score_updates)} records in '{score_filepath}'")
+                        self.notify_data_changed()
                     else:
                         self.log(f"No records to save in '{score_filepath}'")
                 except Exception as e:
@@ -759,6 +772,7 @@ class ArcaeaOnline:
                     with open(filepath, 'wb') as f:
                         f.write(img_data)
                     saved_count += 1
+                    self.notify_data_changed()
                     
             except Exception as e:
                 continue
