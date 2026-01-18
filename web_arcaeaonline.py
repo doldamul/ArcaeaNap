@@ -115,38 +115,39 @@ class ArcaeaOnline:
                 if not self.status.is_running:
                     break
 
-                self.log('New page detected.')
-                
-                # Network 도메인 재활성화 (네비게이션 후 풀릴 수 있음)
-                try:
-                    self.driver.execute_cdp_cmd('Network.enable', {})
-                except:
-                    pass
-            
-                # 이미지 로드 대기 후 Performance Log 파싱 (save_data 전에)
-                import time as _time
-                try:
-                    # album-jacket 이미지가 나타날 때까지 대기
-                    WebDriverWait(self.driver, 5).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR))
-                    )
-                    # 이미지가 실제로 src를 가질 때까지 대기
-                    WebDriverWait(self.driver, 5).until(
-                        lambda d: d.find_element(By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR).get_attribute('src') and 
-                                  'webassets.lowiro.com' in d.find_element(By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR).get_attribute('src')
-                    )
-                    _time.sleep(2)  # 이미지 응답 완료 대기 (네트워크 로그 기록 시간)
-                except:
-                    pass
-                
-                thumbnail_request_ids = self.parse_thumbnail_request_ids()
-                if thumbnail_request_ids:
-                    self.log(f"Thumbnail: Found {len(thumbnail_request_ids)} image requestIds")
-                else:
-                    self.log("Thumbnail: No image requestIds found")
-
                 try:
                     block_pointer_events(self.driver)
+                    
+                    self.log('New page detected.')
+                    
+                    # Network 도메인 재활성화 (네비게이션 후 풀릴 수 있음)
+                    try:
+                        self.driver.execute_cdp_cmd('Network.enable', {})
+                    except:
+                        pass
+                
+                    # 이미지 로드 대기 후 Performance Log 파싱 (save_data 전에)
+                    import time as _time
+                    try:
+                        # album-jacket 이미지가 나타날 때까지 대기
+                        WebDriverWait(self.driver, 5).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR))
+                        )
+                        # 이미지가 실제로 src를 가질 때까지 대기
+                        WebDriverWait(self.driver, 5).until(
+                            lambda d: d.find_element(By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR).get_attribute('src') and 
+                                      'webassets.lowiro.com' in d.find_element(By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR).get_attribute('src')
+                        )
+                        _time.sleep(2)  # 이미지 응답 완료 대기 (네트워크 로그 기록 시간)
+                    except:
+                        pass
+                    
+                    thumbnail_request_ids = self.parse_thumbnail_request_ids()
+                    if thumbnail_request_ids:
+                        self.log(f"Thumbnail: Found {len(thumbnail_request_ids)} image requestIds")
+                    else:
+                        self.log("Thumbnail: No image requestIds found")
+
                     self.save_data(thumbnail_request_ids)
                 finally:
                     restore_pointer_events(self.driver)
