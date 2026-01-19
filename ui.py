@@ -1123,24 +1123,45 @@ class StatisticsHandler(QObject):
             if self._display_mode == "chart":
                 self._selected_difficulty = self._selected_item.get('difficulty', 2)
             else:
-                # Song mode: check if current selected difficulty is available for this song
-                all_diffs = self._selected_item.get('allDifficulties', [])
-                current_diff_available = any(
-                    d.get('difficulty') == self._selected_difficulty and not d.get('isFiltered', False)
-                    for d in all_diffs
-                )
-                if not current_diff_available and all_diffs:
-                    # Find highest non-filtered difficulty (reverse order: BYD, ETR, FTR, PRS, PST)
-                    # DIFFICULTY_ORDER is [0, 1, 2, 4, 3] = PST, PRS, FTR, ETR, BYD
-                    # Reverse: [3, 4, 2, 1, 0] = BYD, ETR, FTR, PRS, PST
-                    for diff_num in [3, 4, 2, 1, 0]:
-                        for d in all_diffs:
-                            if d.get('difficulty') == diff_num and not d.get('isFiltered', False):
-                                self._selected_difficulty = diff_num
-                                break
-                        else:
-                            continue
-                        break
+                # Song mode: for sort modes that highlight a specific difficulty,
+                # automatically select that difficulty
+                best_diff = -1
+                if self._sort_mode == "score":
+                    best_diff = self._selected_item.get('bestDiffForScore', -1)
+                elif self._sort_mode == "max":
+                    best_diff = self._selected_item.get('bestDiffForMax', -1)
+                elif self._sort_mode == "recent_played":
+                    best_diff = self._selected_item.get('bestDiffForRecent', -1)
+                elif self._sort_mode == "level":
+                    best_diff = self._selected_item.get('bestDiffForLevel', -1)
+                elif self._sort_mode == "s_bp":
+                    best_diff = self._selected_item.get('bestDiffForSBp', -1)
+                elif self._sort_mode == "perceived_bp":
+                    best_diff = self._selected_item.get('bestDiffForPerceivedBp', -1)
+                
+                if best_diff >= 0:
+                    # Use the best difficulty for current sort mode
+                    self._selected_difficulty = best_diff
+                else:
+                    # For other sort modes (title, total_play_count, this_year_play_count, length),
+                    # check if current selected difficulty is available for this song
+                    all_diffs = self._selected_item.get('allDifficulties', [])
+                    current_diff_available = any(
+                        d.get('difficulty') == self._selected_difficulty and not d.get('isFiltered', False)
+                        for d in all_diffs
+                    )
+                    if not current_diff_available and all_diffs:
+                        # Find highest non-filtered difficulty (reverse order: BYD, ETR, FTR, PRS, PST)
+                        # DIFFICULTY_ORDER is [0, 1, 2, 4, 3] = PST, PRS, FTR, ETR, BYD
+                        # Reverse: [3, 4, 2, 1, 0] = BYD, ETR, FTR, PRS, PST
+                        for diff_num in [3, 4, 2, 1, 0]:
+                            for d in all_diffs:
+                                if d.get('difficulty') == diff_num and not d.get('isFiltered', False):
+                                    self._selected_difficulty = diff_num
+                                    break
+                            else:
+                                continue
+                            break
             
             self.selectedItemChanged.emit()
     
