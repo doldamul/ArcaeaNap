@@ -359,47 +359,21 @@ Item {
                                     width: thumbSize; height: thumbSize
                                     color: "transparent"
                                     
-                                    // Mask for rounded corners
-                                    Item {
-                                        id: maskItem
-                                        anchors.fill: parent
-                                        visible: false 
-                                        layer.enabled: true
-                                        layer.smooth: true
-                                        layer.samples: 8
-                                        
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            radius: 10
-                                            color: "black"
-                                            antialiasing: true
-                                            smooth: true
-                                        }
-                                    }
-
-                                    // Actual Image + MultiEffect
+                                    // Actual Image (No masking/rounding)
                                     Image {
                                         id: thumbnailImage
                                         anchors.fill: parent
                                         source: statsHandler ? statsHandler.getThumbnailPath(model.arcaeaId) : ""
                                         fillMode: Image.PreserveAspectCrop
-                                        mipmap: true
-                                        antialiasing: true
+                                        mipmap: false
+                                        antialiasing: false
+                                        smooth: true // Keep smooth scaling for image quality, user likely meant edge AA
                                         visible: status === Image.Ready
-                                        
-                                        layer.enabled: visible
-                                        layer.smooth: true
-                                        layer.samples: 8
-                                        layer.effect: MultiEffect {
-                                            maskEnabled: true
-                                            maskSource: maskItem
-                                        }
                                     }
                                     
                                     // Placeholder / border
                                     Rectangle {
                                         anchors.fill: parent
-                                        radius: 10
                                         color: "#EEEEEE"
                                         border.color: "#E0E0E0"
                                         border.width: 1
