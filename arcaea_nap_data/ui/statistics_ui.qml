@@ -468,26 +468,6 @@ Item {
                 Layout.fillWidth: true
                 spacing: 0
                 
-                // BP
-                Item {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: childrenRect.height
-                    Column {
-                        anchors.centerIn: parent
-                        spacing: 0
-                        Text { 
-                            text: bp > 0 ? bp.toFixed(1) : "-"
-                            font.bold: true; font.pixelSize: 12; color: effectiveTextColor
-                            anchors.horizontalCenter: parent.horizontalCenter
-                        }
-                        Text { 
-                            text: "BP"
-                            font.pixelSize: 10; color: effectiveSubTextColor
-                            anchors.horizontalCenter: parent.horizontalCenter
-                        }
-                    }
-                }
-                
                 // Shiny
                 Item {
                     id: shinyWrapper
@@ -503,6 +483,26 @@ Item {
                         }
                         Text { 
                             text: shinyWrapper.width < 50 ? "S-BP" : "Shiny"
+                            font.pixelSize: 10; color: effectiveSubTextColor
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                    }
+                }
+
+                // BP
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: childrenRect.height
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 0
+                        Text { 
+                            text: bp > 0 ? bp.toFixed(1) : "-"
+                            font.bold: true; font.pixelSize: 12; color: effectiveTextColor
+                            anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        Text { 
+                            text: "BP"
                             font.pixelSize: 10; color: effectiveSubTextColor
                             anchors.horizontalCenter: parent.horizontalCenter
                         }
