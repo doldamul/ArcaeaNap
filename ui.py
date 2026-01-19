@@ -857,6 +857,26 @@ class StatisticsHandler(QObject):
                 return dt.strftime("%b %d")
             return dt.strftime("%Y-%m-%d")
     
+    def _get_best_diff_for_sort(self, item):
+        """Get the best difficulty for the current sort mode from a song item.
+        
+        Returns the difficulty number (0-4) if the sort mode highlights a specific difficulty,
+        or -1 if the sort mode doesn't highlight any (e.g., title, total_play_count, length).
+        """
+        if self._sort_mode == "score":
+            return item.get('bestDiffForScore', -1)
+        elif self._sort_mode == "max":
+            return item.get('bestDiffForMax', -1)
+        elif self._sort_mode == "recent_played":
+            return item.get('bestDiffForRecent', -1)
+        elif self._sort_mode == "level":
+            return item.get('bestDiffForLevel', -1)
+        elif self._sort_mode == "s_bp":
+            return item.get('bestDiffForSBp', -1)
+        elif self._sort_mode == "perceived_bp":
+            return item.get('bestDiffForPerceivedBp', -1)
+        return -1
+    
     def _rebuild_list(self):
         """Rebuild the list model based on current mode and filters."""
         items = []
@@ -929,6 +949,22 @@ class StatisticsHandler(QObject):
                 self._selected_song_id = self._selected_item.get('arcaeaId')
                 if self._display_mode == "chart":
                     self._selected_difficulty = self._selected_item.get('difficulty', 2)
+                else:
+                    # Song mode: select best difficulty for current sort mode
+                    best_diff = self._get_best_diff_for_sort(self._selected_item)
+                    if best_diff >= 0:
+                        self._selected_difficulty = best_diff
+                    else:
+                        # For sort modes without highlighting, use highest available difficulty
+                        all_diffs = self._selected_item.get('allDifficulties', [])
+                        for diff_num in [3, 4, 2, 1, 0]:  # BYD, ETR, FTR, PRS, PST
+                            for d in all_diffs:
+                                if d.get('difficulty') == diff_num and not d.get('isFiltered', False):
+                                    self._selected_difficulty = diff_num
+                                    break
+                            else:
+                                continue
+                            break
         elif selection_mode == 'adjacent_fallback':
             # Try to restore selection, with fallback to other difficulties if filtered out
             if self._selected_song_id:
@@ -1125,19 +1161,7 @@ class StatisticsHandler(QObject):
             else:
                 # Song mode: for sort modes that highlight a specific difficulty,
                 # automatically select that difficulty
-                best_diff = -1
-                if self._sort_mode == "score":
-                    best_diff = self._selected_item.get('bestDiffForScore', -1)
-                elif self._sort_mode == "max":
-                    best_diff = self._selected_item.get('bestDiffForMax', -1)
-                elif self._sort_mode == "recent_played":
-                    best_diff = self._selected_item.get('bestDiffForRecent', -1)
-                elif self._sort_mode == "level":
-                    best_diff = self._selected_item.get('bestDiffForLevel', -1)
-                elif self._sort_mode == "s_bp":
-                    best_diff = self._selected_item.get('bestDiffForSBp', -1)
-                elif self._sort_mode == "perceived_bp":
-                    best_diff = self._selected_item.get('bestDiffForPerceivedBp', -1)
+                best_diff = self._get_best_diff_for_sort(self._selected_item)
                 
                 if best_diff >= 0:
                     # Use the best difficulty for current sort mode
@@ -1152,8 +1176,6 @@ class StatisticsHandler(QObject):
                     )
                     if not current_diff_available and all_diffs:
                         # Find highest non-filtered difficulty (reverse order: BYD, ETR, FTR, PRS, PST)
-                        # DIFFICULTY_ORDER is [0, 1, 2, 4, 3] = PST, PRS, FTR, ETR, BYD
-                        # Reverse: [3, 4, 2, 1, 0] = BYD, ETR, FTR, PRS, PST
                         for diff_num in [3, 4, 2, 1, 0]:
                             for d in all_diffs:
                                 if d.get('difficulty') == diff_num and not d.get('isFiltered', False):
