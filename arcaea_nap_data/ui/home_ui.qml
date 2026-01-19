@@ -10,11 +10,15 @@ Item {
 
     // [변경 1] ScrollView 추가 (여백 및 스크롤 담당)
 
+    // Stats data fetched from backend
+    property var difficultyStatsData: []
+
     Connections {
         target: statsHandler
         function onStatsChanged() {
             playCountText.text = statsHandler.getTotalPlayCount()
             playTimeText.text = statsHandler.getTotalPlayTime()
+            difficultyStatsData = statsHandler.getDifficultyStats()
             updateTop10()
         }
     }
@@ -31,6 +35,7 @@ Item {
         if (statsHandler) {
             playCountText.text = statsHandler.getTotalPlayCount()
             playTimeText.text = statsHandler.getTotalPlayTime()
+            difficultyStatsData = statsHandler.getDifficultyStats()
             updateTop10()
         }
     }
@@ -149,75 +154,146 @@ Item {
                             
                             Item { height: 20 }
 
-                            // Stats Row
+                            // Stats & Difficulty Group (3-Column Layout for alignment)
                             RowLayout {
-                                spacing: 30
-                                Layout.alignment: Qt.AlignLeft // Center in parent Layout
-
-                                Column {
-                                    spacing: 5
-                                    Text { 
-                                        text: "TOTAL PLAY" 
-                                        color: "#999999" 
-                                        font.pixelSize: 10 
-                                        font.bold: true
-                                        font.letterSpacing: 1.0
+                                Layout.fillWidth: false
+                                Layout.alignment: Qt.AlignLeft
+                                spacing: 20
+                                
+                                // --- COLUMN 1: Play Count (Right-aligned) ---
+                                ColumnLayout {
+                                    spacing: 16
+                                    
+                                    // Header (fixed height for alignment)
+                                    Item {
+                                        Layout.preferredHeight: 40
+                                        // Use implicit width from child Column so it contributes to parent width
+                                        implicitWidth: headerCol1.implicitWidth
+                                        
+                                        Column {
+                                            id: headerCol1
+                                            anchors.right: parent.right
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: 5
+                                            Text { 
+                                                text: "PLAY COUNT" 
+                                                color: "#999999" 
+                                                font.pixelSize: 10 
+                                                font.bold: true
+                                                font.letterSpacing: 1.0
+                                                anchors.right: parent.right
+                                            }
+                                            Text { 
+                                                id: playCountText
+                                                text: "0" 
+                                                color: "#333333" 
+                                                font.pixelSize: 20 
+                                                font.bold: true 
+                                                anchors.right: parent.right
+                                            }
+                                        }
                                     }
-                                    Text { 
-                                        id: playCountText
-                                        text: "0" 
-                                        color: "#333333" 
-                                        font.pixelSize: 20 
-                                        font.bold: true 
+                                    
+                                    // Spacer between header and list
+                                    Item { Layout.preferredHeight: 0 }
+                                    
+                                    // List items
+                                    Repeater {
+                                        model: difficultyStatsData
+                                        Text {
+                                            Layout.alignment: Qt.AlignRight
+                                            Layout.preferredHeight: 22
+                                            verticalAlignment: Text.AlignVCenter
+                                            text: modelData.count
+                                            font.pixelSize: 15
+                                            color: "#888"
+                                        }
                                     }
                                 }
                                 
-                                Rectangle { width: 1; height: 30; color: "#DDDDDD" }
-
-                                Column {
-                                    spacing: 5
-                                    Text { 
-                                        text: "PLAY TIME" 
-                                        color: "#999999" 
-                                        font.pixelSize: 10 
-                                        font.bold: true
-                                        font.letterSpacing: 1.0
+                                // --- COLUMN 2: Divider & Pills (Center-aligned) ---
+                                ColumnLayout {
+                                    spacing: 16
+                                    
+                                    // Divider (matches header height)
+                                    Item {
+                                        Layout.preferredWidth: 50
+                                        Layout.preferredHeight: 40
+                                        Rectangle { 
+                                            width: 1; height: 30; color: "#DDDDDD" 
+                                            anchors.centerIn: parent
+                                        }
                                     }
-                                    Text { 
-                                        id: playTimeText
-                                        text: "0h 0m" 
-                                        color: "#333333" 
-                                        font.pixelSize: 20 
-                                        font.bold: true 
+                                    
+                                    // Spacer between header and list
+                                    Item { Layout.preferredHeight: 0 }
+                                    
+                                    // Difficulty Text
+                                    Repeater {
+                                        model: difficultyStatsData
+                                        Text {
+                                            Layout.preferredHeight: 22
+                                            Layout.alignment: Qt.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                            horizontalAlignment: Text.AlignHCenter
+                                            text: modelData.name
+                                            color: modelData.color
+                                            font.bold: true
+                                            font.pixelSize: 14
+                                        }
+                                    }
+                                }
+                                
+                                // --- COLUMN 3: Play Time (Left-aligned) ---
+                                ColumnLayout {
+                                    spacing: 16
+                                    
+                                    // Header (fixed height for alignment)
+                                    Item {
+                                        Layout.preferredHeight: 40
+                                        // Use implicit width from child Column so it contributes to parent width
+                                        implicitWidth: headerCol3.implicitWidth
+                                        
+                                        Column {
+                                            id: headerCol3
+                                            anchors.left: parent.left
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: 5
+                                            Text { 
+                                                text: "PLAY TIME" 
+                                                color: "#999999" 
+                                                font.pixelSize: 10 
+                                                font.bold: true
+                                                font.letterSpacing: 1.0
+                                            }
+                                            Text { 
+                                                id: playTimeText
+                                                text: "0h 0m" 
+                                                color: "#333333" 
+                                                font.pixelSize: 20 
+                                                font.bold: true 
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Spacer between header and list
+                                    Item { Layout.preferredHeight: 0 }
+                                    
+                                    // List items
+                                    Repeater {
+                                        model: difficultyStatsData
+                                        Text {
+                                            Layout.alignment: Qt.AlignLeft
+                                            Layout.preferredHeight: 22
+                                            verticalAlignment: Text.AlignVCenter
+                                            text: modelData.time
+                                            font.pixelSize: 15
+                                            color: "#888"
+                                        }
                                     }
                                 }
                             }
 
-                            Item { height: 40 } // Spacer
-
-                            // Export Button
-                            Rectangle {
-                                width: 180
-                                height: 44
-                                radius: 22
-                                border.color: "#E0B0FF"
-                                border.width: 1
-                                color: "transparent"
-                                
-                                Row {
-                                    anchors.centerIn: parent
-                                    spacing: 8
-                                    Text { text: "🔗"; font.pixelSize: 14 } // 아이콘 대체
-                                    Text { 
-                                        text: "Export to Image"
-                                        color: "#6A0DAD"
-                                        font.bold: true
-                                    }
-                                }
-                                
-                                // 버튼 클릭 효과 (옵션)
-                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor }
-                            }
                         }
                     }
                 }

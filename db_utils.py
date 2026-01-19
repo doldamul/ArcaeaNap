@@ -218,18 +218,15 @@ def fill_missing_arcaea_ids_from_scores():
     finally:
         songs_conn.close()
 
-def calculate_user_stats():
+def play_stats_difficulty(difficulty: int):
     """
-    Calculates Total Play Count and Total Play Time.
+    Calculates Play Count and Play Time for a specific difficulty.
     
-    Logic:
-    1. For each (arcaea_id, difficulty), find the latest record in user_scores.db (scores table).
-    2. Total Play Count = Sum of yearly_play_count from these records.
-    3. Total Play Time = Sum of (yearly_play_count * song_length) for these records.
-       song_length is retrieved from songs.db (songs table) joining on arcaea_id.
+    Args:
+        difficulty: Difficulty code (0=PST, 1=PRS, 2=FTR, 3=BYD, 4=ETR)
     
     Returns:
-        tuple: (total_play_count, total_play_time_seconds)
+        tuple: (play_count, play_time_seconds)
     """
     scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
     songs_db_path = get_db_path()
@@ -245,7 +242,7 @@ def calculate_user_stats():
         cursor = conn.cursor()
         
         # Use play_count table for stats
-        # Join with songs AND charts to ensure validity and match user requirement
+        # Join with songs AND charts to ensure validity
         # If song length is null, use 140(2min 20sec) as default
         query = """
             SELECT 
@@ -254,9 +251,10 @@ def calculate_user_stats():
             FROM play_count pc
             JOIN songs_db.songs s ON pc.arcaea_id = s.arcaea_id
             JOIN songs_db.charts c ON s.id = c.song_id AND pc.difficulty = c.difficulty
+            WHERE pc.difficulty = ?
         """
         
-        cursor.execute(query)
+        cursor.execute(query, (difficulty,))
         result = cursor.fetchone()
         
         if result:
@@ -267,10 +265,29 @@ def calculate_user_stats():
             return 0, 0
             
     except Exception as e:
-        print(f"Error calculating stats: {e}")
+        print(f"Error calculating stats for difficulty {difficulty}: {e}")
         return 0, 0
     finally:
         conn.close()
+
+
+def play_stats_total():
+    """
+    Calculates Total Play Count and Total Play Time by summing all difficulties.
+    
+    Returns:
+        tuple: (total_play_count, total_play_time_seconds)
+    """
+    total_count = 0
+    total_time = 0
+    
+    # All difficulty codes: 0=PST, 1=PRS, 2=FTR, 3=BYD, 4=ETR
+    for diff in [0, 1, 2, 3, 4]:
+        count, time = play_stats_difficulty(diff)
+        total_count += count
+        total_time += time
+    
+    return total_count, total_time
 
 def calculate_rank(score: int) -> str:
     """
@@ -413,21 +430,30 @@ def get_best_scores_per_chart():
 def get_play_counts():
     """
     Fetches total play count for each (arcaea_id, difficulty).
+    Only includes play counts for valid charts that exist in songs.db.
     Returns:
         dict: {(arcaea_id, difficulty): total_play_count}
     """
     scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
-    if not os.path.exists(scores_db_path):
+    songs_db_path = get_db_path()
+    
+    if not os.path.exists(scores_db_path) or not os.path.exists(songs_db_path):
         return {}
 
     conn = sqlite3.connect(scores_db_path)
     try:
+        # Attach songs.db
+        conn.execute(f"ATTACH DATABASE ? AS songs_db", (songs_db_path,))
+        
         cursor = conn.cursor()
-        # Sum all yearly_play_count for each chart
+        # Sum all yearly_play_count for each chart, but only for valid charts
+        # This matches the logic in calculate_user_stats()
         cursor.execute("""
-            SELECT arcaea_id, difficulty, SUM(yearly_play_count) as total
-            FROM play_count
-            GROUP BY arcaea_id, difficulty
+            SELECT pc.arcaea_id, pc.difficulty, SUM(pc.yearly_play_count) as total
+            FROM play_count pc
+            JOIN songs_db.songs s ON pc.arcaea_id = s.arcaea_id
+            JOIN songs_db.charts c ON s.id = c.song_id AND pc.difficulty = c.difficulty
+            GROUP BY pc.arcaea_id, pc.difficulty
         """)
         
         result = {}

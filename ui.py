@@ -12,7 +12,7 @@ from web_arcaeaonline import ArcaeaOnline
 from web_consultantsheet import open_sheet
 from web_wiki import open_wiki
 from db_utils import (
-    get_db_path, calculate_user_stats, get_top_10_most_played,
+    get_db_path, play_stats_total, play_stats_difficulty, get_top_10_most_played,
     get_all_songs_with_charts, get_best_scores_per_chart, get_play_counts, 
     get_this_year_play_counts, calculate_rank
 )
@@ -101,6 +101,7 @@ class StatsHandler(QObject):
         super().__init__()
         self._total_count = 0
         self._total_time_str = "0h 0m"
+        self._difficulty_stats = []  # Pre-calculated difficulty stats
         self._thumbnails_dir = os.path.join(config['general']['cache_path'], 'thumbnails')
         self.refreshStats()
 
@@ -111,6 +112,11 @@ class StatsHandler(QObject):
     @pyqtSlot(result=str)
     def getTotalPlayTime(self):
         return self._total_time_str
+    
+    @pyqtSlot(result='QVariant')
+    def getDifficultyStats(self):
+        """Returns pre-calculated difficulty stats list."""
+        return self._difficulty_stats
 
     @pyqtSlot(result=list)
     def getMostPlayed(self):
@@ -214,13 +220,37 @@ class StatsHandler(QObject):
 
     @pyqtSlot()
     def refreshStats(self):
-        count, seconds = calculate_user_stats()
+        # Calculate total stats
+        count, seconds = play_stats_total()
         self._total_count = count
         
         hours = seconds // 3600
         minutes = (seconds % 3600) // 60
         self._total_time_str = f"{hours}h {minutes}m"
         
+        # Calculate per-difficulty stats
+        # Order: PST(0), PRS(1), FTR(2), ETR(4), BYD(3)
+        diff_info = [
+            (0, 'PST', '#00A0E9'),
+            (1, 'PRS', '#50C050'),
+            (2, 'FTR', '#A060FF'),
+            (4, 'ETR', '#808080'),
+            (3, 'BYD', '#E04040'),
+        ]
+        
+        stats = []
+        for code, name, color in diff_info:
+            diff_count, diff_seconds = play_stats_difficulty(code)
+            diff_hours = diff_seconds // 3600
+            diff_minutes = (diff_seconds % 3600) // 60
+            stats.append({
+                'name': name,
+                'color': color,
+                'count': diff_count,
+                'time': f"{diff_hours}.{diff_minutes:02d}"
+            })
+        
+        self._difficulty_stats = stats
         self.statsChanged.emit()
 
 
