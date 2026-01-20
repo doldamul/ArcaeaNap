@@ -773,7 +773,7 @@ Item {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
                                             radius: 6
-                                            color: statisticsHandler && statisticsHandler.displayMode === "song" ? "#6A0DAD" : "transparent"
+                                            color: statisticsHandler && statisticsHandler.displayMode === "song" ? "#6A0DAD" : (songMouse.containsMouse ? "#E0E0E0" : "transparent")
                                             
                                             Text {
                                                 anchors.centerIn: parent
@@ -784,7 +784,9 @@ Item {
                                             }
                                             
                                             MouseArea {
+                                                id: songMouse
                                                 anchors.fill: parent
+                                                hoverEnabled: true
                                                 cursorShape: Qt.PointingHandCursor
                                                 onClicked: if (statisticsHandler) statisticsHandler.setDisplayMode("song")
                                             }
@@ -794,7 +796,7 @@ Item {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
                                             radius: 6
-                                            color: statisticsHandler && statisticsHandler.displayMode === "chart" ? "#6A0DAD" : "transparent"
+                                            color: statisticsHandler && statisticsHandler.displayMode === "chart" ? "#6A0DAD" : (chartMouse.containsMouse ? "#E0E0E0" : "transparent")
                                             
                                             Text {
                                                 anchors.centerIn: parent
@@ -805,7 +807,9 @@ Item {
                                             }
                                             
                                             MouseArea {
+                                                id: chartMouse
                                                 anchors.fill: parent
+                                                hoverEnabled: true
                                                 cursorShape: Qt.PointingHandCursor
                                                 onClicked: if (statisticsHandler) statisticsHandler.setDisplayMode("chart")
                                             }
@@ -817,16 +821,11 @@ Item {
 
                                 // Filter Button
                                 Rectangle {
-                                    Layout.preferredWidth: 80; Layout.preferredHeight: 32
+                                    Layout.preferredWidth: 60; Layout.preferredHeight: 32
                                     radius: 6
                                     color: filterMouse.containsMouse ? "#E0E0E0" : "#F0F0F0"
                                     
-                                    RowLayout {
-                                        anchors.centerIn: parent
-                                        spacing: 4
-                                        Text { text: "🔽"; font.pixelSize: 12; color: "#666" }
-                                        Text { text: "Filters"; font.pixelSize: 12; color: "#666"; font.bold: true }
-                                    }
+                                    Text { anchors.centerIn: parent; text: "Filters"; font.pixelSize: 12; color: "#666"; font.bold: true }
                                     
                                     MouseArea {
                                         id: filterMouse
@@ -844,7 +843,7 @@ Item {
                                 // Sort Dropdown
                                 Basic.ComboBox {
                                     id: sortCombo
-                                    Layout.preferredWidth: 100
+                                    Layout.preferredWidth: 120
                                     Layout.preferredHeight: 32
                                     model: ["Title", "Score", "MAX", "Total Play", "This Year Play", "Recent", "Level (BP)", "S-BP", "P-BP", "Length"]
                                     
@@ -882,15 +881,54 @@ Item {
 
                                     delegate: ItemDelegate {
                                         width: parent.width
+                                        height: 32 // Fixed height for consistency
+                                        
                                         contentItem: Text {
                                             text: modelData
                                             color: "#333"
                                             font.pixelSize: 12
                                             elide: Text.ElideRight
                                             verticalAlignment: Text.AlignVCenter
+                                            leftPadding: 8
                                         }
+                                        
                                         background: Rectangle {
-                                            color: parent.highlighted ? "#E0E0E0" : "transparent"
+                                            // Add margins to background for floating feel inside popup
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 4
+                                            anchors.rightMargin: 4
+                                            color: parent.hovered || parent.highlighted ? "#F5F0FA" : "transparent" // Soft purple tint
+                                            radius: 4
+                                        }
+                                    }
+                                    
+                                    popup: Popup {
+                                        y: sortCombo.height + 4
+                                        width: sortCombo.width
+                                        implicitHeight: contentItem.implicitHeight + 10
+                                        padding: 5
+                                        
+                                        enter: Transition {
+                                            NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 100 }
+                                            NumberAnimation { property: "y"; from: sortCombo.height; to: sortCombo.height + 4; duration: 100; easing.type: Easing.OutQuad }
+                                        }
+                                        exit: Transition {
+                                            NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 100 }
+                                        }
+                                        
+                                        contentItem: ListView {
+                                            clip: true
+                                            implicitHeight: contentHeight
+                                            model: sortCombo.popup.visible ? sortCombo.delegateModel : null
+                                            currentIndex: sortCombo.highlightedIndex
+                                            interactive: false // Disable scrolling
+                                        }
+                                        
+                                        background: Rectangle {
+                                            color: "white"
+                                            border.color: "#E0E0E0"
+                                            border.width: 1
+                                            radius: 8
                                         }
                                     }
                                 }
