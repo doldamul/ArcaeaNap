@@ -14,7 +14,7 @@ from web_wiki import open_wiki
 from db_utils import (
     get_db_path, play_stats_total, play_stats_difficulty, get_top_10_most_played,
     get_all_songs_with_charts, get_best_scores_per_chart, get_play_counts, 
-    get_this_year_play_counts, calculate_rank, get_pin_updated_dates
+    get_this_year_play_counts, calculate_rank
 )
 
 class StartupHandler(QObject):
@@ -61,10 +61,11 @@ class StartupHandler(QObject):
 class AnalysisHandler(QObject):
     logAdded = pyqtSignal(str, arguments=['message'])
     dataUpdated = pyqtSignal()  # Emitted when user_scores.db or thumbnails are updated
+    pinUpdated = pyqtSignal()   # Emitted when pin data is updated
 
     def __init__(self):
         super().__init__()
-        self.analyzer = None
+        self.analyzer = ArcaeaOnline()  # Create on init to load pin_updates from DB
         self.thread = None
 
     @pyqtSlot()
@@ -74,9 +75,12 @@ class AnalysisHandler(QObject):
             return
 
         print("Starting analysis thread...")
-        self.analyzer = ArcaeaOnline()
+        # Reuse existing analyzer or create new one
+        if not self.analyzer:
+            self.analyzer = ArcaeaOnline()
         self.analyzer.set_log_callback(self.emit_log)
         self.analyzer.set_data_changed_callback(self.emit_data_updated)
+        self.analyzer.set_pin_changed_callback(self.emit_pin_updated)
         
         self.thread = threading.Thread(target=self.analyzer.start, daemon=True)
         self.thread.start()
@@ -93,15 +97,20 @@ class AnalysisHandler(QObject):
     
     def emit_data_updated(self):
         self.dataUpdated.emit()
+    
+    def emit_pin_updated(self):
+        self.pinUpdated.emit()
 
     @pyqtSlot(result='QVariant')
     def getPinDates(self):
         """
-        Returns last updated dates for each difficulty.
+        Returns last updated dates for each difficulty from AnalysisStatus.
         Returns: 
-            dict: { difficulty_code(int): timestamp(int) }
+            dict: { difficulty_code(str): timestamp(int) }
         """
-        return get_pin_updated_dates()
+        if self.analyzer and self.analyzer.status.pin_updates:
+            return {str(k): v for k, v in self.analyzer.status.pin_updates.items()}
+        return {}
 
 class StatsHandler(QObject):
     statsChanged = pyqtSignal()

@@ -42,6 +42,7 @@ class ArcaeaOnline:
         self.driver = None
         self.log_callback = None
         self.data_changed_callback = None  # Called when data is saved to DB or thumbnails are saved
+        self.pin_changed_callback = None   # Called when pin data is updated
         
         # State variables
         self.previous_user_data = None
@@ -56,12 +57,37 @@ class ArcaeaOnline:
         for difficulty in Difficulty:
             self.checked_page[difficulty] = set()
             self.total_page[difficulty] = None
+        
+        # Initialize pin_updates from database
+        self._load_pin_updates_from_db()
+
+    def _load_pin_updates_from_db(self):
+        """Load pin update timestamps from database on startup."""
+        try:
+            score_filepath = os.path.join(config['general']['cache_path'], 'user_scores.db')
+            if not os.path.exists(score_filepath):
+                return
+            
+            with sqlite3.connect(score_filepath) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pin'")
+                if not cursor.fetchone():
+                    return
+                
+                cursor.execute("SELECT difficulty, updated_at FROM pin")
+                for row in cursor.fetchall():
+                    self.status.pin_updates[row[0]] = row[1]
+        except Exception as e:
+            print(f"Error loading pin updates from DB: {e}")
 
     def set_log_callback(self, callback):
         self.log_callback = callback
     
     def set_data_changed_callback(self, callback):
         self.data_changed_callback = callback
+    
+    def set_pin_changed_callback(self, callback):
+        self.pin_changed_callback = callback
     
     def notify_data_changed(self):
         """Notify that data has been saved (DB records or thumbnails)"""
@@ -70,6 +96,14 @@ class ArcaeaOnline:
                 self.data_changed_callback()
             except Exception as e:
                 self.log(f"Data changed callback error: {e}")
+    
+    def notify_pin_changed(self):
+        """Notify that pin data has been updated"""
+        if self.pin_changed_callback:
+            try:
+                self.pin_changed_callback()
+            except Exception as e:
+                self.log(f"Pin changed callback error: {e}")
 
     def start(self):
         self.status.is_running = True
@@ -834,6 +868,9 @@ class ArcaeaOnline:
             
             # Update status object
             self.status.pin_updates[difficulty] = current_time
+            
+            # Notify UI to refresh pin dates
+            self.notify_pin_changed()
             
         except Exception as e:
             self.log(f"save_pin_id Error: {e}")

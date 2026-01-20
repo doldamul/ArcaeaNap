@@ -195,8 +195,8 @@ Item {
 
                     Connections {
                         target: analysisHandler
-                        function onDataUpdated() {
-                            updatePinDates()
+                        function onPinUpdated() {
+                            lastSavedInfoContent.updatePinDates()
                         }
                     }
 
