@@ -174,6 +174,7 @@ Item {
                 clip: true
 
                 ColumnLayout {
+                    id: lastSavedInfoContent
                     anchors.fill: parent
                     anchors.margins: 30
                     spacing: 20
@@ -181,64 +182,109 @@ Item {
                     Row {
                         spacing: 10
                         Text { text: "●"; color: "#BC00FF"; font.pixelSize: 16 }
-                        Text { text: "Scraping Progress"; font.pixelSize: 18; font.bold: true; color: "#1A1A1A" }
+                        Text { text: "Last Saved"; font.pixelSize: 18; font.bold: true; color: "#1A1A1A" }
                     }
 
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-                        
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text { text: "Overall Status"; color: "#888"; font.pixelSize: 12 }
-                            Item { Layout.fillWidth: true }
-                            Text { text: "70% Complete"; color: "#BC00FF"; font.bold: true; font.pixelSize: 12 }
-                        }
-                        
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 8
-                            color: "#F0F0F0"
-                            radius: 4
-                            Rectangle {
-                                width: parent.width * 0.7
-                                height: parent.height
-                                radius: 4
-                                color: "#BC00FF"
-                            }
+
+                    // --- Pin Data ---
+                    property var pinDates: ({})
+
+                    Component.onCompleted: {
+                        updatePinDates()
+                    }
+
+                    Connections {
+                        target: analysisHandler
+                        function onDataUpdated() {
+                            updatePinDates()
                         }
                     }
 
+                    function updatePinDates() {
+                        pinDates = analysisHandler.getPinDates()
+                    }
+                    
+                    function formatPinDate(timestamp) {
+                        if (!timestamp || timestamp <= 0) return "-"
+                        var date = new Date(timestamp)
+                        var now = new Date()
+                        
+                        // Calculate days difference based on calendar dates
+                        var dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+                        var nowOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                        var daysDiff = Math.floor((nowOnly - dateOnly) / (1000 * 60 * 60 * 24))
+                        
+                        // Format absolute datetime
+                        var absDate = date.getFullYear() + "-" + 
+                               (date.getMonth() + 1).toString().padStart(2, '0') + "-" + 
+                               date.getDate().toString().padStart(2, '0') + " " +
+                               date.getHours().toString().padStart(2, '0') + ":" +
+                               date.getMinutes().toString().padStart(2, '0')
+                        
+                        // Format relative date
+                        var relDate = ""
+                        if (daysDiff === 0) {
+                            relDate = "Today"
+                        } else if (daysDiff === 1) {
+                            relDate = "Yesterday"
+                        } else {
+                            relDate = daysDiff + " days ago"
+                        }
+                        
+                        return absDate + " (" + relDate + ")"
+                    }
+
+                    // --- Difficulty Date List ---
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 12
-
-                        // Info Items
-                        Rectangle {
-                            Layout.fillWidth: true; height: 60; color: "#F8F9FC"; radius: 12
-                            RowLayout {
-                                anchors.fill: parent; anchors.margins: 20; spacing: 15
-                                Rectangle { width: 30; height: 30; radius: 8; color: "white"; border.color: "#EEE"; Text { text: "📚"; anchors.centerIn: parent } }
-                                Text { text: "Songs Parsed"; color: "#666"; font.pixelSize: 14; Layout.fillWidth: true }
-                                Text { text: "120"; color: "#333"; font.bold: true; font.pixelSize: 18 }
-                            }
-                        }
-                        Rectangle {
-                            Layout.fillWidth: true; height: 60; color: "#F8F9FC"; radius: 12
-                            RowLayout {
-                                anchors.fill: parent; anchors.margins: 20; spacing: 15
-                                Rectangle { width: 30; height: 30; radius: 8; color: "white"; border.color: "#EEE"; Text { text: "📄"; anchors.centerIn: parent } }
-                                Text { text: "Queue Pending"; color: "#666"; font.pixelSize: 14; Layout.fillWidth: true }
-                                Text { text: "50"; color: "#333"; font.bold: true; font.pixelSize: 18 }
-                            }
-                        }
-                        Rectangle {
-                            Layout.fillWidth: true; height: 60; color: "#F8F9FC"; radius: 12
-                            RowLayout {
-                                anchors.fill: parent; anchors.margins: 20; spacing: 15
-                                Rectangle { width: 30; height: 30; radius: 8; color: "white"; border.color: "#EEE"; Text { text: "🕒"; anchors.centerIn: parent } }
-                                Text { text: "Est. Remaining"; color: "#666"; font.pixelSize: 14; Layout.fillWidth: true }
-                                Text { text: "10s"; color: "#333"; font.bold: true; font.pixelSize: 18 }
+                        spacing: 0
+                        
+                        Repeater {
+                            model: [
+                                { label: "PST", color: "#00A0E9", code: 0 },
+                                { label: "PRS", color: "#50C050", code: 1 },
+                                { label: "FTR", color: "#A060FF", code: 2 },
+                                { label: "BYD", color: "#E04040", code: 3 },
+                                { label: "ETR", color: "#808080", code: 4 }
+                            ]
+                            
+                            delegate: Item {
+                                Layout.fillWidth: true
+                                height: 42
+                                
+                                Rectangle {
+                                    anchors.bottom: parent.bottom
+                                    width: parent.width; height: 1
+                                    color: "#F0F0F0"
+                                    visible: index < 4
+                                }
+                                
+                                RowLayout {
+                                    anchors.fill: parent
+                                    spacing: 12
+                                    
+                                    // Colored Pill
+                                    Rectangle {
+                                        width: 36; height: 20
+                                        radius: 6
+                                        color: modelData.color
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: modelData.label
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                            color: "white"
+                                        }
+                                    }
+                                    
+                                    Text { 
+                                        Layout.fillWidth: true
+                                        text: lastSavedInfoContent.formatPinDate(lastSavedInfoContent.pinDates[String(modelData.code)])
+                                        font.pixelSize: 13
+                                        font.bold: true
+                                        color: "#333"
+                                    }
+                                }
                             }
                         }
                     }

@@ -556,3 +556,44 @@ def get_top_10_most_played():
     finally:
         conn.close()
 
+
+def get_pin_updated_dates():
+    """
+    Fetches the last updated timestamp for each difficulty from the 'pin' table.
+    Returns:
+        dict: {difficulty (int): timestamp (int)}
+         - Timestamp is in milliseconds (Unix).
+         - Returns empty dict if no data found.
+    """
+    scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
+    if not os.path.exists(scores_db_path):
+        return {}
+
+    conn = sqlite3.connect(scores_db_path)
+    try:
+        cursor = conn.cursor()
+        
+        # Check if 'pin' table exists just in case
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pin'")
+        if not cursor.fetchone():
+            return {}
+        
+        query = """
+            SELECT p.difficulty, p.updated_at
+            FROM pin p
+        """
+        cursor.execute(query)
+        
+        result = {}
+        for row in cursor.fetchall():
+            diff = str(row[0])  # Convert to string for QML compatibility
+            timestamp = row[1]
+            result[diff] = timestamp
+            
+        return result
+            
+    except Exception as e:
+        print(f"Error fetching pin dates: {e}")
+        return {}
+    finally:
+        conn.close()

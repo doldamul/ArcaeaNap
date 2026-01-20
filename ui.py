@@ -14,7 +14,7 @@ from web_wiki import open_wiki
 from db_utils import (
     get_db_path, play_stats_total, play_stats_difficulty, get_top_10_most_played,
     get_all_songs_with_charts, get_best_scores_per_chart, get_play_counts, 
-    get_this_year_play_counts, calculate_rank
+    get_this_year_play_counts, calculate_rank, get_pin_updated_dates
 )
 
 class StartupHandler(QObject):
@@ -93,6 +93,15 @@ class AnalysisHandler(QObject):
     
     def emit_data_updated(self):
         self.dataUpdated.emit()
+
+    @pyqtSlot(result='QVariant')
+    def getPinDates(self):
+        """
+        Returns last updated dates for each difficulty.
+        Returns: 
+            dict: { difficulty_code(int): timestamp(int) }
+        """
+        return get_pin_updated_dates()
 
 class StatsHandler(QObject):
     statsChanged = pyqtSignal()
