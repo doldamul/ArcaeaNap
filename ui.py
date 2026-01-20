@@ -1284,6 +1284,9 @@ def main():
     if not engine.rootObjects():
         sys.exit(-1)
 
+    # Stop browser on app exit
+    app.aboutToQuit.connect(analysis_handler.stopAnalysis)
+
     sys.exit(app.exec())
 
 if __name__ == "__main__":
