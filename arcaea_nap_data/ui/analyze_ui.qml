@@ -105,34 +105,83 @@ Item {
 
                         // 하단 상태바
                         Rectangle {
+                            id: statusBar
                             Layout.fillWidth: true
                             height: 60
                             color: "#F8F8F8"
                             radius: 15
+                            
+                            // Status property - updated via signal
+                            property string analysisStatus: "closed"  // 'closed', 'login', 'ready', 'analyzing'
+                            
+                            Component.onCompleted: {
+                                analysisStatus = analysisHandler.getStatus()
+                            }
+                            
+                            Connections {
+                                target: analysisHandler
+                                function onStatusChanged(status) {
+                                    statusBar.analysisStatus = status
+                                }
+                            }
                             
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.margins: 15
                                 spacing: 15
 
+                                // Browser Closed indicator
                                 Row { 
                                     spacing: 8
-                                    Rectangle { width: 12; height: 12; radius: 6; color: "#CCCCCC"; anchors.verticalCenter: parent.verticalCenter }
-                                    Text { text: "Browser Closed"; color: "#AAA"; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
+                                    Rectangle { 
+                                        width: 12; height: 12; radius: 6
+                                        color: statusBar.analysisStatus === "closed" ? "#FF6B6B" : "#CCCCCC"
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                    Text { 
+                                        text: "Browser Closed"
+                                        color: statusBar.analysisStatus === "closed" ? "#333" : "#AAA"
+                                        font.pixelSize: 12
+                                        font.bold: statusBar.analysisStatus === "closed"
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
                                 }
                                 Rectangle { width: 1; height: 15; color: "#DDD" }
                                 
+                                // Analyzing indicator (active for 'login' and 'analyzing' states)
                                 Row { 
                                     spacing: 8
-                                    Rectangle { width: 12; height: 12; radius: 6; color: "#CCCCCC"; anchors.verticalCenter: parent.verticalCenter }
-                                    Text { text: "Logging In"; color: "#AAA"; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
+                                    Rectangle { 
+                                        width: 12; height: 12; radius: 6
+                                        color: statusBar.analysisStatus === "login" || statusBar.analysisStatus === "analyzing" ? "#FFB74D" : "#CCCCCC"
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                    Text { 
+                                        // Show "Logging In" during login, otherwise "Analyzing..."
+                                        text: statusBar.analysisStatus === "login" ? "Logging In" : "Analyzing..."
+                                        color: statusBar.analysisStatus === "login" || statusBar.analysisStatus === "analyzing" ? "#333" : "#AAA"
+                                        font.pixelSize: 12
+                                        font.bold: statusBar.analysisStatus === "login" || statusBar.analysisStatus === "analyzing"
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
                                 }
                                 Rectangle { width: 1; height: 15; color: "#DDD" }
 
+                                // Ready indicator
                                 Row { 
                                     spacing: 8
-                                    Rectangle { width: 12; height: 12; radius: 6; color: "#00FF00"; anchors.verticalCenter: parent.verticalCenter }
-                                    Text { text: "Ready"; color: "#333"; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
+                                    Rectangle { 
+                                        width: 12; height: 12; radius: 6
+                                        color: statusBar.analysisStatus === "ready" ? "#00FF00" : "#CCCCCC"
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                    Text { 
+                                        text: "Ready"
+                                        color: statusBar.analysisStatus === "ready" ? "#333" : "#AAA"
+                                        font.pixelSize: 12
+                                        font.bold: statusBar.analysisStatus === "ready"
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
                                 }
                             }
                         }

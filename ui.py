@@ -62,6 +62,7 @@ class AnalysisHandler(QObject):
     logAdded = pyqtSignal(str, arguments=['message'])
     dataUpdated = pyqtSignal()  # Emitted when user_scores.db or thumbnails are updated
     pinUpdated = pyqtSignal()   # Emitted when pin data is updated
+    statusChanged = pyqtSignal(str, arguments=['status'])  # Emitted when analysis status changes
 
     def __init__(self):
         super().__init__()
@@ -81,6 +82,7 @@ class AnalysisHandler(QObject):
         self.analyzer.set_log_callback(self.emit_log)
         self.analyzer.set_data_changed_callback(self.emit_data_updated)
         self.analyzer.set_pin_changed_callback(self.emit_pin_updated)
+        self.analyzer.set_status_changed_callback(self.emit_status_changed)
         
         self.thread = threading.Thread(target=self.analyzer.start, daemon=True)
         self.thread.start()
@@ -100,6 +102,17 @@ class AnalysisHandler(QObject):
     
     def emit_pin_updated(self):
         self.pinUpdated.emit()
+    
+    def emit_status_changed(self):
+        if self.analyzer:
+            self.statusChanged.emit(self.analyzer.status.status)
+
+    @pyqtSlot(result=str)
+    def getStatus(self):
+        """Returns current analysis status: 'closed', 'login', 'ready', 'analyzing'"""
+        if self.analyzer:
+            return self.analyzer.status.status
+        return 'closed'
 
     @pyqtSlot(result='QVariant')
     def getPinDates(self):

@@ -31,7 +31,7 @@ DIFFICULTY_NAMES = {0: 'pst', 1: 'prs', 2: 'ftr', 3: 'byd', 4: 'etr'}
 
 @dataclass
 class AnalysisStatus:
-    status: str = 'login' # 'login', 'ready', 'analyzing'
+    status: str = 'closed' # 'closed', 'login', 'analyzing', 'ready'
     pin_updates: Dict[int, int] = field(default_factory=dict) # Difficulty -> timestamp
     logs: deque = field(default_factory=lambda: deque(maxlen=50))
     is_running: bool = False
@@ -43,6 +43,7 @@ class ArcaeaOnline:
         self.log_callback = None
         self.data_changed_callback = None  # Called when data is saved to DB or thumbnails are saved
         self.pin_changed_callback = None   # Called when pin data is updated
+        self.status_changed_callback = None # Called when status changes
         
         # State variables
         self.previous_user_data = None
@@ -89,6 +90,9 @@ class ArcaeaOnline:
     def set_pin_changed_callback(self, callback):
         self.pin_changed_callback = callback
     
+    def set_status_changed_callback(self, callback):
+        self.status_changed_callback = callback
+    
     def notify_data_changed(self):
         """Notify that data has been saved (DB records or thumbnails)"""
         if self.data_changed_callback:
@@ -104,9 +108,20 @@ class ArcaeaOnline:
                 self.pin_changed_callback()
             except Exception as e:
                 self.log(f"Pin changed callback error: {e}")
+    
+    def notify_status_changed(self):
+        """Notify that status has changed"""
+        if self.status_changed_callback:
+            try:
+                self.status_changed_callback()
+            except Exception as e:
+                self.log(f"Status changed callback error: {e}")
 
     def start(self):
         self.status.is_running = True
+        self.status.status = 'login'
+        self.notify_status_changed()
+        
         lang = 'ko'
         url = f'https://arcaea.lowiro.com/{lang}/profile/scores?page=1'
         
@@ -152,8 +167,10 @@ class ArcaeaOnline:
                 try:
                     block_pointer_events(self.driver)
                     
+                    self.status.status = 'analyzing'
+                    self.notify_status_changed()
                     self.log('New page detected.')
-                    
+
                     # Network 도메인 재활성화 (네비게이션 후 풀릴 수 있음)
                     try:
                         self.driver.execute_cdp_cmd('Network.enable', {})
@@ -207,7 +224,8 @@ class ArcaeaOnline:
 
     def stop(self):
         self.status.is_running = False
-        self.status.status = 'login'
+        self.status.status = 'closed'
+        self.notify_status_changed()
         if self.driver:
             try: self.driver.quit()
             except: pass
@@ -345,7 +363,6 @@ class ArcaeaOnline:
         return False
 
     def save_data(self, thumbnail_request_ids: dict = None):
-        self.status.status = 'analyzing'
         target_element = None
         wait = WebDriverWait(self.driver, 1)
 
@@ -394,6 +411,7 @@ class ArcaeaOnline:
             if not user_scores_data or len(user_scores_data) == 0:
                 self.log('Data save canceled: Current page is empty')
                 self.status.status = 'ready'
+                self.notify_status_changed()
                 return
 
             is_datesort = user_data['dropDownSelectedValue']['value'] == 'date'
@@ -681,6 +699,7 @@ class ArcaeaOnline:
         finally:
             if self.status.status == 'analyzing':
                 self.status.status = 'ready'
+                self.notify_status_changed()
 
     def parse_thumbnail_request_ids(self) -> dict[str, tuple[str, bool]]:
         """
