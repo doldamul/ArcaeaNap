@@ -106,8 +106,8 @@ Item {
                         // 하단 상태바
                         Rectangle {
                             id: statusBar
-                            Layout.fillWidth: true
-                            height: 60
+                            Layout.preferredWidth: 400
+                            Layout.preferredHeight: 60
                             color: "#F8F8F8"
                             radius: 15
                             
@@ -187,20 +187,158 @@ Item {
                         }
                     }
 
-                    // 1-2. 오른쪽 장식
-                    Item {
-                        Layout.fillHeight: true
-                        Layout.preferredWidth: 250
-                        visible: analyzeRoot.width > 750
+                }
 
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: 200; height: 200
-                            color: "transparent"
+                // 1-2. 오른쪽 장식 (RowLayout에서 분리하여 독립 배치)
+                Item {
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    width: 350
+                    visible: analyzeRoot.width > 750
+
+                    Rectangle {
+                        id: decorationContainer
+                        anchors.centerIn: parent
+                        width: 300; height: 300
+                        color: "transparent"
+                        
+                        property var decorationImages: []
+                        Component.onCompleted: decorationImages = analysisHandler.getRandomThumbnails()
+                        
+                        // 1. Top Left
+                        Item { 
+                            id: deco1
+                            x: 10; y: 40; width: 100; height: 100
                             
-                            Rectangle { x: 20; y: 20; width: 80; height: 80; color: "#D0A0FF"; opacity: 0.5; rotation: 15 }
-                            Rectangle { x: 80; y: 40; width: 100; height: 100; color: "#6A0DAD"; opacity: 0.8; rotation: -10 }
-                            Rectangle { x: 60; y: 100; width: 60; height: 60; color: "#A0E0FF"; opacity: 0.6; rotation: 30 }
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "#D0A0FF"
+                                opacity: 0.5
+                                visible: decorationContainer.decorationImages.length < 5
+                                rotation: 15
+                                antialiasing: true
+                            }
+                            
+                            Image {
+                                anchors.fill: parent
+                                source: decorationContainer.decorationImages.length >= 5 ? decorationContainer.decorationImages[0] : ""
+                                visible: decorationContainer.decorationImages.length >= 5
+                                fillMode: Image.PreserveAspectCrop
+                                rotation: 15
+                                antialiasing: true
+                                smooth: true
+                                mipmap: true
+                                sourceSize: Qt.size(width * 2, height * 2)
+                            }
+                        }
+
+                        // 2. Top Right
+                        Item { 
+                            id: deco2
+                            x: 180; y: 20; width: 90; height: 90
+                            
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "#FF80AB"
+                                opacity: 0.6
+                                visible: decorationContainer.decorationImages.length < 5
+                                rotation: -10
+                                antialiasing: true
+                            }
+                            
+                            Image {
+                                anchors.fill: parent
+                                source: decorationContainer.decorationImages.length >= 5 ? decorationContainer.decorationImages[1] : ""
+                                visible: decorationContainer.decorationImages.length >= 5
+                                fillMode: Image.PreserveAspectCrop
+                                rotation: -10
+                                antialiasing: true
+                                smooth: true
+                                mipmap: true
+                                sourceSize: Qt.size(width * 2, height * 2)
+                            }
+                        }
+
+                        // 3. Center (Main)
+                        Item { 
+                            id: deco3
+                            x: 70; y: 80; width: 150; height: 150
+                            
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "#6A0DAD"
+                                opacity: 0.8
+                                visible: decorationContainer.decorationImages.length < 5
+                                rotation: -5
+                                antialiasing: true
+                            }
+                            
+                            Image {
+                                anchors.fill: parent
+                                source: decorationContainer.decorationImages.length >= 5 ? decorationContainer.decorationImages[2] : ""
+                                visible: decorationContainer.decorationImages.length >= 5
+                                fillMode: Image.PreserveAspectCrop
+                                rotation: -5
+                                antialiasing: true
+                                smooth: true
+                                mipmap: true
+                                sourceSize: Qt.size(width * 2, height * 2)
+                            }
+                        }
+                        
+                        // 4. Bottom Left
+                        Item { 
+                            id: deco4
+                            x: 30; y: 160; width: 110; height: 110
+                            
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "#80D8FF"
+                                opacity: 0.6
+                                visible: decorationContainer.decorationImages.length < 5
+                                rotation: 25
+                                antialiasing: true
+                            }
+                            
+                            Image {
+                                anchors.fill: parent
+                                source: decorationContainer.decorationImages.length >= 5 ? decorationContainer.decorationImages[3] : ""
+                                visible: decorationContainer.decorationImages.length >= 5
+                                fillMode: Image.PreserveAspectCrop
+                                rotation: 25
+                                antialiasing: true
+                                smooth: true
+                                mipmap: true
+                                sourceSize: Qt.size(width * 2, height * 2)
+                            }
+                        }
+
+                        // 5. Bottom Right
+                        Item { 
+                            id: deco5
+                            x: 170; y: 150; width: 100; height: 100
+                            
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "#A0E0FF"
+                                opacity: 0.7
+                                visible: decorationContainer.decorationImages.length < 5
+                                rotation: -20
+                                antialiasing: true
+                            }
+                            
+                            Image {
+                                anchors.fill: parent
+                                source: decorationContainer.decorationImages.length >= 5 ? decorationContainer.decorationImages[4] : ""
+                                visible: decorationContainer.decorationImages.length >= 5
+                                fillMode: Image.PreserveAspectCrop
+                                rotation: -20
+                                antialiasing: true
+                                smooth: true
+                                mipmap: true
+                                sourceSize: Qt.size(width * 2, height * 2)
+                            }
                         }
                     }
                 }
@@ -231,7 +369,7 @@ Item {
                     Row {
                         spacing: 10
                         Text { text: "●"; color: "#BC00FF"; font.pixelSize: 16 }
-                        Text { text: "Last Saved"; font.pixelSize: 18; font.bold: true; color: "#1A1A1A" }
+                        Text { text: "Last Synced"; font.pixelSize: 18; font.bold: true; color: "#1A1A1A" }
                     }
 
 

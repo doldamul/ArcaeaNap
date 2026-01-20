@@ -1053,6 +1053,9 @@ Item {
                                                     source: statsHandler ? statsHandler.getThumbnailPathForDifficulty(itemData.arcaeaId || "", itemData.thumbnailDifficulty !== undefined ? itemData.thumbnailDifficulty : itemData.difficulty) : ""
                                                     fillMode: Image.PreserveAspectCrop
                                                     smooth: true
+                                                    mipmap: true
+                                                    antialiasing: true
+                                                    sourceSize: Qt.size(width * 2, height * 2)
                                                     visible: status === Image.Ready
                                                 }
                                                 

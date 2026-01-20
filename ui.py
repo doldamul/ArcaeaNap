@@ -3,11 +3,12 @@ import sys
 import os
 import threading
 import time
+import random
 from datetime import datetime
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtCore import QUrl, QObject, pyqtSlot, pyqtSignal, pyqtProperty, QVariant
-from PyQt6.QtGui import QImage, QColor
+from PyQt6.QtGui import QImage, QColor, QSurfaceFormat
 from web_arcaeaonline import ArcaeaOnline
 from web_consultantsheet import open_sheet
 from web_wiki import open_wiki
@@ -124,6 +125,24 @@ class AnalysisHandler(QObject):
         if self.analyzer and self.analyzer.status.pin_updates:
             return {str(k): v for k, v in self.analyzer.status.pin_updates.items()}
         return {}
+
+    @pyqtSlot(result='QVariant')
+    def getRandomThumbnails(self):
+        """Returns 5 random thumbnail paths if available, otherwise empty list."""
+        try:
+            thumbnails_dir = os.path.join(config['general']['cache_path'], 'thumbnails')
+            if not os.path.exists(thumbnails_dir):
+                return []
+            
+            files = [f for f in os.listdir(thumbnails_dir) if f.lower().endswith(('.jpg', '.png'))]
+            if len(files) < 5:
+                return []
+                
+            selected = random.sample(files, 5)
+            return [QUrl.fromLocalFile(os.path.join(thumbnails_dir, f)).toString() for f in selected]
+        except Exception as e:
+            print(f"Error getting random thumbnails: {e}")
+            return []
 
 class StatsHandler(QObject):
     statsChanged = pyqtSignal()
@@ -1256,6 +1275,11 @@ class StatisticsHandler(QObject):
 
 
 def main():
+    fmt = QSurfaceFormat()
+    fmt.setSamples(8)  # MSAA 8x
+    fmt.setRenderableType(QSurfaceFormat.RenderableType.OpenGL)
+    QSurfaceFormat.setDefaultFormat(fmt)
+
     app = QGuiApplication(sys.argv)
     
     print("Arcaea Nap v0.1")

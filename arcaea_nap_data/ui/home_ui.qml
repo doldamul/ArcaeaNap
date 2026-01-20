@@ -441,9 +441,10 @@ Item {
                                         anchors.fill: parent
                                         source: statsHandler ? statsHandler.getThumbnailPath(model.arcaeaId) : ""
                                         fillMode: Image.PreserveAspectCrop
-                                        mipmap: false
-                                        antialiasing: false
+                                        mipmap: true
+                                        antialiasing: true
                                         smooth: true // Keep smooth scaling for image quality, user likely meant edge AA
+                                        sourceSize: Qt.size(width * 2, height * 2)
                                         visible: status === Image.Ready
                                     }
                                     
