@@ -1488,7 +1488,7 @@ Item {
                             Text {
                                 text: {
                                     if (!currentSong) return ""
-                                    var count = currentSong.totalPlayCount
+                                    var count = currentSong.songTotalPlayCount
                                     if (!count || count <= 0) return "Never played"
                                     return count + " plays"
                                 }

@@ -559,6 +559,20 @@ class StatisticsHandler(QObject):
         else:
             return 10  # 'PM'
     
+    def _get_filtered_song_play_count(self, arcaea_id, song_data):
+        """Calculate total play count for FILTERED difficulties of a song.
+        
+        This sums play counts only for difficulties that pass the current filter,
+        providing song-mode-style aggregation while respecting filter settings.
+        Used for display in the detailed view header.
+        """
+        total = 0
+        for diff, chart_data in song_data.get('charts', {}).items():
+            score_data = self._scores_data.get((arcaea_id, diff), {})
+            if self._matches_filter(chart_data, score_data, diff):
+                total += self._play_counts.get((arcaea_id, diff), 0)
+        return total
+    
     def _build_chart_item(self, arcaea_id, song_data, difficulty, chart_data):
         """Build a chart item for the list model."""
         score_data = self._scores_data.get((arcaea_id, difficulty), {})
@@ -598,6 +612,7 @@ class StatisticsHandler(QObject):
             'scoreBelowMax': score_data.get('score_below_max', 0),
             'totalPlayCount': play_count,
             'thisYearPlayCount': this_year_play_count,
+            'songTotalPlayCount': self._get_filtered_song_play_count(arcaea_id, song_data),
             'displayValue': '',  # Will be set based on sort mode
         }
     
@@ -746,6 +761,7 @@ class StatisticsHandler(QObject):
             'rank': best_rank,
             'totalPlayCount': total_play_count,
             'thisYearPlayCount': total_this_year_play_count,
+            'songTotalPlayCount': self._get_filtered_song_play_count(arcaea_id, song_data),
             'timePlayed': recent_time_played,
             'scoreBelowMax': best_score_below_max,
             'pure': best_max_pure,
