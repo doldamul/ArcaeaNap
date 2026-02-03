@@ -312,17 +312,14 @@ Item {
         
         // Helper function for rank color
         function getRankColor(r) {
-            if (isFiltered) {
-                // Keep rank colors but muted
-                if (r === "PM") return "#C9B060"  // Muted gold
-                if (r === "EX+" || r === "EX") return "#B090D0"  // Muted purple
-                if (r === "AA") return "#7AA8C8"  // Muted blue
-                return "#888"
-            }
-            if (r === "PM") return "#FFD700"
-            if (r === "EX+" || r === "EX") return "#A060FF"
-            if (r === "AA") return "#4A90E2"
-            return "#666"
+            var c = "#666"
+            if (r === "PM") c = "#00aaaa"      // Much darker Cyan
+            else if (r === "EX+" || r === "EX") c = "#5865F2" // Brighter, slightly purplish Blue
+            else if (r === "AA" || r === "A") c = "#9050B0"   // Purple (Desaturated)
+            else if (r === "B" || r === "C" || r === "D") c = "#D04040" // Red (Desaturated)
+            
+            if (isFiltered) return blendWithGray(c, 0.4)
+            return c
         }
         
         // Helper function for clear type text
@@ -357,6 +354,8 @@ Item {
                 switch(diffName) {
                     case "PST": return "#F8FAFA"  // Very light blue-gray
                     case "PRS": return "#F8FAF8"  // Very light green-gray
+                    case "FTR": return "#FAF8FC"  // Very light purple-gray
+                    case "BYD": return "#FAF8F8"  // Very light red-gray
                     case "ETR": return "#F8F8F8"  // Light gray
                     default: return "#FAF8F8"    // Very light red-gray
                 }
@@ -365,6 +364,8 @@ Item {
             switch(diffName) {
                 case "PST": return "#F5FCFF"
                 case "PRS": return "#F0FFF0"
+                case "FTR": return "#F8F0FF" // Light purple for Future
+                case "BYD": return "#FFF5F5" // Light red for Beyond
                 case "ETR": return "#F5F0F5"
                 default: return "#FFF5F5"
             }
