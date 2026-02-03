@@ -431,8 +431,8 @@ Item {
                                 { label: "PST", color: "#00A0E9", code: 0 },
                                 { label: "PRS", color: "#50C050", code: 1 },
                                 { label: "FTR", color: "#A060FF", code: 2 },
-                                { label: "BYD", color: "#E04040", code: 3 },
-                                { label: "ETR", color: "#808080", code: 4 }
+                                { label: "ETR", color: "#808080", code: 4 },
+                                { label: "BYD", color: "#E04040", code: 3 }
                             ]
                             
                             delegate: Item {
