@@ -1,9 +1,10 @@
 from configuration import config
 import time
-from browserdriver import get_driver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+import locale as sys_locale
+from datetime import datetime
+from playwright.sync_api import sync_playwright
+from playwright_stealth import Stealth
+from browser_utils import get_browser
 from bs4 import BeautifulSoup
 from db_utils import get_connection, init_songs_db
 
@@ -13,21 +14,43 @@ LOAD_DETECT_SELECTOR = 'div:nth-child(1) > div > div > table th:nth-child(4)'
 
 # TODO: compare arcaea version with db and call open_wiki if needed
 def open_wiki():
-    driver = None
+    playwright = None
+    browser = None
     try:
-        driver = get_driver(headless=True)
-        assert driver is not None, "unsupported browser"
+        playwright = sync_playwright().start()
+        # Firefox 사용 (Chromium보다 봇 탐지 회피에 유리)
+        browser = playwright.firefox.launch(headless=False)
         
-        driver.get(WIKI_URL)
+        # 시스템 로케일 및 타임존 가져오기
+        system_locale = sys_locale.getdefaultlocale()[0] or 'en-US'
+        system_locale = system_locale.replace('_', '-')  # ko_KR -> ko-KR
+        system_timezone = datetime.now().astimezone().tzinfo.key if hasattr(datetime.now().astimezone().tzinfo, 'key') else 'UTC'
         
-        wait = WebDriverWait(driver, 30)
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, LOAD_DETECT_SELECTOR)))
-        wait.until(EC.text_to_be_present_in_element((By.CSS_SELECTOR, LOAD_DETECT_SELECTOR), 'PST'))
-
-        table_body = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, TABLE_SELECTOR)))
+        # 현실적인 브라우저 설정으로 컨텍스트 생성
+        context = browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            locale=system_locale,
+            timezone_id=system_timezone,
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
+        )
+        page = context.new_page()
+        
+        # Stealth 모드 적용 (봇 감지 회피)
+        Stealth().apply_stealth_sync(context)
+        
+        page.goto(WIKI_URL, timeout=60000)  # 타임아웃 증가
+        
+        # Wait for table to load
+        page.wait_for_selector(LOAD_DETECT_SELECTOR, timeout=30000)
+        page.wait_for_function(
+            f"document.querySelector('{LOAD_DETECT_SELECTOR}')?.textContent?.includes('PST')",
+            timeout=30000
+        )
+        
+        table_body = page.wait_for_selector(TABLE_SELECTOR, timeout=30000)
         
         print("테이블 HTML 가져오는 중...")
-        table_html = table_body.get_attribute("innerHTML")
+        table_html = table_body.inner_html()
         
         soup = BeautifulSoup(table_html, 'html.parser')
         rows = soup.find_all('tr')
@@ -77,9 +100,11 @@ def open_wiki():
     except Exception as e:
         print(f"위키 크롤링 중 오류 발생: {e}")
     finally:
-        if driver:
+        if browser:
             time.sleep(10)
-            driver.quit()
+            browser.close()
+        if playwright:
+            playwright.stop()
 
 def save_data(data):
     init_songs_db()

@@ -9,11 +9,8 @@ import time
 import os
 import base64
 from datetime import datetime, timezone
-from browserdriver import get_driver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchWindowException, WebDriverException
+from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext, TimeoutError as PlaywrightTimeout
+from browser_utils import get_browser
 from enum import IntEnum
 from dataclasses import dataclass, field
 from collections import deque
@@ -28,7 +25,6 @@ ALBUM_JACKET_SELECTOR = "img.album-jacket"
 DIFFICULTY_NAMES = {0: 'pst', 1: 'prs', 2: 'ftr', 3: 'byd', 4: 'etr'}
 
 
-
 @dataclass
 class AnalysisStatus:
     status: str = 'closed' # 'closed', 'login', 'analyzing', 'ready'
@@ -36,10 +32,46 @@ class AnalysisStatus:
     logs: deque = field(default_factory=lambda: deque(maxlen=50))
     is_running: bool = False
 
+
+class ThumbnailCollector:
+    """Response 인터셉트를 통한 썸네일 수집기"""
+    
+    def __init__(self):
+        self.cached_images: Dict[str, bytes] = {}
+    
+    def handle_response(self, response):
+        """Response 이벤트 핸들러 - webassets 이미지를 캐싱"""
+        try:
+            url = response.url
+            if "webassets.lowiro.com" in url and any(ext in url for ext in ['.jpg', '.png', '.webp']):
+                filename = url.split('/')[-1].split('?')[0]
+                # Response body를 동기적으로 가져옴
+                try:
+                    body = response.body()
+                    self.cached_images[filename] = body
+                except Exception:
+                    pass  # Response body를 가져올 수 없는 경우 무시
+        except Exception:
+            pass
+    
+    def get_image(self, filename: str) -> Optional[bytes]:
+        """캐싱된 이미지 데이터 반환"""
+        return self.cached_images.get(filename)
+    
+    def clear(self):
+        """캐시 초기화"""
+        self.cached_images.clear()
+
+
 class ArcaeaOnline:
     def __init__(self):
         self.status = AnalysisStatus()
-        self.driver = None
+        self.playwright = None
+        self.browser: Optional[Browser] = None
+        self.context: Optional[BrowserContext] = None
+        self.page: Optional[Page] = None
+        self.thumbnail_collector = ThumbnailCollector()
+        
         self.log_callback = None
         self.data_changed_callback = None  # Called when data is saved to DB or thumbnails are saved
         self.pin_changed_callback = None   # Called when pin data is updated
@@ -127,16 +159,21 @@ class ArcaeaOnline:
         
         try:
             self.log("Initializing browser...")
-            self.driver = get_driver(enable_performance_log=True)
-            assert self.driver is not None, "unsupported browser"
-
-            self.driver.set_window_size(600, 1000)
+            self.playwright = sync_playwright().start()
+            self.browser = get_browser(self.playwright, headless=False)
+            self.context = self.browser.new_context(
+                viewport={'width': 600, 'height': 1000}
+            )
+            self.page = self.context.new_page()
             
-            # CDP Network 도메인 활성화 (로그 수집을 위해 필수) - login 전에 위치 복구
-            try:
-                self.driver.execute_cdp_cmd('Network.enable', {})
-            except Exception as e:
-                self.log(f"Failed to enable Network domain: {e}")
+            # 브라우저 종료 이벤트 리스너
+            self._browser_closed = False
+            self.page.on("close", lambda: setattr(self, '_browser_closed', True))
+            self.context.on("close", lambda: setattr(self, '_browser_closed', True))
+            self.browser.on("disconnected", lambda: setattr(self, '_browser_closed', True))
+            
+            # Response 인터셉트 설정 (썸네일 캐싱용)
+            self.page.on("response", self.thumbnail_collector.handle_response)
 
             self.login(url)
             
@@ -154,82 +191,123 @@ class ArcaeaOnline:
             self.current_sort = None
             self.current_search_text = ''
 
-            while self.status.is_running:
+            while self.status.is_running and not self._browser_closed:
                 try:
-                    # Polling for page change with short timeout to check is_running frequency
-                    WebDriverWait(self.driver, 1).until(self.has_page_changed)
-                except TimeoutException:
+                    # Polling for page change
+                    if self.has_page_changed():
+                        pass  # Continue to process
+                    else:
+                        time.sleep(1)
+                        continue
+                except Exception as e:
+                    # 브라우저 종료 감지
+                    if self._is_browser_closed_error(e):
+                        break
+                    time.sleep(1)
                     continue
                 
                 if not self.status.is_running:
                     break
 
                 try:
-                    block_pointer_events(self.driver)
+                    block_pointer_events(self.page)
                     
                     self.status.status = 'analyzing'
                     self.notify_status_changed()
                     self.log('New page detected.')
 
-                    # Network 도메인 재활성화 (네비게이션 후 풀릴 수 있음)
+                    # 이미지 로드 대기
                     try:
-                        self.driver.execute_cdp_cmd('Network.enable', {})
-                    except:
-                        pass
-                
-                    # 이미지 로드 대기 후 Performance Log 파싱 (save_data 전에)
-                    import time as _time
-                    try:
-                        # album-jacket 이미지가 나타날 때까지 대기
-                        WebDriverWait(self.driver, 5).until(
-                            EC.presence_of_element_located((By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR))
-                        )
+                        self.page.wait_for_selector(ALBUM_JACKET_SELECTOR, timeout=5000)
                         # 이미지가 실제로 src를 가질 때까지 대기
-                        WebDriverWait(self.driver, 5).until(
-                            lambda d: d.find_element(By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR).get_attribute('src') and 
-                                      'webassets.lowiro.com' in d.find_element(By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR).get_attribute('src')
+                        self.page.wait_for_function(
+                            f"""() => {{
+                                const img = document.querySelector('{ALBUM_JACKET_SELECTOR}');
+                                return img && img.src && img.src.includes('webassets.lowiro.com');
+                            }}""",
+                            timeout=5000
                         )
-                        _time.sleep(2)  # 이미지 응답 완료 대기 (네트워크 로그 기록 시간)
-                    except:
+                        time.sleep(2)  # 이미지 응답 완료 대기
+                    except Exception as e:
+                        if self._is_browser_closed_error(e):
+                            break
                         pass
-                    
-                    thumbnail_request_ids = self.parse_thumbnail_request_ids()
-                    if thumbnail_request_ids:
-                        self.log(f"Thumbnail: Found {len(thumbnail_request_ids)} image requestIds")
-                    else:
-                        self.log("Thumbnail: No image requestIds found")
 
-                    self.save_data(thumbnail_request_ids)
+                    self.save_data()
+                except Exception as e:
+                    if self._is_browser_closed_error(e):
+                        break
                 finally:
-                    restore_pointer_events(self.driver)
+                    try:
+                        restore_pointer_events(self.page)
+                    except Exception:
+                        pass
                 
-                # Check directly if driver is alive
-                self.driver.title
-                
-                # 다음 페이지 로드 대비 Network 활성화
+                # Check if page is still alive
                 try:
-                    self.driver.execute_cdp_cmd('Network.enable', {})
-                except:
-                    pass
-        except (NoSuchWindowException, WebDriverException, AttributeError) as e:
-            msg = str(e).lower()
-            if isinstance(e, NoSuchWindowException) or 'disconnected' in msg or 'not reachable' in msg or 'target closed' in msg or 'get_attribute' in msg:
+                    self.page.title()
+                except Exception:
+                    break
+
+            # 이벤트 리스너로 종료 감지된 경우 로그 출력
+            if self._browser_closed:
+                self.log('Browser closed by user.\n')
+
+        except Exception as e:
+            if self._is_browser_closed_error(e):
                 self.log(f'Browser closed by user.\n')
             else:
                 self.log(f'Browser terminated: {type(e).__name__}; {e}')
-        except Exception as e:
-            self.log(f'Browser terminated: {type(e).__name__}; {e}')
         finally:
             self.stop()
+    
+    def _is_browser_closed_error(self, e: Exception) -> bool:
+        """브라우저/페이지 종료 관련 예외인지 확인"""
+        error_msg = str(e).lower()
+        closed_indicators = [
+            'target closed',
+            'browser has been closed',
+            'context has been closed', 
+            'page has been closed',
+            'target page, context or browser has been closed',
+            'connection closed',
+            'websocket',
+        ]
+        return any(indicator in error_msg for indicator in closed_indicators)
 
     def stop(self):
         self.status.is_running = False
         self.status.status = 'closed'
         self.notify_status_changed()
-        if self.driver:
-            try: self.driver.quit()
-            except: pass
-            self.driver = None
+        
+        try:
+            if self.page:
+                self.page.close()
+        except Exception:
+            pass
+        
+        try:
+            if self.context:
+                self.context.close()
+        except Exception:
+            pass
+        
+        try:
+            if self.browser:
+                self.browser.close()
+        except Exception:
+            pass
+        
+        try:
+            if self.playwright:
+                self.playwright.stop()
+        except Exception:
+            pass
+        
+        self.page = None
+        self.context = None
+        self.browser = None
+        self.playwright = None
 
     def login(self, url):        
         # check login session
@@ -243,47 +321,71 @@ class ArcaeaOnline:
             with open(login_filepath, 'r', encoding='utf-8') as f:
                 login_cookies = json.load(f)
             
-            self.driver.execute_cdp_cmd('Network.enable', {})
-            
+            # Playwright 쿠키 형식으로 변환
+            playwright_cookies = []
             for cookie in login_cookies:
                 try:
+                    pw_cookie = {
+                        'name': cookie['name'],
+                        'value': cookie['value'],
+                        'domain': cookie['domain'],
+                        'path': cookie.get('path', '/'),
+                    }
+                    
+                    # Secure 쿠키 처리
+                    if cookie.get('secure'):
+                        pw_cookie['secure'] = True
+                    
+                    # SameSite 처리
+                    same_site = cookie.get('sameSite', 'Lax')
+                    if same_site in ['Strict', 'Lax', 'None']:
+                        pw_cookie['sameSite'] = same_site
+                    
+                    # 민감한 쿠키는 keyring에서 가져오기
                     match cookie['name']:
                         case 'sid':
-                            cookie['value'] = keyring.get_password('ArcaeaNap', 'sid')
+                            pw_cookie['value'] = keyring.get_password('ArcaeaNap', 'sid') or ''
                         case '__stripe_sid':
-                            cookie['value'] = keyring.get_password('ArcaeaNap', '__stripe_sid')
+                            pw_cookie['value'] = keyring.get_password('ArcaeaNap', '__stripe_sid') or ''
                         case '__stripe_mid':
-                            cookie['value'] = keyring.get_password('ArcaeaNap', '__stripe_mid')
+                            pw_cookie['value'] = keyring.get_password('ArcaeaNap', '__stripe_mid') or ''
                     
-                    self.driver.execute_cdp_cmd('Network.setCookie', cookie)
+                    playwright_cookies.append(pw_cookie)
                 except Exception as e:
-                    self.log(f'Cookie injection error: {e}')
+                    self.log(f'Cookie format error: {e}')
             
-            # Network.disable 호출 제거 - 로그 수집 유지
-            # self.driver.execute_cdp_cmd('Network.disable', {})
+            # 쿠키 추가
+            self.context.add_cookies(playwright_cookies)
             
-            # 페이지 로드 전 Network 활성화 재확인
-            try:
-                self.driver.execute_cdp_cmd('Network.enable', {})
-            except:
-                pass
-
-            self.driver.get(url)
+            self.page.goto(url)
             
             # Verify session
             try:
-                def check_login(d):
-                    login_btns = d.find_elements(By.CSS_SELECTOR, LOGIN_COMPONENT_SELECTOR)
-                    if any(btn.is_displayed() for btn in login_btns):
-                        return "expired"
+                def check_login():
+                    # 로그인 버튼이 보이면 세션 만료
+                    login_btns = self.page.locator(LOGIN_COMPONENT_SELECTOR)
+                    if login_btns.count() > 0:
+                        for i in range(login_btns.count()):
+                            if login_btns.nth(i).is_visible():
+                                return "expired"
                     
-                    vue_comps = d.find_elements(By.CSS_SELECTOR, VUE_COMPONENT_SELECTOR)
-                    if any(comp.is_displayed() for comp in vue_comps):
-                        return "verified"
+                    # Vue 컴포넌트가 보이면 로그인 성공
+                    vue_comps = self.page.locator(VUE_COMPONENT_SELECTOR)
+                    if vue_comps.count() > 0:
+                        for i in range(vue_comps.count()):
+                            if vue_comps.nth(i).is_visible():
+                                return "verified"
                     
-                    return False
+                    return None
 
-                result = WebDriverWait(self.driver, 30).until(check_login)
+                # 30초간 폴링
+                start_time = time.time()
+                result = None
+                while time.time() - start_time < 30:
+                    result = check_login()
+                    if result:
+                        break
+                    time.sleep(0.5)
                 
                 if result == "verified":
                     self.log("Login session verified.")
@@ -297,24 +399,26 @@ class ArcaeaOnline:
             
         if not login_exists: # manual login
             self.log("Waiting for manual login...")
-            if ARCAEAONLINE_DOMAIN not in self.driver.current_url:
-                self.driver.get(url)
+            if ARCAEAONLINE_DOMAIN not in self.page.url:
+                self.page.goto(url)
 
-            WebDriverWait(self.driver, 300).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, VUE_COMPONENT_SELECTOR))
-            )
+            self.page.wait_for_selector(VUE_COMPONENT_SELECTOR, timeout=300000)
             
             self.log("Login complete.")
 
             # save login session
             LOGIN_COOKIE = {'sid', '__stripe_sid', '__stripe_mid'}
             SUB_COOKIE = {'_ga', 'ctrcode', 'lang'}
-            COOKIE_ESSENTIAL_FIELDS = {'name', 'value', 'domain', 'path', 'expires', 'expiry', 'httpOnly', 'secure', 'sameSite'}
+            COOKIE_ESSENTIAL_FIELDS = {'name', 'value', 'domain', 'path', 'expires', 'httpOnly', 'secure', 'sameSite'}
             
-            data = self.get_all_cookies_chromium()
+            # Playwright로 쿠키 가져오기
+            all_cookies = self.context.cookies()
             cookies = []
             
-            for cookie in data:
+            for cookie in all_cookies:
+                if 'lowiro.com' not in cookie.get('domain', ''):
+                    continue
+                    
                 if cookie['name'] in LOGIN_COOKIE:
                     keyring.set_password('ArcaeaNap', cookie['name'], cookie['value'])
                     cookie['value'] = ''
@@ -328,81 +432,79 @@ class ArcaeaOnline:
 
             self.log("Login session saved.")
 
-    def has_page_changed(self, driver):
+    def has_page_changed(self) -> bool:
         if not self.status.is_running:
             return False
         
-        is_disabled = 'disabled' in (driver.find_element(By.CSS_SELECTOR, '.difficulty-select').get_attribute('class') or '')
-        if is_disabled:
-            return False
-
-        new_difficulty = driver.find_element(By.CSS_SELECTOR, ".difficulty-selector.active .label").text
-        new_pageno = driver.find_element(By.CSS_SELECTOR, '.selected.no-select').text
-        new_sort = driver.find_element(By.CSS_SELECTOR, 'div.dropdown > div > span:nth-child(1)').text
-
-        if new_difficulty != self.current_difficulty or new_pageno != self.current_pageno or new_sort != self.current_sort:
-            self.current_difficulty = new_difficulty
-            self.current_pageno = new_pageno
-            self.current_sort = new_sort
-            return True
-
-        new_search_text = driver.find_element(By.CSS_SELECTOR, 'div.search-box > input[type=text]').get_attribute('value')
-
-        if new_search_text != self.current_search_text:
-            time.sleep(0.4)
-            waited_new_search_text = driver.find_element(By.CSS_SELECTOR, 'div.search-box > input[type=text]').get_attribute('value')
-            if new_search_text != waited_new_search_text:
+        try:
+            difficulty_select = self.page.locator('.difficulty-select')
+            if 'disabled' in (difficulty_select.get_attribute('class') or ''):
                 return False
 
-            time.sleep(0.4)
-            waited_new_search_text = driver.find_element(By.CSS_SELECTOR, 'div.search-box > input[type=text]').get_attribute('value')
-            if new_search_text == waited_new_search_text:
-                self.current_search_text = new_search_text
-                return True
-            
-        return False
+            new_difficulty = self.page.locator(".difficulty-selector.active .label").text_content()
+            new_pageno = self.page.locator('.selected.no-select').text_content()
+            new_sort = self.page.locator('div.dropdown > div > span:nth-child(1)').text_content()
 
-    def save_data(self, thumbnail_request_ids: dict = None):
+            if new_difficulty != self.current_difficulty or new_pageno != self.current_pageno or new_sort != self.current_sort:
+                self.current_difficulty = new_difficulty
+                self.current_pageno = new_pageno
+                self.current_sort = new_sort
+                return True
+
+            new_search_text = self.page.locator('div.search-box > input[type=text]').input_value()
+
+            if new_search_text != self.current_search_text:
+                time.sleep(0.4)
+                waited_new_search_text = self.page.locator('div.search-box > input[type=text]').input_value()
+                if new_search_text != waited_new_search_text:
+                    return False
+
+                time.sleep(0.4)
+                waited_new_search_text = self.page.locator('div.search-box > input[type=text]').input_value()
+                if new_search_text == waited_new_search_text:
+                    self.current_search_text = new_search_text
+                    return True
+                
+            return False
+        except Exception:
+            return False
+
+    def save_data(self):
         target_element = None
-        wait = WebDriverWait(self.driver, 1)
 
         while self.status.is_running:
             try:
-                target_element = wait.until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, VUE_COMPONENT_SELECTOR))
-                )
+                target_element = self.page.wait_for_selector(VUE_COMPONENT_SELECTOR, timeout=1000)
+                break
             except Exception:
                 continue
-
-            break
 
         try:
             user_data = None
             while self.status.is_running:
                 try:
-                    user_data = wait.until(
-                        lambda d: d.execute_script("""
-                            var vue = arguments[0].__vue__;
-                            return {
-                                userScores: vue.userScores,
-                                dropDownSelectedValue: vue.dropDownSelectedValue,
-                                searchTerm: vue.searchTerm,
-                                currentPage: vue.currentPage,
-                                selectedDifficulty: vue.selectedDifficulty,
-                                totalPage: vue.totalPage,
-                                count: vue.count
-                            };
-                        """, target_element)
-                    )
+                    user_data = self.page.evaluate("""(element) => {
+                        var vue = element.__vue__;
+                        return {
+                            userScores: vue.userScores,
+                            dropDownSelectedValue: vue.dropDownSelectedValue,
+                            searchTerm: vue.searchTerm,
+                            currentPage: vue.currentPage,
+                            selectedDifficulty: vue.selectedDifficulty,
+                            totalPage: vue.totalPage,
+                            count: vue.count
+                        };
+                    }""", target_element)
+                    break
                 except Exception:
-                    continue
-
-                if user_data == self.previous_user_data:
                     time.sleep(0.5)
                     continue
 
-                self.previous_user_data = user_data
-                break
+            if user_data == self.previous_user_data:
+                time.sleep(0.5)
+                return
+
+            self.previous_user_data = user_data
             
             user_scores_data = None
             if user_data is not None:
@@ -690,7 +792,7 @@ class ArcaeaOnline:
                     
                     # 썸네일 다운로드 (DB 저장과 별개로 수행)
                     try:
-                        self.save_thumbnails(user_scores_data, difficulty, thumbnail_request_ids)
+                        self.save_thumbnails(user_scores_data, difficulty)
                     except Exception as e:
                         self.log(f"Thumbnail save error: {e}")
                         import traceback
@@ -701,73 +803,12 @@ class ArcaeaOnline:
                 self.status.status = 'ready'
                 self.notify_status_changed()
 
-    def parse_thumbnail_request_ids(self) -> dict[str, tuple[str, bool]]:
-        """
-        Performance Log에서 webassets 이미지의 requestId를 파싱
-        Returns:
-            dict: {filename: (requestId, fromDiskCache)}
-        """
-        result = {}
-        
-        try:
-            logs = self.driver.get_log("performance")
-            
-            for entry in logs:
-                try:
-                    message = json.loads(entry["message"])["message"]
-                    
-                    if message.get("method") == "Network.responseReceived":
-                        params = message.get("params", {})
-                        response = params.get("response", {})
-                        url = response.get("url", "")
-                        
-                        if "webassets.lowiro.com" in url and any(ext in url for ext in ['.jpg', '.png', '.webp']):
-                            request_id = params.get("requestId")
-                            from_disk_cache = response.get("fromDiskCache", False) or response.get("fromServiceWorker", False)
-                            
-                            filename = url.split('/')[-1].split('?')[0]
-                            result[filename] = (request_id, from_disk_cache)
-                except:
-                    continue
-            
-            return result
-            
-            # if result:
-            #     self.log(f"Thumbnail: Found {len(result)} image requestIds in performance log")
-            return result
-        except Exception as e:
-            self.log(f"Error parsing performance log: {e}")
-            return {}
-
-    def download_thumbnail_via_cdp(self, request_id: str) -> bytes | None:
-        """CDP를 통해 브라우저 메모리에서 이미지 데이터 가져오기"""
-        try:
-            response_body = self.driver.execute_cdp_cmd(
-                "Network.getResponseBody",
-                {"requestId": request_id}
-            )
-            
-            body = response_body.get("body")
-            is_base64 = response_body.get("base64Encoded", False)
-            
-            if body:
-                if is_base64:
-                    return base64.b64decode(body)
-                else:
-                    return body.encode('utf-8')
-            
-            return None
-        except Exception as e:
-            return None
-
-    def save_thumbnails(self, user_scores_data: list, difficulty: int, request_id_map: dict):
+    def save_thumbnails(self, user_scores_data: list, difficulty: int):
         """
         현재 페이지의 썸네일 이미지를 저장
         파일명 형식: {song_id}_{difficulty}.jpg
+        Response 인터셉트 방식으로 캐싱된 이미지 사용
         """
-        if not request_id_map:
-            return
-        
         # 썸네일 저장 경로
         thumbnails_dir = os.path.join(config['general']['cache_path'], 'thumbnails')
         os.makedirs(thumbnails_dir, exist_ok=True)
@@ -776,7 +817,7 @@ class ArcaeaOnline:
         
         # 이미지 요소 가져오기
         try:
-            img_elements = self.driver.find_elements(By.CSS_SELECTOR, ALBUM_JACKET_SELECTOR)
+            img_elements = self.page.locator(ALBUM_JACKET_SELECTOR).all()
         except Exception as e:
             self.log(f"Thumbnail: Failed to find image elements: {e}")
             return
@@ -800,7 +841,7 @@ class ArcaeaOnline:
                 filename = f"{song_id}_{difficulty_name}.jpg"
                 filepath = os.path.join(thumbnails_dir, filename)
                 
-                # 이미 존재하면 스킵 (파일 존재 확인은 ~0.01ms로 빠름)
+                # 이미 존재하면 스킵
                 if os.path.exists(filepath):
                     skipped_count += 1
                     continue
@@ -812,46 +853,22 @@ class ArcaeaOnline:
                 
                 url_filename = img_url.split('/')[-1].split('?')[0]
                 
-                # requestId 찾기
-                if url_filename not in request_id_map:
-                    not_found_count += 1
-                    continue
-                
-                request_id, _ = request_id_map[url_filename]
-                
-                # CDP로 이미지 다운로드
-                img_data = self.download_thumbnail_via_cdp(request_id)
+                # 캐싱된 이미지 찾기
+                img_data = self.thumbnail_collector.get_image(url_filename)
                 
                 if img_data:
                     with open(filepath, 'wb') as f:
                         f.write(img_data)
                     saved_count += 1
                     self.notify_data_changed()
+                else:
+                    not_found_count += 1
                     
             except Exception as e:
                 continue
         
         if saved_count > 0 or skipped_count > 0 or not_found_count > 0:
             self.log(f"Thumbnail: saved={saved_count}, skipped={skipped_count}, not_found={not_found_count}")
-
-    def get_all_cookies_chromium(self):
-        try:
-            self.driver.execute_cdp_cmd('Network.enable', {})
-            result = self.driver.execute_cdp_cmd('Network.getAllCookies', {})
-            cookies = result['cookies']
-        except Exception as e:
-            self.log(f'Error getting cookies via CDP: {e}')
-            raise
-        finally:
-            try: self.driver.execute_cdp_cmd('Network.disable', {})
-            except: pass
-        
-        target_cookies = []
-        for cookie in cookies:
-            if 'lowiro.com' in cookie['domain']:
-                target_cookies.append(cookie)
-                
-        return target_cookies
 
     def get_pin_id(self, difficulty) -> int | None:
         score_filepath = os.path.join(config['general']['cache_path'], 'user_scores.db')
@@ -912,6 +929,7 @@ class ArcaeaOnline:
         if self.log_callback:
             self.log_callback(formatted_message)
 
+
 def check_db_data():
     DB_FILENAME = 'user_scores.db'
     DB_FILEPATH = os.path.join(config['general']['cache_path'], DB_FILENAME)
@@ -952,6 +970,7 @@ def check_db_data():
 
     except Exception as e:
         print(f"Error checking DB: {e}")
+
 
 if __name__=='__main__':
     analyzer = ArcaeaOnline()
