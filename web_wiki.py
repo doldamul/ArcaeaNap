@@ -1,63 +1,47 @@
 from configuration import config
-import time
-import locale as sys_locale
-from datetime import datetime
-from playwright.sync_api import sync_playwright
-from playwright_stealth import Stealth
-from browser_utils import get_browser
+import requests
 from bs4 import BeautifulSoup
 from db_utils import get_connection, init_songs_db
 
-WIKI_URL = 'https://arcaea.fandom.com/wiki/Songs_by_Date'
-TABLE_SELECTOR = 'table.wikitable:nth-child(1) > tbody:nth-child(2)'
-LOAD_DETECT_SELECTOR = 'div:nth-child(1) > div > div > table th:nth-child(4)'
+WIKI_API_URL = 'https://arcaea.fandom.com/api.php'
+WIKI_PAGE = 'Songs_by_Date'
 
-# TODO: compare arcaea version with db and call open_wiki if needed
 def open_wiki():
-    playwright = None
-    browser = None
     try:
-        playwright = sync_playwright().start()
-        # Firefox 사용 (Chromium보다 봇 탐지 회피에 유리)
-        browser = playwright.firefox.launch(headless=False)
+        print("request data to MediaWiki API...")
         
-        # 시스템 로케일 및 타임존 가져오기
-        system_locale = sys_locale.getdefaultlocale()[0] or 'en-US'
-        system_locale = system_locale.replace('_', '-')  # ko_KR -> ko-KR
-        system_timezone = datetime.now().astimezone().tzinfo.key if hasattr(datetime.now().astimezone().tzinfo, 'key') else 'UTC'
+        params = {
+            'action': 'parse',
+            'page': WIKI_PAGE,
+            'format': 'json',
+            'prop': 'text'
+        }
         
-        # 현실적인 브라우저 설정으로 컨텍스트 생성
-        context = browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            locale=system_locale,
-            timezone_id=system_timezone,
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
-        )
-        page = context.new_page()
+        response = requests.get(WIKI_API_URL, params=params, timeout=30)
+        response.raise_for_status()
         
-        # Stealth 모드 적용 (봇 감지 회피)
-        Stealth().apply_stealth_sync(context)
+        data = response.json()
         
-        page.goto(WIKI_URL, timeout=60000)  # 타임아웃 증가
+        if 'error' in data:
+            print(f"API Error: {data['error']['info']}")
+            return
         
-        # Wait for table to load
-        page.wait_for_selector(LOAD_DETECT_SELECTOR, timeout=30000)
-        page.wait_for_function(
-            f"document.querySelector('{LOAD_DETECT_SELECTOR}')?.textContent?.includes('PST')",
-            timeout=30000
-        )
+        html = data['parse']['text']['*']
         
-        table_body = page.wait_for_selector(TABLE_SELECTOR, timeout=30000)
+        soup = BeautifulSoup(html, 'html.parser')
         
-        print("테이블 HTML 가져오는 중...")
-        table_html = table_body.inner_html()
+        # 첫 번째 wikitable 찾기
+        table = soup.find('table', class_='wikitable')
+        if not table:
+            print("table not found")
+            return
         
-        soup = BeautifulSoup(table_html, 'html.parser')
-        rows = soup.find_all('tr')
+        tbody = table.find('tbody')
+        rows = tbody.find_all('tr') if tbody else table.find_all('tr')
         
         songs_data = []
         
-        print(f"총 {len(rows)}개의 행 발견...")
+        print(f"found {len(rows)} rows")
         
         for row in rows:
             cells = row.find_all('td')
@@ -90,26 +74,22 @@ def open_wiki():
                         songs_data.append((title, artist, length, bpm))
 
             except Exception as e:
-                print(f"행 파싱 중 오류 발생 (무시함): {e}")
+                print(f"row parsing error: {e}")
                 continue
 
-        print(f"완료: {len(songs_data)}곡")
+        print(f"complete: {len(songs_data)} songs")
         
         save_data(songs_data)
         
+    except requests.RequestException as e:
+        print(f"HTTP request error: {e}")
     except Exception as e:
-        print(f"위키 크롤링 중 오류 발생: {e}")
-    finally:
-        if browser:
-            time.sleep(10)
-            browser.close()
-        if playwright:
-            playwright.stop()
+        print(f"Wiki crawling error: {e}")
 
 def save_data(data):
     init_songs_db()
     
-    print(f"DB 저장 시작: songs.db")
+    print(f"save data to songs.db...")
     
     conn = get_connection()
     cursor = conn.cursor()
@@ -137,13 +117,13 @@ def save_data(data):
             updated_count += 1
             
         conn.commit()
-        print(f"DB 저장 완료: {updated_count}건 처리됨")
+        print(f"save data to songs.db complete: {updated_count} songs")
         
         # Try to fill arcaea_id from user_scores.db
         fill_missing_arcaea_ids_from_scores()
         
     except Exception as e:
-        print(f"DB 저장 중 오류 발생: {e}")
+        print(f"save data to songs.db error: {e}")
     finally:
         conn.close()
 
