@@ -519,7 +519,7 @@ Item {
                         anchors.centerIn: parent
                         spacing: 0
                         Text { 
-                            text: perceivedBp > 0 ? perceivedBp.toFixed(1) : "-"
+                            text: perceivedBp > 0 ? (Math.round(perceivedBp * 100) % 10 === 0 ? perceivedBp.toFixed(1) : perceivedBp.toFixed(2)) : "-"
                             font.bold: true; font.pixelSize: 12; color: effectiveTextColor
                             anchors.horizontalCenter: parent.horizontalCenter
                         }

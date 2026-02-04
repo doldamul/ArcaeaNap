@@ -44,7 +44,7 @@ def open_sheet():
         print(f"Processing sheet: {tab_name}")
         try:
             tab = sheet.worksheet(tab_name)
-            all_values = tab.get_values()
+            all_values = tab.get_values(value_render_option='UNFORMATTED_VALUE')
             
             if not all_values:
                 continue
