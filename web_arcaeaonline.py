@@ -125,6 +125,9 @@ class ArcaeaOnline:
     def set_status_changed_callback(self, callback):
         self.status_changed_callback = callback
     
+    def set_progress_changed_callback(self, callback):
+        self.progress_changed_callback = callback
+    
     def notify_data_changed(self):
         """Notify that data has been saved (DB records or thumbnails)"""
         if self.data_changed_callback:
@@ -148,6 +151,14 @@ class ArcaeaOnline:
                 self.status_changed_callback()
             except Exception as e:
                 self.log(f"Status changed callback error: {e}")
+
+    def notify_progress_changed(self):
+        """Notify that progress data has changed"""
+        if hasattr(self, 'progress_changed_callback') and self.progress_changed_callback:
+            try:
+                self.progress_changed_callback()
+            except Exception as e:
+                self.log(f"Progress changed callback error: {e}")
 
     def start(self):
         self.status.is_running = True
@@ -190,6 +201,8 @@ class ArcaeaOnline:
             self.current_pageno = None
             self.current_sort = None
             self.current_search_text = ''
+            
+            self.notify_progress_changed()
 
             while self.status.is_running and not self._browser_closed:
                 try:
@@ -601,6 +614,8 @@ class ArcaeaOnline:
                                 break
                 else:
                     self.total_page[difficulty] = user_data['totalPage']
+            
+            self.notify_progress_changed()
 
             record_count = user_data['count']
 

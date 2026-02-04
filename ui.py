@@ -64,6 +64,7 @@ class AnalysisHandler(QObject):
     dataUpdated = pyqtSignal()  # Emitted when user_scores.db or thumbnails are updated
     pinUpdated = pyqtSignal()   # Emitted when pin data is updated
     statusChanged = pyqtSignal(str, arguments=['status'])  # Emitted when analysis status changes
+    progressChanged = pyqtSignal() # Emitted when progress data (checked_page/total_page) changes
 
     def __init__(self):
         super().__init__()
@@ -84,6 +85,7 @@ class AnalysisHandler(QObject):
         self.analyzer.set_data_changed_callback(self.emit_data_updated)
         self.analyzer.set_pin_changed_callback(self.emit_pin_updated)
         self.analyzer.set_status_changed_callback(self.emit_status_changed)
+        self.analyzer.set_progress_changed_callback(self.emit_progress_changed)
         
         self.thread = threading.Thread(target=self.analyzer.start, daemon=True)
         self.thread.start()
@@ -108,6 +110,9 @@ class AnalysisHandler(QObject):
         if self.analyzer:
             self.statusChanged.emit(self.analyzer.status.status)
 
+    def emit_progress_changed(self):
+        self.progressChanged.emit()
+
     @pyqtSlot(result=str)
     def getStatus(self):
         """Returns current analysis status: 'closed', 'login', 'ready', 'analyzing'"""
@@ -125,6 +130,19 @@ class AnalysisHandler(QObject):
         if self.analyzer and self.analyzer.status.pin_updates:
             return {str(k): v for k, v in self.analyzer.status.pin_updates.items()}
         return {}
+    
+    @pyqtSlot(result='QVariant')
+    def getProgress(self):
+        """Returns current scraping progress for each difficulty."""
+        if not self.analyzer:
+            return {}
+        
+        result = {}
+        for diff in range(5):
+            checked = len(self.analyzer.checked_page.get(diff, set()))
+            total = self.analyzer.total_page.get(diff)
+            result[str(diff)] = {"checked": checked, "total": total}
+        return result
 
     @pyqtSlot(result='QVariant')
     def getRandomThumbnails(self):

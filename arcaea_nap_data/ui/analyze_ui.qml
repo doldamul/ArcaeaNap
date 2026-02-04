@@ -375,9 +375,11 @@ Item {
 
                     // --- Pin Data ---
                     property var pinDates: ({})
+                    property var progressData: ({})
 
                     Component.onCompleted: {
                         updatePinDates()
+                        updateProgressData()
                     }
 
                     Connections {
@@ -385,10 +387,17 @@ Item {
                         function onPinUpdated() {
                             lastSavedInfoContent.updatePinDates()
                         }
+                        function onProgressChanged() {
+                            lastSavedInfoContent.updateProgressData()
+                        }
                     }
 
                     function updatePinDates() {
                         pinDates = analysisHandler.getPinDates()
+                    }
+
+                    function updateProgressData() {
+                        progressData = analysisHandler.getProgress()
                     }
                     
                     function formatPinDate(timestamp) {
@@ -464,12 +473,87 @@ Item {
                                         }
                                     }
                                     
-                                    Text { 
+                                    // Content Container
+                                    Item {
+                                        id: progressContainer
                                         Layout.fillWidth: true
-                                        text: lastSavedInfoContent.formatPinDate(lastSavedInfoContent.pinDates[String(modelData.code)])
-                                        font.pixelSize: 13
-                                        font.bold: true
-                                        color: "#333"
+                                        Layout.fillHeight: true
+
+                                        property bool hasPinInfo: {
+                                            var ts = lastSavedInfoContent.pinDates[String(modelData.code)]
+                                            return (ts && ts > 0) === true
+                                        }
+                                        property bool isWebPageOpen: statusBar.analysisStatus !== "closed"
+                                        
+                                        property var diffProgress: lastSavedInfoContent.progressData[String(modelData.code)] || {}
+                                        property bool hasTotal: diffProgress.total !== undefined && diffProgress.total !== null
+                                        property int totalPages: hasTotal ? diffProgress.total : 0
+                                        property int checkedPages: diffProgress.checked || 0
+                                        
+                                        // Show Progress Bar only when: web page open AND total_page known AND no pin data
+                                        property bool showProgressBar: isWebPageOpen && hasTotal && !hasPinInfo
+
+                                        // 1. Date Text
+                                        Text { 
+                                            anchors.fill: parent
+                                            verticalAlignment: Text.AlignVCenter
+                                            visible: !progressContainer.showProgressBar
+                                            text: lastSavedInfoContent.formatPinDate(lastSavedInfoContent.pinDates[String(modelData.code)])
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                            color: "#333"
+                                            elide: Text.ElideRight
+                                        }
+
+                                        // 2. Progress Bar Row
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            visible: progressContainer.showProgressBar
+                                            spacing: 8
+                                            
+                                            // Bar Track
+                                            Rectangle {
+                                                id: trackRect
+                                                Layout.fillWidth: true
+                                                height: 6
+                                                radius: 3
+                                                color: "#E0E0E0"
+                                                clip: true
+                                                
+                                                // Bar Indicator
+                                                Rectangle {
+                                                    id: pBar
+                                                    height: parent.height
+                                                    // Width logic: 
+                                                    // If totalPages known > 0: calculate percentage
+                                                    // If totalPages known == 0 (start): 0
+                                                    // If totalPages unknown (null): show full bar (or indeterminate style if preferred, here indeterminate -> 0 or handling separate?)
+                                                    // Actually if total is unknown, we can't show progress.
+                                                    // The requirement: "Show progress bar". If unknown, maybe show "0%" or "??"
+                                                    // Let's implement: if total known -> progress. if total unknown -> 0 width
+                                                    
+                                                    width: progressContainer.totalPages > 0 ? 
+                                                           (parent.width * (progressContainer.checkedPages / progressContainer.totalPages)) : 0
+                                                           
+                                                    color: modelData.color
+                                                    radius: 3
+                                                    
+                                                    Behavior on width { NumberAnimation { duration: 200 } }
+                                                }
+                                            }
+                                            
+                                            // Percentage Label
+                                            Text {
+                                                text: progressContainer.hasTotal && progressContainer.totalPages > 0
+                                                      ? Math.floor((progressContainer.checkedPages / progressContainer.totalPages) * 100) + "%" 
+                                                      : "?%"
+                                                font.pixelSize: 11
+                                                font.weight: Font.Normal
+                                                color: "black"
+                                                Layout.minimumWidth: 20
+                                                horizontalAlignment: Text.AlignRight
+                                            }
+                                        }
                                     }
                                 }
                             }
