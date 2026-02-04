@@ -478,7 +478,7 @@ Item {
                         anchors.centerIn: parent
                         spacing: 0
                         Text { 
-                            text: shinyBp > 0 ? shinyBp.toFixed(1) : "-"
+                            text: shinyBp > 0 ? (Math.round(shinyBp * 100) % 10 === 0 ? shinyBp.toFixed(1) : shinyBp.toFixed(2)) : "-"
                             font.bold: true; font.pixelSize: 12; color: effectiveTextColor
                             anchors.horizontalCenter: parent.horizontalCenter
                         }
