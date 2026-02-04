@@ -881,7 +881,7 @@ Item {
                                     }
 
                                     delegate: ItemDelegate {
-                                        width: parent.width
+                                        width: sortCombo.width
                                         height: 32 // Fixed height for consistency
                                         
                                         contentItem: Text {
