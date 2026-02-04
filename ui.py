@@ -839,7 +839,7 @@ class StatisticsHandler(QObject):
             rank = item.get('rank', '')
             has_score = item.get('hasScore', False)
             if has_score:
-                return f"{score:,} ({rank})"
+                return f"{score:,}"
             return "-"
         elif mode == "max":
             # Display value: perfect + near + miss - shiny_perfect
