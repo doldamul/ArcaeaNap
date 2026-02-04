@@ -879,13 +879,13 @@ class ArcaeaOnline:
                     cursor.execute('SELECT score_id FROM pin WHERE difficulty = ?', (difficulty,))
                 except sqlite3.OperationalError:
                     cursor.execute('DROP TABLE IF EXISTS pin')
-                    cursor.execute('CREATE TABLE pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER)')
+                    cursor.execute('CREATE TABLE pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER, updated_at INTEGER)')
                     cursor.execute('SELECT score_id FROM pin WHERE difficulty = ?', (difficulty,))
                 
                 row = cursor.fetchone()
                 
                 if row is None:
-                    cursor.execute('CREATE TABLE IF NOT EXISTS pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER)')
+                    cursor.execute('CREATE TABLE IF NOT EXISTS pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER, updated_at INTEGER)')
                     cursor.execute('INSERT OR IGNORE INTO pin (difficulty, score_id) VALUES (?, NULL)', (difficulty,))
                     conn.commit()
                     return None
