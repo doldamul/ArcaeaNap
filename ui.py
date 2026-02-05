@@ -1308,6 +1308,111 @@ class StatisticsHandler(QObject):
         self._load_data()
 
 
+
+class SettingsHandler(QObject):
+    settingsChanged = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+
+    # --- General Settings ---
+    @pyqtSlot(result=str)
+    def getCachePath(self):
+        return config['general']['cache_path']
+
+    @pyqtSlot(str)
+    def setCachePath(self, path):
+        # Allow use of file:// prefix for drag-and-drop support or dialog returns
+        if path.startswith("file:///"):
+            path = path[8:]
+        config['general']['cache_path'] = path
+        self.settingsChanged.emit()
+
+    @pyqtSlot(result=bool)
+    def getAnalyzeModeEnabled(self):
+        return config['general']['analyze_mode']
+
+    @pyqtSlot(bool)
+    def setAnalyzeModeEnabled(self, enabled):
+        config['general']['analyze_mode'] = str(enabled)
+        self.settingsChanged.emit()
+        
+    @pyqtSlot()
+    def updateSongDatabase(self):
+        print("[SettingsHandler] Update Song Database requested. (Not implemented yet)")
+        # TODO: Implement database rebuild logic here (web_consultantsheet + web_wiki)
+
+    # --- Profile Settings ---
+    @pyqtSlot(result=bool)
+    def getShowFriendCode(self):
+        return config['profile']['show_friend_code']
+
+    @pyqtSlot(bool)
+    def setShowFriendCode(self, show):
+        config['profile']['show_friend_code'] = str(show)
+        self.settingsChanged.emit()
+
+    @pyqtSlot(result=bool)
+    def getShowPotential(self):
+        return config['profile']['show_potential']
+
+    @pyqtSlot(bool)
+    def setShowPotential(self, show):
+        config['profile']['show_potential'] = str(show)
+        self.settingsChanged.emit()
+
+    @pyqtSlot(result=str)
+    def getProfileImage(self):
+        return config['profile']['profile_image']
+
+    @pyqtSlot(str)
+    def setProfileImage(self, path):
+        if path.startswith("file:///"):
+            path = path[8:]
+        config['profile']['profile_image'] = path
+        self.settingsChanged.emit()
+
+    @pyqtSlot(result=str)
+    def getProfileDescription(self):
+        return config['profile']['profile_description']
+
+    @pyqtSlot(str)
+    def setProfileDescription(self, text):
+        config['profile']['profile_description'] = text
+        self.settingsChanged.emit()
+
+    @pyqtSlot(result=str)
+    def getGroupingCriteria(self):
+        return config['profile']['grouping_criteria']
+
+    @pyqtSlot(str)
+    def setGroupingCriteria(self, criteria):
+        # 'song' or 'chart'
+        config['profile']['grouping_criteria'] = criteria
+        self.settingsChanged.emit()
+
+    @pyqtSlot(result=str)
+    def getDifficultyFilter(self):
+        return config['profile']['difficulty_filter']
+
+    @pyqtSlot(str)
+    def setDifficultyFilter(self, filters):
+        # 'all' or comma separated 'pst,prs'
+        config['profile']['difficulty_filter'] = filters
+        self.settingsChanged.emit()
+
+    # --- Account Connections (Placeholder) ---
+    @pyqtSlot(result=bool)
+    def isArcaeaOnlineConnected(self):
+        # TODO: Check actual connection status
+        return False
+
+    @pyqtSlot(result=bool)
+    def isGoogleSheetConnected(self):
+        # TODO: Check actual connection status
+        return False
+
+
 def main():
     fmt = QSurfaceFormat()
     fmt.setSamples(8)  # MSAA 8x
@@ -1333,6 +1438,9 @@ def main():
 
     statistics_handler = StatisticsHandler()
     engine.rootContext().setContextProperty("statisticsHandler", statistics_handler)
+
+    settings_handler = SettingsHandler()
+    engine.rootContext().setContextProperty("settingsHandler", settings_handler)
 
     qml_filename = "main.qml"
     qml_filepath = os.path.join(config['general']['cache_path'], 'ui', qml_filename)

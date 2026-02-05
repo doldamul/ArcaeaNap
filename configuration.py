@@ -19,7 +19,19 @@ _config_default = {
     'general': {
         'browser': Browser.CHROME,
         'auto_login': True,
-        'cache_path': './arcaea_nap_data/'
+        'cache_path': './arcaea_nap_data/',
+        'analyze_mode': False,
+    },
+    'profile': {
+        'show_friend_code': True,
+        'show_potential': False,
+        'profile_image': '',
+        'profile_description': '',
+        'grouping_criteria': 'song',  # 'song' or 'chart'
+        'difficulty_filter': 'all',  # 'all' or comma-separated string like 'pst,prs'
+    },
+    'sheet': {
+        'last_synced': 0,
     }
 }
 
@@ -27,7 +39,19 @@ _converters = {
     'general': {
         'browser': Browser,
         'auto_login': lambda v: v.lower() == 'true',
-        'cache_path': lambda v: (_ for _ in ()).throw(ValueError(f'invalid path: {v}')) if not os.path.isdir(os.path.dirname(os.path.abspath(v))) else v
+        'cache_path': lambda v: (_ for _ in ()).throw(ValueError(f'invalid path: {v}')) if not os.path.isdir(os.path.dirname(os.path.abspath(v))) else v,
+        'analyze_mode': lambda v: v.lower() == 'true',
+    },
+    'profile': {
+        'show_friend_code': lambda v: v.lower() == 'true',
+        'show_potential': lambda v: v.lower() == 'true',
+        'profile_image': str,
+        'profile_description': str,
+        'grouping_criteria': str,
+        'difficulty_filter': str,
+    },
+    'sheet': {
+        'last_synced': float,
     }
 }
 

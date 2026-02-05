@@ -16,6 +16,7 @@ ApplicationWindow {
     minimumHeight: 800
 
     // 현재 선택된 탭 인덱스 (0: Home, 1: Analyze, 2: Statistics)
+    // Settings는 별도 윈도우로 분리됨
     property int currentTab: 0
 
     font.family: "Segoe UI, Roboto, Helvetica, Arial, sans-serif"
@@ -174,10 +175,27 @@ ApplicationWindow {
                 anchors.fill: parent
                 hoverEnabled: true 
                 cursorShape: Qt.PointingHandCursor
-                onClicked: console.log("Settings Clicked!")
+                onClicked: {
+                    // Show settings window or bring it to focus
+                    if (settingsWindow.visible) {
+                        settingsWindow.raise()
+                        settingsWindow.requestActivate()
+                    } else {
+                        settingsWindow.show()
+                    }
+                }
             }
         }
     }
+
+    // --- Settings Window (별도 윈도우) ---
+    Loader {
+        id: settingsWindowLoader
+        source: "settings_ui.qml"
+        asynchronous: true
+    }
+    
+    property Window settingsWindow: settingsWindowLoader.item
 
     // --- 페이지 컨테이너 (StackLayout) ---
     // 현재 currentTab 값에 따라 보여주는 페이지가 바뀝니다.
