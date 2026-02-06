@@ -12,6 +12,9 @@ Item {
 
     // Stats data fetched from backend
     property var difficultyStatsData: []
+    
+    // Cache migration state - prevents image load errors during migration
+    property bool isMigrating: false
 
     Connections {
         target: statsHandler
@@ -20,6 +23,20 @@ Item {
             playTimeText.text = statsHandler.getTotalPlayTime()
             difficultyStatsData = statsHandler.getDifficultyStats()
             updateTop10()
+        }
+    }
+    
+    // Refresh thumbnail paths after cache migration
+    Connections {
+        target: settingsHandler
+        function onCacheMigrationStarting() {
+            homeRoot.isMigrating = true
+        }
+        function onCacheMigrationFinished(error) {
+            homeRoot.isMigrating = false
+            if (error === "") {
+                updateTop10()
+            }
         }
     }
     
@@ -439,7 +456,7 @@ Item {
                                     Image {
                                         id: thumbnailImage
                                         anchors.fill: parent
-                                        source: statsHandler ? statsHandler.getThumbnailPath(model.arcaeaId) : ""
+                                        source: (statsHandler && !homeRoot.isMigrating) ? statsHandler.getThumbnailPath(model.arcaeaId) : ""
                                         fillMode: Image.PreserveAspectCrop
                                         mipmap: true
                                         antialiasing: true

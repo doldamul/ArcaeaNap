@@ -170,8 +170,12 @@ class StatsHandler(QObject):
         self._total_count = 0
         self._total_time_str = "0h 0m"
         self._difficulty_stats = []  # Pre-calculated difficulty stats
-        self._thumbnails_dir = os.path.join(config['general']['cache_path'], 'thumbnails')
         self.refreshStats()
+    
+    @property
+    def _thumbnails_dir(self):
+        """동적으로 현재 cache_path 기반 thumbnails 디렉토리 반환"""
+        return os.path.join(config['general']['cache_path'], 'thumbnails')
 
     @pyqtSlot(result=int)
     def getTotalPlayCount(self):
@@ -1311,22 +1315,151 @@ class StatisticsHandler(QObject):
 
 class SettingsHandler(QObject):
     settingsChanged = pyqtSignal()
+    cachePathChanged = pyqtSignal()
+    # Migration signals
+    cacheMigrationStarting = pyqtSignal()  # Emitted before migration - QML should release file handles
+    cacheMigrationFinished = pyqtSignal(str, arguments=['error'])  # Emitted after migration with error message (empty if success)
 
     def __init__(self):
         super().__init__()
+        self._pending_migration_path = None  # Stores the new path during migration
 
     # --- General Settings ---
     @pyqtSlot(result=str)
     def getCachePath(self):
         return config['general']['cache_path']
 
+    def _get_absolute_cache_path(self, path: str) -> str:
+        """Convert cache path to absolute path, resolving relative paths from script directory."""
+        if path.startswith('./') or path.startswith('.\\'):
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            return os.path.normpath(os.path.join(base_dir, path))
+        return os.path.abspath(path)
+
     @pyqtSlot(str)
-    def setCachePath(self, path):
+    def prepareCacheMigration(self, new_path):
+        """
+        Step 1 of cache migration: Store target path and signal QML to release file handles.
+        After this, QML should show loading modal and release all file handles,
+        then call executeCacheMigration().
+        """
         # Allow use of file:// prefix for drag-and-drop support or dialog returns
-        if path.startswith("file:///"):
-            path = path[8:]
-        config['general']['cache_path'] = path
-        self.settingsChanged.emit()
+        if new_path.startswith("file:///"):
+            new_path = new_path[8:]
+        
+        old_path = config['general']['cache_path']
+        old_abs = self._get_absolute_cache_path(old_path)
+        new_abs = os.path.abspath(new_path)
+        
+        # Same path check
+        if os.path.normpath(old_abs) == os.path.normpath(new_abs):
+            return
+        
+        self._pending_migration_path = new_path
+        print(f"[SettingsHandler] Preparing cache migration to '{new_path}'...")
+        self.cacheMigrationStarting.emit()
+
+    @pyqtSlot()
+    def executeCacheMigration(self):
+        """
+        Step 2 of cache migration: Actually copy files and update config.
+        Should be called by QML after it has released all file handles.
+        """
+        import shutil
+        
+        if not self._pending_migration_path:
+            self.cacheMigrationFinished.emit("No pending migration")
+            return
+        
+        new_path = self._pending_migration_path
+        self._pending_migration_path = None
+        
+        old_path = config['general']['cache_path']
+        old_abs = self._get_absolute_cache_path(old_path)
+        new_abs = os.path.abspath(new_path)
+        
+        # Data files/folders to migrate
+        data_items = ['ui', 'thumbnails', 'user_scores.db', 'login.dat', 'songs.db', 'token.json', 'client_secret.json']
+        
+        copied_items = []
+        try:
+            # Ensure new directory exists
+            os.makedirs(new_abs, exist_ok=True)
+            
+            # Phase 1: Copy all items to new location
+            for item in data_items:
+                src = os.path.join(old_abs, item)
+                dst = os.path.join(new_abs, item)
+                
+                if not os.path.exists(src):
+                    continue
+                
+                if os.path.isdir(src):
+                    if os.path.exists(dst):
+                        shutil.rmtree(dst)
+                    shutil.copytree(src, dst)
+                else:
+                    shutil.copy2(src, dst)
+                
+                copied_items.append(item)
+            
+            # Phase 2: Verify copied items exist
+            for item in copied_items:
+                dst = os.path.join(new_abs, item)
+                if not os.path.exists(dst):
+                    raise IOError(f"Verification failed: {item} not found in new location")
+            
+            # Phase 3: Update config (this is the point of no return)
+            config['general']['cache_path'] = new_path
+            self.cachePathChanged.emit()
+            self.settingsChanged.emit()
+            
+            # Phase 4: Delete old items (failure here is acceptable - data is safe in new location)
+            for item in copied_items:
+                src = os.path.join(old_abs, item)
+                try:
+                    if os.path.isdir(src):
+                        shutil.rmtree(src, ignore_errors=True)
+                    else:
+                        os.remove(src)
+                except Exception as e:
+                    print(f"[SettingsHandler] Warning: Could not delete old {item}: {e}")
+            
+            print(f"[SettingsHandler] Cache moved from '{old_abs}' to '{new_abs}'")
+            self.cacheMigrationFinished.emit("")  # Success
+            
+        except Exception as e:
+            # Rollback: remove any partially copied items from new location
+            print(f"[SettingsHandler] Copy failed, attempting rollback...")
+            for item in copied_items:
+                dst = os.path.join(new_abs, item)
+                try:
+                    if os.path.isdir(dst):
+                        shutil.rmtree(dst, ignore_errors=True)
+                    elif os.path.exists(dst):
+                        os.remove(dst)
+                except Exception:
+                    pass
+            
+            error_msg = f"Failed to move cache: {e}"
+            print(f"[SettingsHandler] {error_msg}")
+            self.cacheMigrationFinished.emit(error_msg)
+
+    @pyqtSlot()
+    def cancelCacheMigration(self):
+        """Cancel a pending migration."""
+        self._pending_migration_path = None
+        self.cacheMigrationFinished.emit("Migration cancelled")
+
+    @pyqtSlot()
+    def openCacheFolder(self):
+        """Open the cache folder in the system file explorer."""
+        import subprocess
+        cache_path = self._get_absolute_cache_path(config['general']['cache_path'])
+        
+        if os.path.isdir(cache_path):
+            # Windows
+            subprocess.Popen(['explorer', cache_path])
 
     @pyqtSlot(result=bool)
     def getAnalyzeModeEnabled(self):

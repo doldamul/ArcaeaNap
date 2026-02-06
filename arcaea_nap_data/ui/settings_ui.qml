@@ -20,6 +20,120 @@ Window {
     // 메인 윈도우 위에 고정되지 않도록 부모 관계 해제
     transientParent: null
 
+    // Cache Migration Loading Modal
+    property bool isMigrating: false
+    
+    Connections {
+        target: settingsHandler
+        function onCacheMigrationStarting() {
+            settingsWindow.isMigrating = true
+            // Use Timer to give QML time to release file handles
+            migrationTimer.start()
+        }
+        function onCacheMigrationFinished(error) {
+            settingsWindow.isMigrating = false
+            if (error !== "") {
+                errorMessageText.text = error
+                errorPopup.open()
+            }
+        }
+    }
+    
+    Timer {
+        id: migrationTimer
+        interval: 100  // Short delay to ensure image sources are cleared
+        repeat: false
+        onTriggered: {
+            if (settingsHandler) settingsHandler.executeCacheMigration()
+        }
+    }
+    
+    // Modal Loading Overlay
+    Rectangle {
+        id: migrationOverlay
+        anchors.fill: parent
+        color: "#80000000"
+        visible: settingsWindow.isMigrating
+        z: 1000
+        
+        MouseArea {
+            anchors.fill: parent
+            // Block all mouse events
+        }
+        
+        Rectangle {
+            anchors.centerIn: parent
+            width: 280
+            height: 120
+            radius: 16
+            color: "#FFFFFF"
+            
+            Column {
+                anchors.centerIn: parent
+                spacing: 16
+                
+                BusyIndicator {
+                    running: settingsWindow.isMigrating
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+                
+                Text {
+                    text: "Moving cache files..."
+                    font.pixelSize: 14
+                    font.bold: true
+                    color: "#333"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+            }
+        }
+    }
+    
+    // Error Popup
+    Popup {
+        id: errorPopup
+        anchors.centerIn: parent
+        width: 350
+        height: errorContent.implicitHeight + 40
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        
+        background: Rectangle {
+            color: "#FFFFFF"
+            radius: 12
+            border.color: "#E53935"
+            border.width: 2
+        }
+        
+        Column {
+            id: errorContent
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 12
+            
+            Text {
+                text: "⚠️ Migration Failed"
+                font.bold: true
+                font.pixelSize: 16
+                color: "#E53935"
+            }
+            
+            Text {
+                id: errorMessageText
+                wrapMode: Text.WordWrap
+                width: parent.width
+                color: "#333"
+            }
+            
+            Basic.Button {
+                text: "OK"
+                anchors.right: parent.right
+                onClicked: errorPopup.close()
+                background: Rectangle { color: "#F0F0F0"; radius: 6 }
+            }
+        }
+    }
+
     ScrollView {
         id: scrollView
         anchors.fill: parent
@@ -67,12 +181,30 @@ Window {
                                 background: Rectangle {
                                     color: "#F5F5F5"; radius: 8; border.width: 0
                                 }
+                                
+                                // Update when cache path changes
+                                Connections {
+                                    target: settingsHandler
+                                    function onCachePathChanged() {
+                                        cachePathField.text = settingsHandler.getCachePath()
+                                    }
+                                }
                             }
                             
+                            // Open folder button
+                            Basic.Button {
+                                text: "📂"
+                                background: Rectangle { color: "#F0F0F0"; radius: 8 }
+                                onClicked: if (settingsHandler) settingsHandler.openCacheFolder()
+                                Basic.ToolTip { text: "Open folder"; visible: parent.hovered }
+                            }
+                            
+                            // Change folder button
                             Basic.Button {
                                 text: "📁"
                                 background: Rectangle { color: "#F0F0F0"; radius: 8 }
                                 onClicked: folderDialog.open()
+                                Basic.ToolTip { text: "Change folder"; visible: parent.hovered }
                             }
                         }
                     }
@@ -80,7 +212,7 @@ Window {
                     FolderDialog {
                         id: folderDialog
                         title: "Select Cache Directory"
-                        onAccepted: if (settingsHandler) settingsHandler.setCachePath(folderDialog.selectedFolder)
+                        onAccepted: if (settingsHandler) settingsHandler.prepareCacheMigration(folderDialog.selectedFolder)
                     }
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }

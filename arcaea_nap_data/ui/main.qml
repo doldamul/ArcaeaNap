@@ -248,6 +248,28 @@ ApplicationWindow {
 
     // --- Loading Overlay ---
     property bool isLoading: false
+    
+    // --- Cache Migration State ---
+    property bool isCacheMigrating: false
+    
+    Connections {
+        target: settingsHandler
+        function onCacheMigrationStarting() {
+            window.isCacheMigrating = true
+        }
+        function onCacheMigrationFinished(error) {
+            window.isCacheMigrating = false
+            // Refresh all handlers to use new thumbnail paths
+            if (error === "") {
+                if (statsHandler) {
+                    statsHandler.refreshStats()
+                }
+                if (statisticsHandler) {
+                    statisticsHandler.refreshData()
+                }
+            }
+        }
+    }
 
     Connections {
         target: startupHandler

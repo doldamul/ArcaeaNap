@@ -327,7 +327,7 @@ class ArcaeaOnline:
         login_filename = 'login.dat'
         login_filepath = os.path.join(config['general']['cache_path'], login_filename)
         
-        login_exists = os.path.exists(login_filepath) and os.path.isfile(login_filepath) and config['general']['auto_login']
+        login_exists = os.path.exists(login_filepath) and os.path.isfile(login_filepath)
         
         if login_exists: # session load
             self.log("Loading saved login session...")

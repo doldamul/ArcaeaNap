@@ -2,12 +2,6 @@ import configparser
 import os
 from enum import StrEnum, auto
 
-class Browser(StrEnum):
-    SYSTEM_DEFAULT = auto()
-    CHROME = auto()
-    EDGE = auto()
-    # FIREFOX = auto()
-
 class OS(StrEnum):
     WINDOWS = auto(),
     MACOS = auto(),
@@ -17,8 +11,6 @@ config = None
 
 _config_default = {
     'general': {
-        'browser': Browser.CHROME,
-        'auto_login': True,
         'cache_path': './arcaea_nap_data/',
         'analyze_mode': False,
     },
@@ -35,11 +27,32 @@ _config_default = {
     }
 }
 
+def _validate_cache_path(v: str) -> str:
+    """
+    Validate and normalize cache_path.
+    Supports relative paths like './...' which are resolved relative to the script directory.
+    Creates the directory if it doesn't exist.
+    """
+    # Resolve relative paths from the script's directory
+    if v.startswith('./') or v.startswith('.\\'):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        abs_path = os.path.normpath(os.path.join(base_dir, v))
+    else:
+        abs_path = os.path.abspath(v)
+    
+    # Create directory if it doesn't exist
+    if not os.path.isdir(abs_path):
+        try:
+            os.makedirs(abs_path, exist_ok=True)
+        except OSError as e:
+            raise ValueError(f'Cannot create directory: {abs_path} ({e})')
+    
+    # Return the original value (preserving relative path format in config)
+    return v
+
 _converters = {
     'general': {
-        'browser': Browser,
-        'auto_login': lambda v: v.lower() == 'true',
-        'cache_path': lambda v: (_ for _ in ()).throw(ValueError(f'invalid path: {v}')) if not os.path.isdir(os.path.dirname(os.path.abspath(v))) else v,
+        'cache_path': _validate_cache_path,
         'analyze_mode': lambda v: v.lower() == 'true',
     },
     'profile': {
@@ -103,7 +116,7 @@ class Configuration:
             self.save()
         else:
             self._config.read(self.filename, encoding="utf-8")
-            # TODO: restore when the data corrupted
+            self._sanitize_config()
             
         if __name__=='__main__':
             print(f'data validation: {self._is_valid_structure()}')
@@ -113,6 +126,59 @@ class Configuration:
             self._config.add_section(key)
             
         return SectionWrapper(self, key, self._config[key])
+
+    def _sanitize_config(self) -> None:
+        """
+        Sanitize the loaded config:
+        1. Remove sections/keys not in _config_default
+        2. Add missing keys with default values
+        3. Validate existing keys and restore defaults for invalid values
+        """
+        modified = False
+        
+        # Remove unknown sections
+        for section in self._config.sections():
+            if section not in _config_default:
+                self._config.remove_section(section)
+                print(f"[Config] Removed unknown section: [{section}]")
+                modified = True
+        
+        # For each expected section
+        for section, default_keys in _config_default.items():
+            # Add missing section
+            if not self._config.has_section(section):
+                self._config.add_section(section)
+                print(f"[Config] Added missing section: [{section}]")
+                modified = True
+            
+            # Remove unknown keys from this section
+            if self._config.has_section(section):
+                for key in list(self._config[section].keys()):
+                    if key not in default_keys:
+                        self._config.remove_option(section, key)
+                        print(f"[Config] Removed unknown key: [{section}] {key}")
+                        modified = True
+            
+            # Add missing keys with default values
+            for key, default_value in default_keys.items():
+                if not self._config.has_option(section, key):
+                    self._config.set(section, key, str(default_value))
+                    print(f"[Config] Restored missing key: [{section}] {key} = {default_value}")
+                    modified = True
+                else:
+                    # Validate existing value
+                    raw_value = self._config.get(section, key)
+                    converter = _converters.get(section, {}).get(key)
+                    if converter:
+                        try:
+                            converter(raw_value)
+                        except Exception:
+                            self._config.set(section, key, str(default_value))
+                            print(f"[Config] Restored invalid value: [{section}] {key} = {default_value} (was: {raw_value})")
+                            modified = True
+        
+        if modified:
+            self.save()
 
     def _is_valid_structure(self) -> bool:
         for section, keys in _config_default.items():
@@ -124,8 +190,8 @@ class Configuration:
         return True
 
     def save(self):
-        filepath = os.path.join(self._config['general']['cache_path'], self.filename)
-        with open(filepath, 'w', encoding='utf-8') as f:
+        # Always save to the root directory (consistent location)
+        with open(self.filename, 'w', encoding='utf-8') as f:
             self._config.write(f)
 
 config = Configuration()
