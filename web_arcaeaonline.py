@@ -1,6 +1,7 @@
 from configuration import config
 from disrupt import block_pointer_events, restore_pointer_events
 from db_utils import get_connection, resolve_song_id_for_ao, init_songs_db
+from score_repository import ScoreRepository, PlayCountRepository, PinRepository
 import sqlite3
 import pandas as pd
 import keyring
@@ -31,6 +32,18 @@ class AnalysisStatus:
     pin_updates: Dict[int, int] = field(default_factory=dict) # Difficulty -> timestamp
     logs: deque = field(default_factory=lambda: deque(maxlen=50))
     is_running: bool = False
+
+
+@dataclass
+class PageScoreData:
+    """한 페이지에서 추출된 스코어 데이터"""
+    scores: list
+    difficulty: int
+    current_page: int
+    total_page: int
+    is_date_sorted: bool
+    is_search: bool
+    record_count: int
 
 
 class ThumbnailCollector:
@@ -71,6 +84,12 @@ class ArcaeaOnline:
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
         self.thumbnail_collector = ThumbnailCollector()
+        
+        # Repository instances
+        self.db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
+        self._score_repo = ScoreRepository()
+        self._play_count_repo = PlayCountRepository()
+        self._pin_repo = PinRepository()
         
         self.log_callback = None
         self.data_changed_callback = None  # Called when data is saved to DB or thumbnails are saved
@@ -252,6 +271,8 @@ class ArcaeaOnline:
                         break
                 finally:
                     try:
+                        self.status.status = 'ready'
+                        self.notify_status_changed()
                         restore_pointer_events(self.page)
                     except Exception:
                         pass
@@ -483,340 +504,327 @@ class ArcaeaOnline:
             return False
 
     def save_data(self):
-        target_element = None
+        """
+        페이지 데이터를 DB에 저장하는 메인 진입점.
+        
+        Vue 컴포넌트에서 데이터 추출 → 페이지 진행 상태 업데이트 → DB 저장 → 썸네일 저장
+        """
+        # 1. 페이지 데이터 추출
+        page_data = self._extract_page_data()
+        if not page_data:
+            return
+        
+        difficulty = page_data.difficulty
+        
+        # 2. 페이지 진행 상태 업데이트 (날짜순 정렬 + 검색 아닐 때만)
+        if not page_data.is_search and page_data.is_date_sorted:
+            self.checked_page[difficulty].add(page_data.current_page)
+            
+            pin_id = self.get_pin_id(difficulty)
+            if pin_id:
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.cursor()
+                    self._check_pin_in_page(cursor, pin_id, page_data)
+            else:
+                self.total_page[difficulty] = page_data.total_page
+        
+        self.notify_progress_changed()
+        
+        # 3. DB 저장
+        self.log(f"Found {len(page_data.scores)} play records.")
+        
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            try:
+                # 테이블 생성
+                self._score_repo.ensure_tables(cursor)
+                
+                # INSERT 데이터 준비
+                score_inserts, count_updates = self._prepare_inserts(
+                    cursor, page_data.scores, difficulty
+                )
+                
+                # INSERT 실행
+                self._score_repo.insert_scores(cursor, score_inserts)
+                self._play_count_repo.upsert_counts(cursor, count_updates)
+                
+                # 전체 페이지 완료 시 Pin 업데이트
+                if self.all_pages_checked(difficulty):
+                    recent_id = self._score_repo.get_latest_score_id(cursor, difficulty)
+                    
+                    # 현재 Pin과 다를 때만 업데이트 (로그 스팸 방지)
+                    try:
+                        current_pin_id = self._pin_repo.get_pin(cursor, difficulty)
+                    except Exception:
+                        current_pin_id = None
+                    
+                    if recent_id != current_pin_id:
+                        self.save_pin_id(difficulty, recent_id, cursor)
+                        self.log(f'Updated pin for {Difficulty(difficulty).name}')
+                    
+                    self.rise_all_saved_flag(difficulty)
+                
+                conn.commit()
+                
+                if len(score_inserts) > 0:
+                    self.log(f"Saved/Updated {len(score_inserts)} records in '{self.db_path}'")
+                    self.notify_data_changed()
+                else:
+                    self.log(f"No records to save in '{self.db_path}'")
+                    
+            except Exception as e:
+                self.log(f"Error saving to DB: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                # 썸네일 다운로드 (DB 저장과 별개로 수행)
+                try:
+                    self.save_thumbnails(page_data.scores, difficulty)
+                except Exception as e:
+                    self.log(f"Thumbnail save error: {e}")
+                    import traceback
+                    traceback.print_exc()
 
+
+    def _extract_page_data(self) -> Optional[PageScoreData]:
+        """
+        Vue 컴포넌트에서 스코어 데이터를 추출합니다.
+        
+        Returns:
+            PageScoreData 또는 None (데이터 없음/중복시)
+        """
+        target_element = None
         while self.status.is_running:
             try:
                 target_element = self.page.wait_for_selector(VUE_COMPONENT_SELECTOR, timeout=1000)
                 break
             except Exception:
                 continue
-
-        try:
-            user_data = None
-            while self.status.is_running:
-                try:
-                    user_data = self.page.evaluate("""(element) => {
-                        var vue = element.__vue__;
-                        return {
-                            userScores: vue.userScores,
-                            dropDownSelectedValue: vue.dropDownSelectedValue,
-                            searchTerm: vue.searchTerm,
-                            currentPage: vue.currentPage,
-                            selectedDifficulty: vue.selectedDifficulty,
-                            totalPage: vue.totalPage,
-                            count: vue.count
-                        };
-                    }""", target_element)
-                    break
-                except Exception:
-                    time.sleep(0.5)
-                    continue
-
-            if user_data == self.previous_user_data:
-                time.sleep(0.5)
-                return
-
-            self.previous_user_data = user_data
-            
-            user_scores_data = None
-            if user_data is not None:
-                user_scores_data = user_data['userScores']
-
-            if not user_scores_data or len(user_scores_data) == 0:
-                self.log('Data save canceled: Current page is empty')
-                self.status.status = 'ready'
-                self.notify_status_changed()
-                return
-
-            is_datesort = user_data['dropDownSelectedValue']['value'] == 'date'
-            is_search = user_data['searchTerm'] != ''
-
-            difficulty = int(user_data['selectedDifficulty'])
-            pin_id = self.get_pin_id(difficulty)
-
-            if not is_search and is_datesort:
-                self.checked_page[difficulty].add(user_data['currentPage'])
-                
-                if pin_id:
-                    score_filepath = os.path.join(config['general']['cache_path'], 'user_scores.db')
-                    pinned_song_date = None
-                    pinned_song_id = None
-                    
-                    with sqlite3.connect(score_filepath) as conn:
-                        cursor = conn.cursor()
-                        cursor.execute('SELECT arcaea_id, time_played FROM scores WHERE id = ?', (pin_id,))
-                        row = cursor.fetchone()
-                        if row:
-                            pinned_song_id, pinned_song_date = row
-
-                            # iterate user_scores_data and compare name_id with pin data
-                            for item in user_scores_data:
-                                if item.get('song_id') != pinned_song_id:
-                                    continue
-                                
-                                # if name_id is same, compare the date
-                                item_date = item.get('time_played')
-                                if item_date == pinned_song_date:
-                                    # found pin, pin page is the last page of new data
-                                    self.total_page[difficulty] = user_data['currentPage']
-                                    self.log('Found last page of new data.')
-                                    break
-
-                                else:
-                                    # iterate db data - find previous last saved data's id in db, which is not overlaped with newer one, save to pin_id and break
-                                    current_search_date = pinned_song_date
-                                    found_new_pin = False
-
-                                    while True:
-                                        # Find candidate: newest record in DB older than current_search_date
-                                        cursor.execute('SELECT id, arcaea_id, time_played FROM scores WHERE difficulty = ? AND time_played < ? ORDER BY time_played DESC LIMIT 1', (difficulty, current_search_date))
-                                        candidate_row = cursor.fetchone()
-
-                                        if not candidate_row:
-                                            # No more history -> Set Pin to None
-                                            self.save_pin_id(difficulty, None, cursor)
-                                            found_new_pin = True
-                                            break
-                                        
-                                        c_id, c_song_id, c_time = candidate_row
-                                        current_search_date = c_time # Move cursor for next iteration
-
-                                        # Check Overlap (Is there a newer record for this song?)
-                                        newer_exists = False
-
-                                        # 1. Check in Fetched Data
-                                        for fetched_item in user_scores_data:
-                                            if fetched_item.get('song_id') == c_song_id:
-                                                f_time = fetched_item.get('time_played', 0)
-                                                if f_time > c_time:
-                                                    newer_exists = True
-                                                    break
-                                        
-                                        if newer_exists:
-                                            continue # Newer exists, try previous
-
-                                        # 2. Check in DB (Is there a newer record for this song?)
-                                        cursor.execute('SELECT 1 FROM scores WHERE arcaea_id = ? AND difficulty = ? AND time_played > ? LIMIT 1', (c_song_id, difficulty, c_time))
-                                        if cursor.fetchone():
-                                            newer_exists = True
-                                        
-                                        if newer_exists:
-                                            continue # Newer exists, try previous
-                                        
-                                        # If we are here, No Newer Record exists (Stable)
-                                        self.save_pin_id(difficulty, c_id, cursor)
-                                        found_new_pin = True
-                                        break
-                                    
-                                    if found_new_pin:
-                                        break
-                                break
-                else:
-                    self.total_page[difficulty] = user_data['totalPage']
-            
-            self.notify_progress_changed()
-
-            record_count = user_data['count']
-
-            # save data
-            score_filename = 'user_scores.db'
-            score_filepath = os.path.join(config['general']['cache_path'], score_filename)
-
-            self.log(f"Found {len(user_scores_data)} play records.")
-            
-            # Weak dependency for songs.db
-            songs_conn = None
-            songs_cursor = None
-            try:
-                init_songs_db()
-                songs_conn = get_connection()
-                songs_cursor = songs_conn.cursor()
-            except Exception as e:
-                self.log(f"Warning: Could not connect to songs.db. Data linking will be skipped. ({e})")
-
-            with sqlite3.connect(score_filepath) as conn:
-                cursor = conn.cursor()
-                
-                try:
-                    # Create table with new schema
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS scores (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            arcaea_id TEXT,
-                            difficulty INTEGER,
-                            score INTEGER,
-                            shiny_perfect_count INTEGER,
-                            perfect_count INTEGER,
-                            near_count INTEGER,
-                            miss_count INTEGER,
-                            health INTEGER,
-                            modifier INTEGER,
-                            time_played INTEGER,
-                            clear_type INTEGER,
-                            best_clear_type INTEGER,
-                            title TEXT,
-                            artist TEXT,
-                            user_id INTEGER,
-                            yearly_play_index INTEGER,
-                            score_below_max INTEGER,
-                            UNIQUE(arcaea_id, difficulty, time_played)
-                        )
-                    ''')
-                    
-                    # Create play_count table
-                    cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS play_count (
-                            arcaea_id TEXT,
-                            difficulty INTEGER,
-                            year INTEGER,
-                            yearly_play_count INTEGER,
-                            PRIMARY KEY (arcaea_id, difficulty, year)
-                        )
-                    ''')
-                    
-                    play_score_updates = []
-                    play_count_updates = [] # (arcaea_id, diff, year, count)
-                    current_year = datetime.now(timezone.utc).year
-
-                    for idx, item in enumerate(user_scores_data):
-                        diff_val = item.get('difficulty')
-                        title_obj = item.get('title')
-                        if isinstance(title_obj, dict):
-                            title_str = title_obj.get('en', '')
-                        else:
-                            title_str = str(title_obj) if title_obj else ''
-                        
-                        # Weak dependency: Update songs.db if possible
-                        ao_song_id = item.get('song_id')
-                        
-                        if songs_cursor:
-                            try:
-                                resolve_song_id_for_ao(songs_cursor, ao_song_id, title_str)
-                            except Exception as e:
-                                pass
-
-                        time_played = item.get('time_played')
-                        score_year = datetime.fromtimestamp(time_played / 1000, tz=timezone.utc).year
-                        
-                        # Check existence first to prevent double counting on past scores
-                        # We need to know if we are inserting a NEW score or just seeing an old one.
-                        
-                        cursor.execute('SELECT 1 FROM scores WHERE arcaea_id = ? AND difficulty = ? AND time_played = ?', (ao_song_id, diff_val, time_played))
-                        is_existing_score = cursor.fetchone() is not None
-                        
-                        yearly_play_count = item.get('yearly_play_count') or 0
-
-                        # Update current year play count if valid (regardless of score year)
-                        if yearly_play_count > 0:
-                            play_count_updates.append((ao_song_id, diff_val, current_year, yearly_play_count, yearly_play_count))
-                        
-                        # Only process new scores for insertion
-                        if not is_existing_score:
-                            yearly_play_index = 0
-                            
-                            if score_year == current_year:
-                                # Current Year: Trust data for index
-                                yearly_play_index = yearly_play_count
-                            else:
-                                # New Past Score -> Increment from DB (for that PAST year)
-                                cursor.execute('SELECT yearly_play_count FROM play_count WHERE arcaea_id = ? AND difficulty = ? AND year = ?', 
-                                            (ao_song_id, diff_val, score_year))
-                                row_pc = cursor.fetchone()
-                                current_db_count = row_pc[0] if row_pc else 0
-                                yearly_play_index = current_db_count + 1
-                                
-                                # Update DB for PAST YEAR
-                                play_count_updates.append((ao_song_id, diff_val, score_year, yearly_play_index, yearly_play_index))
-
-                            row = (
-                                ao_song_id,
-                                item.get('difficulty'),
-                                item.get('score'),
-                                item.get('shiny_perfect_count'),
-                                item.get('perfect_count'),
-                                item.get('near_count'),
-                                item.get('miss_count'),
-                                item.get('health'),
-                                item.get('modifier'),
-                                time_played,
-                                item.get('clear_type'),
-                                item.get('best_clear_type'),
-                                title_str,
-                                item.get('artist'),
-                                item.get('user_id'),
-                                yearly_play_index,
-                                item.get('score_below_max')
-                            )
-                            play_score_updates.append(row)
-
-                    songs_conn.commit()
-
-                    cursor.executemany('''
-                        INSERT OR IGNORE INTO scores 
-                        (arcaea_id, difficulty, score, shiny_perfect_count, perfect_count, near_count, 
-                            miss_count, health, modifier, time_played, clear_type, best_clear_type, 
-                            title, artist, user_id, yearly_play_index, score_below_max)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', play_score_updates)
-
-                    cursor.executemany('''
-                        INSERT INTO play_count (arcaea_id, difficulty, year, yearly_play_count)
-                        VALUES (?, ?, ?, ?)
-                        ON CONFLICT(arcaea_id, difficulty, year) DO UPDATE SET yearly_play_count = ?
-                    ''', play_count_updates)
-                    
-                    # check all_pages_checked
-                    if self.all_pages_checked(difficulty):
-                        # find most recent data in current difficulty from db
-                        cursor.execute('SELECT id FROM scores WHERE difficulty = ? ORDER BY time_played DESC LIMIT 1', (difficulty,))
-                        
-                        row = cursor.fetchone()
-                        recent_id = None
-                        if row:
-                            recent_id = row[0]
-                            
-                        # Check if the newest data is different from the current pin (avoid log spam)
-                        try:
-                            cursor.execute('SELECT score_id FROM pin WHERE difficulty = ?', (difficulty,))
-                            pin_row = cursor.fetchone()
-                            current_pin_id = pin_row[0] if pin_row else None
-                        except Exception:
-                            current_pin_id = None
-
-                        if recent_id != current_pin_id:
-                            self.save_pin_id(difficulty, recent_id, cursor)
-                            self.log(f'Updated pin for {Difficulty(difficulty).name}')
-                        
-                        self.rise_all_saved_flag(difficulty)
-
-                    conn.commit()
-                    if len(play_score_updates) > 0:
-                        self.log(f"Saved/Updated {len(play_score_updates)} records in '{score_filepath}'")
-                        self.notify_data_changed()
-                    else:
-                        self.log(f"No records to save in '{score_filepath}'")
-                except Exception as e:
-                    self.log(f"Error saving to DB: {e}")
-                    import traceback
-                    traceback.print_exc()
-                finally:
-                    if songs_conn:
-                        songs_conn.commit()
-                        songs_conn.close()
-                    
-                    # 썸네일 다운로드 (DB 저장과 별개로 수행)
-                    try:
-                        self.save_thumbnails(user_scores_data, difficulty)
-                    except Exception as e:
-                        self.log(f"Thumbnail save error: {e}")
-                        import traceback
-                        traceback.print_exc()
         
+        if not target_element:
+            return None
+        
+        user_data = None
+        while self.status.is_running:
+            try:
+                user_data = self.page.evaluate("""(element) => {
+                    var vue = element.__vue__;
+                    return {
+                        userScores: vue.userScores,
+                        dropDownSelectedValue: vue.dropDownSelectedValue,
+                        searchTerm: vue.searchTerm,
+                        currentPage: vue.currentPage,
+                        selectedDifficulty: vue.selectedDifficulty,
+                        totalPage: vue.totalPage,
+                        count: vue.count
+                    };
+                }""", target_element)
+                break
+            except Exception:
+                time.sleep(0.5)
+                continue
+        
+        if user_data == self.previous_user_data:
+            time.sleep(0.5)
+            return None
+        
+        self.previous_user_data = user_data
+        
+        user_scores = user_data.get('userScores') if user_data else None
+        if not user_scores or len(user_scores) == 0:
+            self.log('Data save canceled: Current page is empty')
+            self.status.status = 'ready'
+            self.notify_status_changed()
+            return None
+        
+        return PageScoreData(
+            scores=user_scores,
+            difficulty=int(user_data['selectedDifficulty']),
+            current_page=user_data['currentPage'],
+            total_page=user_data['totalPage'],
+            is_date_sorted=user_data['dropDownSelectedValue']['value'] == 'date',
+            is_search=user_data['searchTerm'] != '',
+            record_count=user_data['count']
+        )
+
+    def _check_pin_in_page(self, cursor: sqlite3.Cursor, pin_id: int, 
+                            page_data: PageScoreData) -> None:
+        """
+        현재 페이지에서 Pin 곡을 검색해, 존재할 경우 마지막 페이지로 선정, 신규 기록으로 덮어씌워진 경우 Pin을 재선정합니다.
+        
+        Args:
+            cursor: DB 커서
+            pin_id: 현재 Pin의 score ID
+            page_data: 페이지 스코어 데이터
+        """
+        pin_record = self._score_repo.get_score_by_id(cursor, pin_id)
+        if not pin_record:
+            return
+        
+        pinned_song_id = pin_record.arcaea_id
+        pinned_time = pin_record.time_played
+        
+        for item in page_data.scores:
+            if item.get('song_id') != pinned_song_id:
+                continue
+            
+            item_time = item.get('time_played')
+            if item_time == pinned_time:
+                # Pin 발견 - 이 페이지가 새 데이터의 마지막 페이지
+                self.total_page[page_data.difficulty] = page_data.current_page
+                self.log('Found last page of new data.')
+            else:
+                # 같은 곡의 더 최신 기록 존재 → Pin 재선정 필요
+                self._find_new_stable_pin(cursor, page_data.difficulty, 
+                                           pinned_time, page_data.scores)
+
+    def _find_new_stable_pin(self, cursor: sqlite3.Cursor, difficulty: int,
+                              start_time: int, page_items: list):
+        """
+        기존 Pin이 무효화되었을 때 새로운 안정적인 Pin을 찾습니다.
+        
+        조건:
+        1. 기존 Pin보다 이전(older) 기록이어야 함
+        2. 해당 곡의 동일 난이도 내 가장 최신 기록이어야 함
+        3. 현재 페이지에 더 최신 기록이 없어야 함
+        
+        Args:
+            cursor: DB 커서
+            difficulty: 난이도
+            start_time: 탐색 시작 시간 (기존 Pin의 time_played)
+            page_items: 현재 페이지의 스코어 아이템들
+        """
+        search_time = start_time
+        
+        while True:
+            # 조건1: start_time보다 이전인 가장 최신 레코드
+            candidate = self._score_repo.find_next_older_score(cursor, difficulty, search_time)
+            
+            if not candidate:
+                # 더 이상 후보 없음 → Pin을 None으로 설정
+                self.save_pin_id(difficulty, None, cursor)
+                return
+            
+            c_id, c_song_id, c_time = candidate
+            search_time = c_time  # 다음 반복을 위해 커서 이동
+            
+            # 조건3: 현재 페이지에 이 곡의 더 최신 기록이 있는지 확인
+            has_newer_in_page = any(
+                item.get('song_id') == c_song_id and item.get('time_played', 0) > c_time
+                for item in page_items
+            )
+            if has_newer_in_page:
+                continue
+            
+            # 조건2: DB에 이 곡의 더 최신 기록이 있는지 확인
+            if self._score_repo.has_newer_score_for_song(cursor, c_song_id, difficulty, c_time):
+                continue
+            
+            # 모든 조건 충족 → 새 Pin으로 선정
+            self.save_pin_id(difficulty, c_id, cursor)
+            return
+
+    def _prepare_inserts(self, cursor: sqlite3.Cursor, 
+                          items: list, difficulty: int) -> tuple[list, list]:
+        """
+        INSERT할 스코어 및 플레이카운트 데이터를 준비합니다.
+        
+        Args:
+            cursor: user_scores.db 커서
+            items: 스코어 아이템 리스트
+            difficulty: 난이도
+            
+        Returns:
+            (score_inserts, count_updates) 튜플
+        """
+        score_inserts = []
+        count_updates = []
+        current_year = datetime.now(timezone.utc).year
+        
+        # songs.db 연결 (실패해도 계속 진행)
+        songs_conn = None
+        songs_cursor = None
+        try:
+            init_songs_db()
+            songs_conn = get_connection()
+            songs_cursor = songs_conn.cursor()
+        except Exception as e:
+            self.log(f"Warning: Could not connect to songs.db. Data linking will be skipped. ({e})")
+        
+        try:
+            for item in items:
+                diff_val = item.get('difficulty')
+                ao_song_id = item.get('song_id')
+                time_played = item.get('time_played')
+                
+                # 타이틀 추출
+                title_obj = item.get('title')
+                if isinstance(title_obj, dict):
+                    title_str = title_obj.get('en', '')
+                else:
+                    title_str = str(title_obj) if title_obj else ''
+                
+                # songs.db 연동 (실패해도 계속 진행)
+                if songs_cursor:
+                    try:
+                        resolve_song_id_for_ao(songs_cursor, ao_song_id, title_str)
+                    except Exception:
+                        pass
+                
+                score_year = datetime.fromtimestamp(time_played / 1000, tz=timezone.utc).year
+                
+                # 중복 체크
+                is_existing = self._score_repo.score_exists(cursor, ao_song_id, diff_val, time_played)
+                
+                yearly_play_count = item.get('yearly_play_count') or 0
+                
+                # 현재 연도 플레이 카운트 업데이트 (스코어 연도와 무관)
+                if yearly_play_count > 0:
+                    count_updates.append((ao_song_id, diff_val, current_year, yearly_play_count, yearly_play_count))
+                
+                # 새 스코어만 삽입
+                if not is_existing:
+                    yearly_play_index = 0
+                    
+                    if score_year == current_year:
+                        yearly_play_index = yearly_play_count
+                    else:
+                        # 과거 스코어 → DB에서 해당 연도 카운트 조회 후 +1
+                        current_db_count = self._play_count_repo.get_yearly_count(
+                            cursor, ao_song_id, diff_val, score_year
+                        )
+                        yearly_play_index = current_db_count + 1
+
+                        # 해당 연도 플레이 카운트 업데이트
+                        count_updates.append((ao_song_id, diff_val, score_year, yearly_play_index, yearly_play_index))
+                    
+                    row = (
+                        ao_song_id,
+                        diff_val,
+                        item.get('score'),
+                        item.get('shiny_perfect_count'),
+                        item.get('perfect_count'),
+                        item.get('near_count'),
+                        item.get('miss_count'),
+                        item.get('health'),
+                        item.get('modifier'),
+                        time_played,
+                        item.get('clear_type'),
+                        item.get('best_clear_type'),
+                        title_str,
+                        item.get('artist'),
+                        item.get('user_id'),
+                        yearly_play_index,
+                        item.get('score_below_max')
+                    )
+                    score_inserts.append(row)
         finally:
-            if self.status.status == 'analyzing':
-                self.status.status = 'ready'
-                self.notify_status_changed()
+            if songs_conn:
+                songs_conn.commit()
+                songs_conn.close()
+        
+        return score_inserts, count_updates
 
     def save_thumbnails(self, user_scores_data: list, difficulty: int):
         """
