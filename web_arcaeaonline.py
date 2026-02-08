@@ -573,6 +573,9 @@ class ArcaeaOnline:
                     self.log(f"Saved/Updated {len(score_inserts)} records in '{self.db_path}'")
                     self.notify_data_changed()
                 else:
+                    if len(count_updates) > 0:
+                        self.notify_data_changed()
+
                     self.log(f"No records to save in '{self.db_path}'")
                     
             except Exception as e:
@@ -767,60 +770,59 @@ class ArcaeaOnline:
                 else:
                     title_str = str(title_obj) if title_obj else ''
                 
-                # songs.db 연동 (실패해도 계속 진행)
+                # 해당 채보의 곡을 songs.db에서 찾아 ao_song_id 정보 삽입 (실패해도 계속 진행)
                 if songs_cursor:
                     try:
                         resolve_song_id_for_ao(songs_cursor, ao_song_id, title_str)
                     except Exception:
                         pass
                 
-                score_year = datetime.fromtimestamp(time_played / 1000, tz=timezone.utc).year
-                
                 # 중복 체크
                 is_existing = self._score_repo.score_exists(cursor, ao_song_id, diff_val, time_played)
-                
+                if is_existing:
+                    continue
+
+                yearly_play_index = 0
                 yearly_play_count = item.get('yearly_play_count') or 0
                 
                 # 현재 연도 플레이 카운트 업데이트 (스코어 연도와 무관)
                 if yearly_play_count > 0:
                     count_updates.append((ao_song_id, diff_val, current_year, yearly_play_count, yearly_play_count))
                 
-                # 새 스코어만 삽입
-                if not is_existing:
-                    yearly_play_index = 0
-                    
-                    if score_year == current_year:
-                        yearly_play_index = yearly_play_count
-                    else:
-                        # 과거 스코어 → DB에서 해당 연도 카운트 조회 후 +1
-                        current_db_count = self._play_count_repo.get_yearly_count(
-                            cursor, ao_song_id, diff_val, score_year
-                        )
-                        yearly_play_index = current_db_count + 1
+                score_year = datetime.fromtimestamp(time_played / 1000, tz=timezone.utc).year
 
-                        # 해당 연도 플레이 카운트 업데이트
-                        count_updates.append((ao_song_id, diff_val, score_year, yearly_play_index, yearly_play_index))
-                    
-                    row = (
-                        ao_song_id,
-                        diff_val,
-                        item.get('score'),
-                        item.get('shiny_perfect_count'),
-                        item.get('perfect_count'),
-                        item.get('near_count'),
-                        item.get('miss_count'),
-                        item.get('health'),
-                        item.get('modifier'),
-                        time_played,
-                        item.get('clear_type'),
-                        item.get('best_clear_type'),
-                        title_str,
-                        item.get('artist'),
-                        item.get('user_id'),
-                        yearly_play_index,
-                        item.get('score_below_max')
+                if score_year == current_year:
+                    yearly_play_index = yearly_play_count
+                else:
+                    # 과거 스코어 → DB에서 해당 연도 카운트 조회 후 +1
+                    current_db_count = self._play_count_repo.get_yearly_count(
+                        cursor, ao_song_id, diff_val, score_year
                     )
-                    score_inserts.append(row)
+                    yearly_play_index = current_db_count + 1
+
+                    # 해당 연도 플레이 카운트 업데이트
+                    count_updates.append((ao_song_id, diff_val, score_year, yearly_play_index, yearly_play_index))
+                
+                row = (
+                    ao_song_id,
+                    diff_val,
+                    item.get('score'),
+                    item.get('shiny_perfect_count'),
+                    item.get('perfect_count'),
+                    item.get('near_count'),
+                    item.get('miss_count'),
+                    item.get('health'),
+                    item.get('modifier'),
+                    time_played,
+                    item.get('clear_type'),
+                    item.get('best_clear_type'),
+                    title_str,
+                    item.get('artist'),
+                    item.get('user_id'),
+                    yearly_play_index,
+                    item.get('score_below_max')
+                )
+                score_inserts.append(row)
         finally:
             if songs_conn:
                 songs_conn.commit()
