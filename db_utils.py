@@ -597,3 +597,24 @@ def get_pin_updated_dates():
         return {}
     finally:
         conn.close()
+
+
+def get_song_title(arcaea_id):
+    """
+    Fetches the song title given an arcaea_id.
+    """
+    songs_db_path = get_db_path()
+    if not os.path.exists(songs_db_path):
+        return None
+    
+    conn = sqlite3.connect(songs_db_path)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT title FROM songs WHERE arcaea_id = ?", (arcaea_id,))
+        row = cursor.fetchone()
+        return row[0] if row else None
+    except Exception as e:
+        print(f"Error fetching song title: {e}")
+        return None
+    finally:
+        conn.close()

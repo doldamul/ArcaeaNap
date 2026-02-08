@@ -366,10 +366,11 @@ Item {
                     anchors.margins: 30
                     spacing: 20
 
-                    Row {
-                        spacing: 10
-                        Text { text: "●"; color: "#BC00FF"; font.pixelSize: 16 }
-                        Text { text: "Last Synced"; font.pixelSize: 18; font.bold: true; color: "#1A1A1A" }
+                    Text { 
+                        text: "Synchronization Status" 
+                        font.pixelSize: 20
+                        font.bold: true
+                        color: "#1A1A1A" 
                     }
 
 
@@ -400,40 +401,64 @@ Item {
                         progressData = analysisHandler.getProgress()
                     }
                     
-                    function formatPinDate(timestamp) {
-                        if (!timestamp || timestamp <= 0) return "-"
-                        var date = new Date(timestamp)
-                        var now = new Date()
+                    function formatPinDate(ts) {
+                        if (!ts || ts <= 0) return "-"
                         
-                        // Calculate days difference based on calendar dates
-                        var dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-                        var nowOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-                        var daysDiff = Math.floor((nowOnly - dateOnly) / (1000 * 60 * 60 * 24))
+                        var date = new Date(ts)
                         
-                        // Format absolute datetime
                         var absDate = date.getFullYear() + "-" + 
-                               (date.getMonth() + 1).toString().padStart(2, '0') + "-" + 
-                               date.getDate().toString().padStart(2, '0') + " " +
-                               date.getHours().toString().padStart(2, '0') + ":" +
-                               date.getMinutes().toString().padStart(2, '0')
+                                      (date.getMonth() + 1).toString().padStart(2, '0') + "-" + 
+                                      date.getDate().toString().padStart(2, '0') + " " +
+                                      date.getHours().toString().padStart(2, '0') + ":" +
+                                      date.getMinutes().toString().padStart(2, '0')
                         
-                        // Format relative date
-                        var relDate = ""
-                        if (daysDiff === 0) {
-                            relDate = "Today"
-                        } else if (daysDiff === 1) {
-                            relDate = "Yesterday"
-                        } else {
-                            relDate = daysDiff + " days ago"
-                        }
-                        
-                        return absDate + " (" + relDate + ")"
+                        return absDate
                     }
 
                     // --- Difficulty Date List ---
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 0
+                        
+                        // Column Header Labels
+                        Item {
+                            Layout.fillWidth: true
+                            height: 20
+                            visible: {
+                                // Show header only if at least one difficulty has pin data
+                                for (var i = 0; i < 5; i++) {
+                                    var pinData = lastSavedInfoContent.pinDates[String(i)]
+                                    if (pinData && pinData.updated_at && pinData.updated_at > 0) return true
+                                }
+                                return false
+                            }
+                            
+                            RowLayout {
+                                anchors.fill: parent
+                                spacing: 0
+                                
+                                // Space for badge + gap + thumbnail
+                                Item { width: 36 + 24 + 32 }
+                                
+                                // Last Played label
+                                Text {
+                                    text: "last played"
+                                    font.pixelSize: 10
+                                    color: "#999"
+                                    Layout.preferredWidth: 120
+                                    Layout.leftMargin: 12
+                                    Layout.rightMargin: 24
+                                }
+                                
+                                // Last Synced label  
+                                Text {
+                                    text: "last synced"
+                                    font.pixelSize: 10
+                                    color: "#999"
+                                    Layout.fillWidth: true
+                                }
+                            }
+                        }
                         
                         Repeater {
                             model: [
@@ -446,7 +471,7 @@ Item {
                             
                             delegate: Item {
                                 Layout.fillWidth: true
-                                height: 42
+                                height: 48
                                 
                                 Rectangle {
                                     anchors.bottom: parent.bottom
@@ -455,9 +480,16 @@ Item {
                                     visible: index < 4
                                 }
                                 
+                                // Get pin data for this difficulty
+                                property var pinData: lastSavedInfoContent.pinDates[String(modelData.code)] || {}
+                                property bool hasPinInfo: pinData.updated_at && pinData.updated_at > 0
+                                property string arcaeaId: pinData.arcaea_id || ""
+                                property var timePlayed: pinData.time_played || 0
+                                property var updatedAt: pinData.updated_at || 0
+                                
                                 RowLayout {
                                     anchors.fill: parent
-                                    spacing: 12
+                                    spacing: 0
                                     
                                     // Colored Pill
                                     Rectangle {
@@ -473,16 +505,73 @@ Item {
                                         }
                                     }
                                     
-                                    // Content Container
+                                    // Thumbnail (32x32, or empty space if not available)
+                                    Item {
+                                        width: 32; height: 32
+                                        Layout.leftMargin: 24
+                                        Layout.rightMargin: 12
+                                        
+                                        Image {
+                                            id: thumbnailImg
+                                            anchors.fill: parent
+                                            source: (arcaeaId && statsHandler) ? statsHandler.getThumbnailPathForDifficulty(arcaeaId, modelData.code) : ""
+                                            visible: status === Image.Ready
+                                            fillMode: Image.PreserveAspectCrop
+                                            smooth: true
+                                            mipmap: true
+                                            sourceSize: Qt.size(64, 64)
+                                        }
+
+                                        MouseArea {
+                                            id: thumbMouseArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                        }
+
+                                        ToolTip {
+                                            id: titleTip
+                                            visible: thumbMouseArea.containsMouse && text !== ""
+                                            delay: 100
+                                            
+                                            text: (arcaeaId && statsHandler) ? statsHandler.getSongTitle(arcaeaId) : ""
+                                            
+                                            contentItem: Text {
+                                                text: titleTip.text
+                                                font.pixelSize: 12
+                                                color: "#FFFFFF"
+                                                horizontalAlignment: Text.AlignHCenter
+                                            }
+                                            
+                                            background: Rectangle {
+                                                color: "#E6222222"
+                                                radius: 6
+                                                border.width: 1
+                                                border.color: "#33FFFFFF"
+                                            }
+                                            
+                                            y: parent.height + 6
+                                            x: (parent.width - width) / 2
+                                            
+                                            leftPadding: 8
+                                            rightPadding: 8
+                                            topPadding: 6
+                                            bottomPadding: 6
+                                        }
+                                        
+                                        // Empty placeholder when no thumbnail
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            color: "transparent"
+                                            visible: !thumbnailImg.visible && hasPinInfo
+                                        }
+                                    }
+                                    
+                                    // Content Container (dates or progress bar)
                                     Item {
                                         id: progressContainer
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
 
-                                        property bool hasPinInfo: {
-                                            var ts = lastSavedInfoContent.pinDates[String(modelData.code)]
-                                            return (ts && ts > 0) === true
-                                        }
                                         property bool isWebPageOpen: statusBar.analysisStatus !== "closed"
                                         
                                         property var diffProgress: lastSavedInfoContent.progressData[String(modelData.code)] || {}
@@ -493,19 +582,35 @@ Item {
                                         // Show Progress Bar only when: web page open AND total_page known AND no pin data
                                         property bool showProgressBar: isWebPageOpen && hasTotal && !hasPinInfo
 
-                                        // 1. Date Text
-                                        Text { 
+                                        // Date Display Row (when not showing progress bar)
+                                        RowLayout {
                                             anchors.fill: parent
-                                            verticalAlignment: Text.AlignVCenter
                                             visible: !progressContainer.showProgressBar
-                                            text: lastSavedInfoContent.formatPinDate(lastSavedInfoContent.pinDates[String(modelData.code)])
-                                            font.pixelSize: 13
-                                            font.bold: true
-                                            color: "#333"
-                                            elide: Text.ElideRight
+                                            spacing: 24
+                                            
+                                            // Last Played Date (yyyy-mm-dd HH:mm)
+                                            Text {
+                                                text: lastSavedInfoContent.formatPinDate(timePlayed)
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                                color: "#333"
+                                                Layout.preferredWidth: 120
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                            
+                                            // Last Synced (existing format with relative date)
+                                            Text { 
+                                                Layout.fillWidth: true
+                                                verticalAlignment: Text.AlignVCenter
+                                                text: lastSavedInfoContent.formatPinDate(updatedAt)
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                                color: "#333"
+                                                elide: Text.ElideRight
+                                            }
                                         }
 
-                                        // 2. Progress Bar Row
+                                        // Progress Bar Row
                                         RowLayout {
                                             anchors.fill: parent
                                             visible: progressContainer.showProgressBar
@@ -524,14 +629,6 @@ Item {
                                                 Rectangle {
                                                     id: pBar
                                                     height: parent.height
-                                                    // Width logic: 
-                                                    // If totalPages known > 0: calculate percentage
-                                                    // If totalPages known == 0 (start): 0
-                                                    // If totalPages unknown (null): show full bar (or indeterminate style if preferred, here indeterminate -> 0 or handling separate?)
-                                                    // Actually if total is unknown, we can't show progress.
-                                                    // The requirement: "Show progress bar". If unknown, maybe show "0%" or "??"
-                                                    // Let's implement: if total known -> progress. if total unknown -> 0 width
-                                                    
                                                     width: progressContainer.totalPages > 0 ? 
                                                            (parent.width * (progressContainer.checkedPages / progressContainer.totalPages)) : 0
                                                            
@@ -577,10 +674,11 @@ Item {
                         }
                     }
 
-                    Row {
-                        spacing: 8
-                        Text { text: "📓"; font.pixelSize: 12 }
-                        Text { text: "LIVE LOGS"; color: "#888"; font.bold: true; font.pixelSize: 11 }
+                    Text {
+                        text: "LIVE LOGS"
+                        color: "#888"
+                        font.bold: true
+                        font.pixelSize: 11
                     }
 
                     Rectangle {

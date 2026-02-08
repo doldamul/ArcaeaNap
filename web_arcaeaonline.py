@@ -553,14 +553,16 @@ class ArcaeaOnline:
                 if self.all_pages_checked(difficulty):
                     recent_id = self._score_repo.get_latest_score_id(cursor, difficulty)
                     
-                    # 현재 Pin과 다를 때만 업데이트 (로그 스팸 방지)
+                    # 현재 Pin과 다를 때만 로그 (스팸 방지), 하지만 updated_at은 항상 갱신
                     try:
                         current_pin_id = self._pin_repo.get_pin(cursor, difficulty)
                     except Exception:
                         current_pin_id = None
                     
+                    # Always update pin to refresh updated_at timestamp
+                    self.save_pin_id(difficulty, recent_id, cursor)
+                    
                     if recent_id != current_pin_id:
-                        self.save_pin_id(difficulty, recent_id, cursor)
                         self.log(f'Updated pin for {Difficulty(difficulty).name}')
                     
                     self.rise_all_saved_flag(difficulty)

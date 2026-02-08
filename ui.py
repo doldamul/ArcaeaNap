@@ -123,13 +123,49 @@ class AnalysisHandler(QObject):
     @pyqtSlot(result='QVariant')
     def getPinDates(self):
         """
-        Returns last updated dates for each difficulty from AnalysisStatus.
+        Returns extended pin data for each difficulty.
         Returns: 
-            dict: { difficulty_code(str): timestamp(int) }
+            dict: { 
+                difficulty_code(str): {
+                    'updated_at': int,     # pin updated timestamp (ms)
+                    'time_played': int,    # score time_played (ms)
+                    'arcaea_id': str       # song ID for thumbnail lookup
+                }
+            }
         """
-        if self.analyzer and self.analyzer.status.pin_updates:
-            return {str(k): v for k, v in self.analyzer.status.pin_updates.items()}
-        return {}
+        import sqlite3
+        result = {}
+        
+        try:
+            db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
+            if not os.path.exists(db_path):
+                return {}
+            
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                # Join pin with scores to get time_played and arcaea_id
+                cursor.execute('''
+                    SELECT p.difficulty, p.updated_at, s.time_played, s.arcaea_id
+                    FROM pin p
+                    LEFT JOIN scores s ON p.score_id = s.id
+                    WHERE p.updated_at IS NOT NULL
+                ''')
+                
+                for row in cursor.fetchall():
+                    difficulty, updated_at, time_played, arcaea_id = row
+                    result[str(difficulty)] = {
+                        'updated_at': updated_at or 0,
+                        'time_played': time_played or 0,
+                        'arcaea_id': arcaea_id or ''
+                    }
+        except Exception as e:
+            print(f"Error in getPinDates: {e}")
+            # Fallback to simple pin_updates if DB query fails
+            if self.analyzer and self.analyzer.status.pin_updates:
+                for k, v in self.analyzer.status.pin_updates.items():
+                    result[str(k)] = {'updated_at': v, 'time_played': 0, 'arcaea_id': ''}
+        
+        return result
     
     @pyqtSlot(result='QVariant')
     def getProgress(self):
@@ -212,6 +248,12 @@ class StatsHandler(QObject):
         if not arcaea_id:
             return ""
         return self._find_thumbnail_by_priority(arcaea_id)
+
+    @pyqtSlot(str, result=str)
+    def getSongTitle(self, arcaea_id: str) -> str:
+        from db_utils import get_song_title
+        title = get_song_title(arcaea_id)
+        return title if title else ""
     
     @pyqtSlot(str, int, result=str)
     def getThumbnailPathForDifficulty(self, arcaea_id: str, difficulty: int) -> str:
