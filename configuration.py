@@ -1,4 +1,5 @@
 import configparser
+import copy
 import os
 from enum import StrEnum, auto
 
@@ -12,7 +13,6 @@ config = None
 _config_default = {
     'general': {
         'cache_path': './arcaea_nap_data/',
-        'analyze_mode': False,
     },
     'profile': {
         'show_friend_code': True,
@@ -53,7 +53,6 @@ def _validate_cache_path(v: str) -> str:
 _converters = {
     'general': {
         'cache_path': _validate_cache_path,
-        'analyze_mode': lambda v: v.lower() == 'true',
     },
     'profile': {
         'show_friend_code': lambda v: v.lower() == 'true',
@@ -65,6 +64,13 @@ _converters = {
     },
     'sheet': {
         'last_synced': float,
+    }
+}
+
+# --- Runtime-only settings (not persisted to config.ini) ---
+_runtime_default = {
+    'general': {
+        'analyze_mode': False,
     }
 }
 
@@ -84,6 +90,9 @@ class SectionWrapper:
         self.section_name = section_name
         self.section_proxy = section_proxy
 
+    def _is_runtime_key(self, key):
+        return key in _runtime_default.get(self.section_name, {})
+
     def transform_value(self, section, key, value):
         converter = _converters.get(section, {}).get(key)
         
@@ -94,11 +103,19 @@ class SectionWrapper:
             return _config_default[section][key]
 
     def __getitem__(self, key):
+        # Runtime keys: read directly from in-memory store (no conversion needed)
+        if self._is_runtime_key(key):
+            return self.parent.get_runtime(self.section_name, key)
+
         raw_value = self.section_proxy[key]
-    
         return self.transform_value(self.section_name, key, raw_value)
 
     def __setitem__(self, key, value):
+        # Runtime keys: store in memory only (no file save)
+        if self._is_runtime_key(key):
+            self.parent.set_runtime(self.section_name, key, value)
+            return
+
         self.section_proxy[key] = str(value)
         self.parent.save()
 
@@ -109,6 +126,7 @@ class Configuration:
 
     def __init__(self) -> None:
         self._config = configparser.ConfigParser()
+        self._runtime = copy.deepcopy(_runtime_default)
         
         if not os.path.exists(self.filename):
             # create config file as default
@@ -120,6 +138,14 @@ class Configuration:
             
         if __name__=='__main__':
             print(f'data validation: {self._is_valid_structure()}')
+
+    def get_runtime(self, section, key):
+        return self._runtime.get(section, {}).get(key, _runtime_default.get(section, {}).get(key))
+
+    def set_runtime(self, section, key, value):
+        if section not in self._runtime:
+            self._runtime[section] = {}
+        self._runtime[section][key] = value
         
     def __getitem__(self, key):
         if key not in self._config:

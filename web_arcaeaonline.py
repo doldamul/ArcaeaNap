@@ -46,6 +46,38 @@ class PageScoreData:
     record_count: int
 
 
+@dataclass
+class CountModeState:
+    """Play Count Analyze Mode 전용 상태. 기존 로직과 완전히 분리."""
+    checked_pages: Dict[int, Set[int]] = field(default_factory=dict)
+    total_pages: Dict[int, Optional[int]] = field(default_factory=dict)
+    completed: Set[int] = field(default_factory=set)
+
+    def __post_init__(self):
+        for d in Difficulty:
+            if d not in self.checked_pages:
+                self.checked_pages[d] = set()
+            if d not in self.total_pages:
+                self.total_pages[d] = None
+
+    def reset_progress(self):
+        """세션 리셋 시 진행도 초기화 (completed는 보존)"""
+        for d in self.checked_pages:
+            self.checked_pages[d] = set()
+            self.total_pages[d] = None
+
+    def reset_all(self):
+        """모드 해제 시 전체 초기화"""
+        self.reset_progress()
+        self.completed.clear()
+
+    def all_pages_checked(self, difficulty: int) -> bool:
+        total = self.total_pages.get(difficulty)
+        if not total:
+            return False
+        return set(range(1, total + 1)) <= self.checked_pages.get(difficulty, set())
+
+
 class ThumbnailCollector:
     """Response 인터셉트를 통한 썸네일 수집기"""
     
@@ -114,6 +146,10 @@ class ArcaeaOnline:
             self.checked_page[difficulty] = set()
             self.total_page[difficulty] = None
             self.scanned_pages[difficulty] = {}
+
+        # Play Count Analyze Mode 전용 상태
+        self.count_mode = CountModeState()
+        self._mode_toggle_pending = False
         
         # Initialize pin_updates from database
         self._load_pin_updates_from_db()
@@ -154,6 +190,23 @@ class ArcaeaOnline:
     
     def set_session_reset_callback(self, callback):
         self.session_reset_callback = callback
+
+    def set_play_count_mode(self, enabled: bool):
+        """Play Count Analyze Mode 토글"""
+        config['general']['analyze_mode'] = enabled
+        self.count_mode.reset_all()
+        self.log(f"Play Count Analyze Mode: {'ON' if enabled else 'OFF'}")
+
+        # 분석 스레드 실행 중일 때만 플래그 설정 (브라우저가 켜져 있어야 리셋 가능)
+        # 닫혀있다면 다음 start() 시 자연스럽게 새 세션으로 시작되므로 리셋 불필요
+        if self.status.is_running and self.status.status not in ('closed',):
+            self._mode_toggle_pending = True
+
+        self.notify_progress_changed()
+
+    @property
+    def play_count_mode(self) -> bool:
+        return config['general']['analyze_mode']
     
     def notify_data_changed(self):
         """Notify that data has been saved (DB records or thumbnails)"""
@@ -235,6 +288,15 @@ class ArcaeaOnline:
 
             while self.status.is_running and not self._browser_closed:
                 try:
+                    # Play Count Mode 토글 감지 → 분석 스레드에서 안전하게 세션 리셋
+                    if self._mode_toggle_pending:
+                        self._mode_toggle_pending = False
+                        self._reset_analysis_session(
+                            current_page=self.current_pageno, 
+                            msg="Play Count Analyze Mode changed. Session refreshed"
+                        )
+                        continue
+
                     # Polling for page change
                     if self.has_page_changed():
                         pass  # Continue to process
@@ -525,6 +587,13 @@ class ArcaeaOnline:
                     self._check_pin_in_page(cursor, pin_id, page_data)
             else:
                 self.total_page[difficulty] = page_data.total_page
+
+            # Play Count Analyze Mode: 별도 상태로 진행도 추적
+            if self.play_count_mode:
+                self.count_mode.checked_pages[difficulty].add(page_data.current_page)
+                self.count_mode.total_pages[difficulty] = page_data.total_page
+                if self.count_mode.all_pages_checked(difficulty):
+                    self.count_mode.completed.add(difficulty)
         
         self.notify_progress_changed()
         
@@ -718,7 +787,8 @@ class ArcaeaOnline:
         self.scanned_pages[difficulty][page] = current_times
         return False
 
-    def _reset_analysis_session(self, current_page: int = None) -> bool:
+    def _reset_analysis_session(self, current_page: int = None, 
+                              msg: str = "New play record detected. Session refreshed") -> bool:
         """세션 무결성 위반 시 세션 리셋. 리로드 발생 시 True 반환."""
         # 스캔 추적 초기화
         self.previous_user_data = None
@@ -726,6 +796,9 @@ class ArcaeaOnline:
             self.checked_page[difficulty] = set()
             self.total_page[difficulty] = None
             self.scanned_pages[difficulty] = {}
+
+        # Play Count Analyze Mode: 진행도 리셋 (completed는 보존)
+        self.count_mode.reset_progress()
 
         # 브라우저 새로고침 (1페이지면 스킵)
         reloaded = False
@@ -743,14 +816,13 @@ class ArcaeaOnline:
 
         self.notify_progress_changed()
 
-        # UI 경고
-        msg = "New play record detected. Session refreshed"
-        self.log(msg)
-        if self.session_reset_callback:
-            try:
-                self.session_reset_callback(msg)
-            except Exception:
-                pass
+        if msg:
+            self.log(msg)
+            if self.session_reset_callback:
+                try:
+                    self.session_reset_callback(msg)
+                except Exception:
+                    pass
 
         return reloaded
 
@@ -850,6 +922,11 @@ class ArcaeaOnline:
                 # 중복 체크
                 is_existing = self._score_repo.score_exists(cursor, ao_song_id, diff_val, time_played)
                 if is_existing:
+                    # Play Count Analyze Mode: 기존 기록이어도 play count 최신화
+                    if self.play_count_mode:
+                        yearly_play_count = item.get('yearly_play_count') or 0
+                        if yearly_play_count > 0:
+                            count_updates.append((ao_song_id, diff_val, current_year, yearly_play_count, yearly_play_count))
                     continue
 
                 yearly_play_index = 0

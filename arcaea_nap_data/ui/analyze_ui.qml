@@ -377,6 +377,8 @@ Item {
                     // --- Pin Data ---
                     property var pinDates: ({})
                     property var progressData: ({})
+                    property var countModeData: ({})
+                    property bool isPlayCountMode: false
 
                     Component.onCompleted: {
                         updatePinDates()
@@ -389,7 +391,7 @@ Item {
                             lastSavedInfoContent.updatePinDates()
                         }
                         function onProgressChanged() {
-                            lastSavedInfoContent.updateProgressData()
+                            Qt.callLater(lastSavedInfoContent.updateProgressData)
                         }
                     }
 
@@ -399,6 +401,8 @@ Item {
 
                     function updateProgressData() {
                         progressData = analysisHandler.getProgress()
+                        countModeData = analysisHandler.getCountModeProgress()
+                        isPlayCountMode = analysisHandler.isPlayCountMode()
                     }
                     
                     function formatPinDate(ts) {
@@ -580,7 +584,16 @@ Item {
                                         property int checkedPages: diffProgress.checked || 0
                                         
                                         // Show Progress Bar only when: web page open AND total_page known AND no pin data
-                                        property bool showProgressBar: isWebPageOpen && hasTotal && !hasPinInfo
+                                        // Play Count Mode: always show progress bar
+                                        property var countProgress: lastSavedInfoContent.countModeData[String(modelData.code)] || {}
+                                        property bool isPlayCountMode: lastSavedInfoContent.isPlayCountMode
+                                        property bool isCountModeCompleted: countProgress.completed || false
+                                        property int countChecked: countProgress.checked || 0
+                                        property int countTotal: (countProgress.total !== undefined && countProgress.total !== null) ? countProgress.total : 0
+                                        
+                                        property bool showProgressBar: (isPlayCountMode && isCountModeCompleted) ||
+                                                                       (isPlayCountMode && isWebPageOpen && countTotal > 0) ||
+                                                                       (isWebPageOpen && hasTotal && !hasPinInfo)
 
                                         // Date Display Row (when not showing progress bar)
                                         RowLayout {
@@ -629,8 +642,15 @@ Item {
                                                 Rectangle {
                                                     id: pBar
                                                     height: parent.height
-                                                    width: progressContainer.totalPages > 0 ? 
-                                                           (parent.width * (progressContainer.checkedPages / progressContainer.totalPages)) : 0
+                                                    width: {
+                                                        if (progressContainer.isPlayCountMode) {
+                                                            if (progressContainer.isCountModeCompleted) return parent.width
+                                                            return progressContainer.countTotal > 0 ?
+                                                                (parent.width * (progressContainer.countChecked / progressContainer.countTotal)) : 0
+                                                        }
+                                                        return progressContainer.totalPages > 0 ?
+                                                            (parent.width * (progressContainer.checkedPages / progressContainer.totalPages)) : 0
+                                                    }
                                                            
                                                     color: modelData.color
                                                     radius: 3
@@ -639,14 +659,22 @@ Item {
                                                 }
                                             }
                                             
-                                            // Percentage Label
+                                            // Percentage / Count Mode Label
                                             Text {
-                                                text: progressContainer.hasTotal && progressContainer.totalPages > 0
-                                                      ? Math.floor((progressContainer.checkedPages / progressContainer.totalPages) * 100) + "%" 
-                                                      : "?%"
+                                                text: {
+                                                    if (progressContainer.isPlayCountMode) {
+                                                        if (progressContainer.isCountModeCompleted) return "✓"
+                                                        if (progressContainer.countTotal > 0)
+                                                            return progressContainer.countChecked + "/" + progressContainer.countTotal
+                                                        return "0"
+                                                    }
+                                                    if (progressContainer.hasTotal && progressContainer.totalPages > 0)
+                                                        return Math.floor((progressContainer.checkedPages / progressContainer.totalPages) * 100) + "%"
+                                                    return "?%"
+                                                }
                                                 font.pixelSize: 11
-                                                font.weight: Font.Normal
-                                                color: "black"
+                                                font.weight: progressContainer.isCountModeCompleted ? Font.Bold : Font.Normal
+                                                color: progressContainer.isCountModeCompleted ? "#2E7D32" : "black"
                                                 Layout.minimumWidth: 20
                                                 horizontalAlignment: Text.AlignRight
                                             }

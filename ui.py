@@ -185,6 +185,28 @@ class AnalysisHandler(QObject):
             result[str(diff)] = {"checked": checked, "total": total}
         return result
 
+    @pyqtSlot(result=bool)
+    def isPlayCountMode(self):
+        """Returns whether Play Count Analyze Mode is active."""
+        if not self.analyzer:
+            return False
+        return self.analyzer.play_count_mode
+
+    @pyqtSlot(result='QVariant')
+    def getCountModeProgress(self):
+        """Returns Play Count Analyze Mode progress for each difficulty."""
+        if not self.analyzer:
+            return {}
+        
+        cm = self.analyzer.count_mode
+        result = {}
+        for diff in range(5):
+            checked = len(cm.checked_pages.get(diff, set()))
+            total = cm.total_pages.get(diff)
+            completed = diff in cm.completed
+            result[str(diff)] = {"checked": checked, "total": total, "completed": completed}
+        return result
+
     @pyqtSlot(result='QVariant')
     def getRandomThumbnails(self):
         """Returns 5 random thumbnail paths if available, otherwise empty list."""
@@ -1363,6 +1385,7 @@ class StatisticsHandler(QObject):
 class SettingsHandler(QObject):
     settingsChanged = pyqtSignal()
     cachePathChanged = pyqtSignal()
+    analyzeModeChanged = pyqtSignal(bool, arguments=['enabled'])
     # Migration signals
     cacheMigrationStarting = pyqtSignal()  # Emitted before migration - QML should release file handles
     cacheMigrationFinished = pyqtSignal(str, arguments=['error'])  # Emitted after migration with error message (empty if success)
@@ -1370,6 +1393,11 @@ class SettingsHandler(QObject):
     def __init__(self):
         super().__init__()
         self._pending_migration_path = None  # Stores the new path during migration
+        self._analyzer = None
+
+    def set_analyzer(self, analyzer):
+        """Connect to ArcaeaOnline instance for play count mode control."""
+        self._analyzer = analyzer
 
     # --- General Settings ---
     @pyqtSlot(result=str)
@@ -1514,7 +1542,11 @@ class SettingsHandler(QObject):
 
     @pyqtSlot(bool)
     def setAnalyzeModeEnabled(self, enabled):
-        config['general']['analyze_mode'] = str(enabled)
+        if self._analyzer:
+            self._analyzer.set_play_count_mode(enabled)
+        else:
+            config['general']['analyze_mode'] = enabled
+        self.analyzeModeChanged.emit(enabled)
         self.settingsChanged.emit()
         
     @pyqtSlot()
@@ -1620,6 +1652,7 @@ def main():
     engine.rootContext().setContextProperty("statisticsHandler", statistics_handler)
 
     settings_handler = SettingsHandler()
+    settings_handler.set_analyzer(analysis_handler.analyzer)
     engine.rootContext().setContextProperty("settingsHandler", settings_handler)
 
     qml_filename = "main.qml"

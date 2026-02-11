@@ -222,7 +222,6 @@ Window {
                         Layout.fillWidth: true
                         
                         ColumnLayout {
-                            Layout.fillWidth: true
                             spacing: 4
                             
                             RowLayout {
@@ -270,28 +269,41 @@ Window {
                                     }
                                 }
                             }
-                            
-                            
                         }
+
+                        Item { Layout.fillWidth: true }
                         
-                        Basic.Switch {
-                            checked: settingsHandler ? settingsHandler.getAnalyzeModeEnabled() : false
-                            onToggled: if (settingsHandler) settingsHandler.setAnalyzeModeEnabled(checked)
-                            
-                            indicator: Rectangle {
-                                implicitWidth: 48; implicitHeight: 26
-                                x: parent.leftPadding; y: parent.height / 2 - height / 2
+                        Item {
+                            id: analyzeToggle
+                            width: 48; height: 26
+                            Layout.alignment: Qt.AlignRight
+                            property bool checked: settingsHandler ? settingsHandler.getAnalyzeModeEnabled() : false
+
+                            Rectangle {
+                                id: toggleTrack
+                                anchors.fill: parent
                                 radius: 13
-                                color: parent.checked ? "#6A0DAD" : "#E0E0E0"
-                                border.color: parent.checked ? "#6A0DAD" : "#CCCCCC"
+                                color: analyzeToggle.checked ? "#6A0DAD" : "#E0E0E0"
+                                border.color: analyzeToggle.checked ? "#6A0DAD" : "#CCCCCC"
+                                Behavior on color { ColorAnimation { duration: 200 } }
+                                Behavior on border.color { ColorAnimation { duration: 200 } }
 
                                 Rectangle {
-                                    x: parent.checked ? parent.width - width - 2 : 2
-                                    width: 22; height: 22
-                                    radius: 11
+                                    width: 22; height: 22; radius: 11
                                     anchors.verticalCenter: parent.verticalCenter
+                                    x: analyzeToggle.checked ? parent.width - width - 2 : 2
                                     color: "white"
-                                    Behavior on x { NumberAnimation { duration: 100 } }
+                                    
+                                    Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutCubic } }
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    analyzeToggle.checked = !analyzeToggle.checked
+                                    if (settingsHandler) settingsHandler.setAnalyzeModeEnabled(analyzeToggle.checked)
                                 }
                             }
                         }
