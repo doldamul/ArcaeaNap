@@ -95,6 +95,7 @@ class ArcaeaOnline:
         self.data_changed_callback = None  # Called when data is saved to DB or thumbnails are saved
         self.pin_changed_callback = None   # Called when pin data is updated
         self.status_changed_callback = None # Called when status changes
+        self.session_reset_callback = None  # Called when session is auto-reset
         
         # State variables
         self.previous_user_data = None
@@ -106,9 +107,13 @@ class ArcaeaOnline:
         self.current_sort = None
         self.current_search_text = ''
 
+        # Session auto-reset detection
+        self.scanned_pages: Dict[int, Dict[int, list]] = {}  # difficulty -> {page -> [time_played]}
+
         for difficulty in Difficulty:
             self.checked_page[difficulty] = set()
             self.total_page[difficulty] = None
+            self.scanned_pages[difficulty] = {}
         
         # Initialize pin_updates from database
         self._load_pin_updates_from_db()
@@ -146,6 +151,9 @@ class ArcaeaOnline:
     
     def set_progress_changed_callback(self, callback):
         self.progress_changed_callback = callback
+    
+    def set_session_reset_callback(self, callback):
+        self.session_reset_callback = callback
     
     def notify_data_changed(self):
         """Notify that data has been saved (DB records or thumbnails)"""
@@ -211,10 +219,12 @@ class ArcaeaOnline:
             self.previous_user_data = None
             self.checked_page = {}
             self.total_page = {}
+            self.scanned_pages = {}
 
             for difficulty in Difficulty:
                 self.checked_page[difficulty] = set()
                 self.total_page[difficulty] = None
+                self.scanned_pages[difficulty] = {}
 
             self.current_difficulty = None
             self.current_pageno = None
@@ -247,23 +257,6 @@ class ArcaeaOnline:
                     self.status.status = 'analyzing'
                     self.notify_status_changed()
                     self.log('New page detected.')
-
-                    # 이미지 로드 대기
-                    try:
-                        self.page.wait_for_selector(ALBUM_JACKET_SELECTOR, timeout=5000)
-                        # 이미지가 실제로 src를 가질 때까지 대기
-                        self.page.wait_for_function(
-                            f"""() => {{
-                                const img = document.querySelector('{ALBUM_JACKET_SELECTOR}');
-                                return img && img.src && img.src.includes('webassets.lowiro.com');
-                            }}""",
-                            timeout=5000
-                        )
-                        time.sleep(2)  # 이미지 응답 완료 대기
-                    except Exception as e:
-                        if self._is_browser_closed_error(e):
-                            break
-                        pass
 
                     self.save_data()
                 except Exception as e:
@@ -514,6 +507,11 @@ class ArcaeaOnline:
         if not page_data:
             return
         
+        # Session integrity check (date-sorted, non-search only)
+        if not page_data.is_search and page_data.is_date_sorted:
+            if self._check_session_integrity(page_data):
+                return  # 리로드 발생 → start() 루프가 리로드된 페이지를 다시 처리
+        
         difficulty = page_data.difficulty
         
         # 2. 페이지 진행 상태 업데이트 (날짜순 정렬 + 검색 아닐 때만)
@@ -684,6 +682,78 @@ class ArcaeaOnline:
                 self._find_new_stable_pin(cursor, page_data.difficulty, 
                                            pinned_time, page_data.scores)
 
+    def _check_session_integrity(self, page_data: PageScoreData) -> bool:
+        """
+        세션 무결성 검사: 중복 레코드 또는 페이지 내용 변경 감지 시 세션 리셋.
+        
+        Returns:
+            True if session was reset (caller should abort save_data)
+        """
+        difficulty = page_data.difficulty
+        page = page_data.current_page
+        current_times = [s.get('time_played') for s in page_data.scores]
+
+        # 1) 페이지 재방문 → 스냅샷 비교
+        if page in self.scanned_pages[difficulty]:
+            if self.scanned_pages[difficulty][page] != current_times:
+                self.log(f"Session reset: Page {page} content changed on revisit.")
+                reloaded = self._reset_analysis_session(page)
+                self.scanned_pages[difficulty][page] = current_times
+                return reloaded
+            return False  # 동일 내용이면 중복 체크 불필요
+
+        # 2) 순방향 중복 감지 — 다른 페이지에 같은 time_played가 있는지
+        all_scanned = set()
+        for p, times in self.scanned_pages[difficulty].items():
+            all_scanned.update(times)
+
+        for tp in current_times:
+            if tp in all_scanned:
+                self.log(f"Session reset: Already scanned record detected on page {page}.")
+                reloaded = self._reset_analysis_session(page)
+                self.scanned_pages[difficulty][page] = current_times
+                return reloaded
+
+        # 정상 — 스냅샷 저장
+        self.scanned_pages[difficulty][page] = current_times
+        return False
+
+    def _reset_analysis_session(self, current_page: int = None) -> bool:
+        """세션 무결성 위반 시 세션 리셋. 리로드 발생 시 True 반환."""
+        # 스캔 추적 초기화
+        self.previous_user_data = None
+        for difficulty in Difficulty:
+            self.checked_page[difficulty] = set()
+            self.total_page[difficulty] = None
+            self.scanned_pages[difficulty] = {}
+
+        # 브라우저 새로고침 (1페이지면 스킵)
+        reloaded = False
+        if current_page != 1:
+            try:
+                self.page.reload()
+                reloaded = True
+                # has_page_changed()가 리로드된 페이지를 새 페이지로 감지하도록 초기화
+                self.current_pageno = None
+                self.current_difficulty = None
+                self.current_sort = None
+                self.current_search_text = ''
+            except Exception:
+                pass
+
+        self.notify_progress_changed()
+
+        # UI 경고
+        msg = "New play record detected. Session refreshed"
+        self.log(msg)
+        if self.session_reset_callback:
+            try:
+                self.session_reset_callback(msg)
+            except Exception:
+                pass
+
+        return reloaded
+
     def _find_new_stable_pin(self, cursor: sqlite3.Cursor, difficulty: int,
                               start_time: int, page_items: list):
         """
@@ -842,6 +912,35 @@ class ArcaeaOnline:
         
         difficulty_name = DIFFICULTY_NAMES.get(difficulty, 'unknown')
         
+        # 1차 패스: 미저장 썸네일의 인덱스 → filepath 매핑
+        missing = {}  # {index: filepath}
+        for i, score in enumerate(user_scores_data):
+            song_id = score.get('song_id')
+            if not song_id:
+                continue
+            filepath = os.path.join(thumbnails_dir, f"{song_id}_{difficulty_name}.jpg")
+            if not os.path.exists(filepath):
+                missing[i] = filepath
+        
+        if not missing:
+            return  # 모든 썸네일이 이미 존재
+        
+        # 미저장 썸네일이 있으면 이미지 로드 대기
+        try:
+            self.page.wait_for_selector(ALBUM_JACKET_SELECTOR, timeout=5000)
+            self.page.wait_for_function(
+                f"""() => {{
+                    const img = document.querySelector('{ALBUM_JACKET_SELECTOR}');
+                    return img && img.src && img.src.includes('webassets.lowiro.com');
+                }}""",
+                timeout=5000
+            )
+            time.sleep(2)  # 이미지 응답 완료 대기
+        except Exception as e:
+            if self._is_browser_closed_error(e):
+                return
+            pass  # 타임아웃이어도 캐싱된 데이터로 시도
+        
         # 이미지 요소 가져오기
         try:
             img_elements = self.page.locator(ALBUM_JACKET_SELECTOR).all()
@@ -853,34 +952,21 @@ class ArcaeaOnline:
             self.log(f"Thumbnail: No image elements found")
             return
         
-        # Vue 데이터와 이미지 요소 매칭 (순서 기반)
+        # 미저장 항목만 처리
         saved_count = 0
-        skipped_count = 0
         not_found_count = 0
         
-        for score, img_elem in zip(user_scores_data, img_elements):
+        for i, img_elem in enumerate(img_elements):
+            if i not in missing:
+                continue
+            
+            filepath = missing[i]
             try:
-                song_id = score.get('song_id')
-                if not song_id:
-                    continue
-                
-                # 저장할 파일 경로
-                filename = f"{song_id}_{difficulty_name}.jpg"
-                filepath = os.path.join(thumbnails_dir, filename)
-                
-                # 이미 존재하면 스킵
-                if os.path.exists(filepath):
-                    skipped_count += 1
-                    continue
-                
-                # 이미지 URL에서 파일명 추출
                 img_url = img_elem.get_attribute('src')
                 if not img_url:
                     continue
                 
                 url_filename = img_url.split('/')[-1].split('?')[0]
-                
-                # 캐싱된 이미지 찾기
                 img_data = self.thumbnail_collector.get_image(url_filename)
                 
                 if img_data:
@@ -891,9 +977,10 @@ class ArcaeaOnline:
                 else:
                     not_found_count += 1
                     
-            except Exception as e:
+            except Exception:
                 continue
         
+        skipped_count = len(user_scores_data) - len(missing)
         if saved_count > 0 or skipped_count > 0 or not_found_count > 0:
             self.log(f"Thumbnail: saved={saved_count}, skipped={skipped_count}, not_found={not_found_count}")
 

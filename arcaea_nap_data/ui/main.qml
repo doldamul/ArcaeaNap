@@ -303,11 +303,99 @@ ApplicationWindow {
                 statisticsHandler.refreshData()
             }
         }
+        function onSessionReset(message) {
+            toastText.text = message
+            toastAnimation.restart()
+        }
     }
 
     Component.onCompleted: {
         if (startupHandler) {
             startupHandler.checkAndLoad()
+        }
+    }
+
+    // --- Toast Notification ---
+    Rectangle {
+        id: toastContainer
+        width: toastText.implicitWidth + 40
+        height: toastText.implicitHeight + 24
+        radius: 20
+        color: "#E0333333"
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 40
+
+        opacity: 0
+        scale: 0.85
+        z: 100
+        visible: opacity > 0
+
+        Text {
+            id: toastText
+            anchors.centerIn: parent
+            color: "#FFFFFF"
+            font.pixelSize: 14
+            font.bold: true
+            text: ""
+        }
+
+        // 말풍선 꼬리 (하단 중앙 삼각형)
+        Canvas {
+            width: 16; height: 8
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: parent.bottom
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.fillStyle = "#E0333333"
+                ctx.beginPath()
+                ctx.moveTo(0, 0)
+                ctx.lineTo(8, 8)
+                ctx.lineTo(16, 0)
+                ctx.closePath()
+                ctx.fill()
+            }
+        }
+
+        SequentialAnimation {
+            id: toastAnimation
+
+            // 등장: 아래에서 위로 슬라이드 + 페이드인
+            ParallelAnimation {
+                NumberAnimation {
+                    target: toastContainer; property: "opacity"
+                    from: 0; to: 1; duration: 300
+                    easing.type: Easing.OutCubic
+                }
+                NumberAnimation {
+                    target: toastContainer; property: "scale"
+                    from: 0.85; to: 1.0; duration: 300
+                    easing.type: Easing.OutBack
+                }
+                NumberAnimation {
+                    target: toastContainer; property: "anchors.bottomMargin"
+                    from: 20; to: 40; duration: 300
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            // 3초 대기
+            PauseAnimation { duration: 3000 }
+
+            // 퇴장: 페이드아웃 + 축소
+            ParallelAnimation {
+                NumberAnimation {
+                    target: toastContainer; property: "opacity"
+                    from: 1; to: 0; duration: 400
+                    easing.type: Easing.InCubic
+                }
+                NumberAnimation {
+                    target: toastContainer; property: "scale"
+                    from: 1.0; to: 0.85; duration: 400
+                    easing.type: Easing.InCubic
+                }
+            }
         }
     }
 

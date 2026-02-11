@@ -65,6 +65,7 @@ class AnalysisHandler(QObject):
     pinUpdated = pyqtSignal()   # Emitted when pin data is updated
     statusChanged = pyqtSignal(str, arguments=['status'])  # Emitted when analysis status changes
     progressChanged = pyqtSignal() # Emitted when progress data (checked_page/total_page) changes
+    sessionReset = pyqtSignal(str, arguments=['message'])  # Emitted when session is auto-reset
 
     def __init__(self):
         super().__init__()
@@ -86,6 +87,7 @@ class AnalysisHandler(QObject):
         self.analyzer.set_pin_changed_callback(self.emit_pin_updated)
         self.analyzer.set_status_changed_callback(self.emit_status_changed)
         self.analyzer.set_progress_changed_callback(self.emit_progress_changed)
+        self.analyzer.set_session_reset_callback(self.emit_session_reset)
         
         self.thread = threading.Thread(target=self.analyzer.start, daemon=True)
         self.thread.start()
@@ -112,6 +114,9 @@ class AnalysisHandler(QObject):
 
     def emit_progress_changed(self):
         self.progressChanged.emit()
+
+    def emit_session_reset(self, message):
+        self.sessionReset.emit(message)
 
     @pyqtSlot(result=str)
     def getStatus(self):
