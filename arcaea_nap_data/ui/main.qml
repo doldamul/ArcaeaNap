@@ -197,6 +197,12 @@ ApplicationWindow {
     
     property Window settingsWindow: settingsWindowLoader.item
 
+    onClosing: {
+        if (settingsWindow && settingsWindow.visible) {
+            settingsWindow.close()
+        }
+    }
+
     // --- 페이지 컨테이너 (StackLayout) ---
     // 현재 currentTab 값에 따라 보여주는 페이지가 바뀝니다.
     Item {
