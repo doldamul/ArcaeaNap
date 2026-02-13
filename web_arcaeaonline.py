@@ -128,6 +128,7 @@ class ArcaeaOnline:
         self.pin_changed_callback = None   # Called when pin data is updated
         self.status_changed_callback = None # Called when status changes
         self.session_reset_callback = None  # Called when session is auto-reset
+        self.login_completed_callback = None  # Called when login is completed
         
         # State variables
         self.previous_user_data = None
@@ -190,6 +191,9 @@ class ArcaeaOnline:
     
     def set_session_reset_callback(self, callback):
         self.session_reset_callback = callback
+    
+    def set_login_completed_callback(self, callback):
+        self.login_completed_callback = callback
 
     def set_play_count_mode(self, enabled: bool):
         """Play Count Analyze Mode 토글"""
@@ -399,16 +403,24 @@ class ArcaeaOnline:
         self.playwright = None
 
     def login(self, url):        
-        # check login session
-        login_filename = 'login.dat'
-        login_filepath = os.path.join(config['general']['cache_path'], login_filename)
+        # check login session from account_connections.json
+        connections_filepath = os.path.join(config['general']['cache_path'], 'account_connections.json')
+        login_exists = False
+        login_cookies = []
         
-        login_exists = os.path.exists(login_filepath) and os.path.isfile(login_filepath)
+        if os.path.exists(connections_filepath):
+            try:
+                with open(connections_filepath, 'r', encoding='utf-8') as f:
+                    connections = json.load(f)
+                    ao_info = connections.get('arcaea_online', {})
+                    if ao_info.get('connected', False) and 'cookies' in ao_info:
+                        login_exists = True
+                        login_cookies = ao_info['cookies']
+            except Exception as e:
+                self.log(f'Error loading connections: {e}')
         
         if login_exists: # session load
             self.log("Loading saved login session...")
-            with open(login_filepath, 'r', encoding='utf-8') as f:
-                login_cookies = json.load(f)
             
             # Playwright 쿠키 형식으로 변환
             playwright_cookies = []
@@ -495,7 +507,27 @@ class ArcaeaOnline:
             
             self.log("Login complete.")
 
-            # save login session
+            # Extract authUser information from Vue component
+            auth_user = {}
+            try:
+                vue_element = self.page.locator(VUE_COMPONENT_SELECTOR)
+                if vue_element.count() > 0:
+                    auth_user_data = self.page.evaluate("""(element) => {
+                        var vue = element.__vue__;
+                        var authUser = vue.authUser;
+                        return {
+                            name: authUser.name || '',
+                            user_id: authUser.user_id || '',
+                            rating: authUser.rating || null,
+                            join_date: authUser.join_date || null,
+                            user_code: authUser.user_code || ''
+                        };
+                    }""", vue_element.nth(0).element_handle())
+                    auth_user = auth_user_data or {}
+            except Exception as e:
+                self.log(f'Could not extract authUser: {e}')
+
+            # save login session to account_connections.json
             LOGIN_COOKIE = {'sid', '__stripe_sid', '__stripe_mid'}
             SUB_COOKIE = {'_ga', 'ctrcode', 'lang'}
             COOKIE_ESSENTIAL_FIELDS = {'name', 'value', 'domain', 'path', 'expires', 'httpOnly', 'secure', 'sameSite'}
@@ -516,10 +548,38 @@ class ArcaeaOnline:
                 
                 cookies.append({k: v for k, v in cookie.items() if k in COOKIE_ESSENTIAL_FIELDS})
             
-            with open(login_filepath, 'w', encoding='utf-8') as f:
-                json.dump(cookies, f, ensure_ascii=False)
+            # Load existing connections or create new
+            connections = {}
+            if os.path.exists(connections_filepath):
+                try:
+                    with open(connections_filepath, 'r', encoding='utf-8') as f:
+                        connections = json.load(f)
+                except Exception:
+                    pass
+            
+            # Update arcaea_online section
+            connections['arcaea_online'] = {
+                'connected': True,
+                'connected_at': int(time.time()),
+                'name': auth_user.get('name', ''),
+                'user_id': auth_user.get('user_id', ''),
+                'rating': auth_user.get('rating'),
+                'join_date': auth_user.get('join_date'),
+                'user_code': auth_user.get('user_code', ''),
+                'cookies': cookies
+            }
+            
+            with open(connections_filepath, 'w', encoding='utf-8') as f:
+                json.dump(connections, f, ensure_ascii=False, indent=2)
 
             self.log("Login session saved.")
+            
+            # Notify that login is completed (for updating settings UI)
+            if self.login_completed_callback:
+                try:
+                    self.login_completed_callback()
+                except Exception as e:
+                    self.log(f"Login completed callback error: {e}")
 
     def has_page_changed(self) -> bool:
         if not self.status.is_running:

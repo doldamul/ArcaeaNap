@@ -4,6 +4,8 @@ import os
 import threading
 import time
 import random
+import json
+import keyring
 from datetime import datetime
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtQml import QQmlApplicationEngine
@@ -71,6 +73,11 @@ class AnalysisHandler(QObject):
         super().__init__()
         self.analyzer = ArcaeaOnline()  # Create on init to load pin_updates from DB
         self.thread = None
+        self._settings_handler = None  # Reference to SettingsHandler
+    
+    def set_settings_handler(self, settings_handler):
+        """Set reference to SettingsHandler for connection status updates."""
+        self._settings_handler = settings_handler
 
     @pyqtSlot()
     def startAnalysis(self):
@@ -88,6 +95,7 @@ class AnalysisHandler(QObject):
         self.analyzer.set_status_changed_callback(self.emit_status_changed)
         self.analyzer.set_progress_changed_callback(self.emit_progress_changed)
         self.analyzer.set_session_reset_callback(self.emit_session_reset)
+        self.analyzer.set_login_completed_callback(self.emit_login_completed)
         
         self.thread = threading.Thread(target=self.analyzer.start, daemon=True)
         self.thread.start()
@@ -117,6 +125,11 @@ class AnalysisHandler(QObject):
 
     def emit_session_reset(self, message):
         self.sessionReset.emit(message)
+    
+    def emit_login_completed(self):
+        """Called when login is completed - notify SettingsHandler to update UI."""
+        if self._settings_handler:
+            self._settings_handler.arcaeaOnlineConnectionChanged.emit()
 
     @pyqtSlot(result=str)
     def getStatus(self):
@@ -1389,11 +1402,15 @@ class SettingsHandler(QObject):
     # Migration signals
     cacheMigrationStarting = pyqtSignal()  # Emitted before migration - QML should release file handles
     cacheMigrationFinished = pyqtSignal(str, arguments=['error'])  # Emitted after migration with error message (empty if success)
+    # Account connection signals
+    arcaeaOnlineConnectionChanged = pyqtSignal()
+    googleSheetConnectionChanged = pyqtSignal()
 
     def __init__(self):
         super().__init__()
         self._pending_migration_path = None  # Stores the new path during migration
         self._analyzer = None
+        self._connections_file = os.path.join(config['general']['cache_path'], 'account_connections.json')
 
     def set_analyzer(self, analyzer):
         """Connect to ArcaeaOnline instance for play count mode control."""
@@ -1613,16 +1630,187 @@ class SettingsHandler(QObject):
         config['profile']['difficulty_filter'] = filters
         self.settingsChanged.emit()
 
-    # --- Account Connections (Placeholder) ---
+    # --- Account Connections ---
+    def _load_connections(self):
+        """Load account connections from JSON file."""
+        if not os.path.exists(self._connections_file):
+            return {}
+        try:
+            with open(self._connections_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[SettingsHandler] Error loading connections: {e}")
+            return {}
+    
+    def _save_connections(self, connections):
+        """Save account connections to JSON file."""
+        try:
+            with open(self._connections_file, 'w', encoding='utf-8') as f:
+                json.dump(connections, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"[SettingsHandler] Error saving connections: {e}")
+    
     @pyqtSlot(result=bool)
     def isArcaeaOnlineConnected(self):
-        # TODO: Check actual connection status
-        return False
-
+        """Check if Arcaea Online is connected."""
+        connections = self._load_connections()
+        return connections.get('arcaea_online', {}).get('connected', False)
+    
     @pyqtSlot(result=bool)
     def isGoogleSheetConnected(self):
-        # TODO: Check actual connection status
-        return False
+        """Check if Google Sheet is connected."""
+        connections = self._load_connections()
+        return connections.get('google_sheet', {}).get('connected', False)
+    
+    @pyqtSlot(result=str)
+    def getArcaeaOnlineConnectionInfo(self):
+        """Get Arcaea Online connection info as JSON string."""
+        connections = self._load_connections()
+        ao_info = connections.get('arcaea_online', {})
+        if not ao_info.get('connected', False):
+            return json.dumps({})
+        
+        return json.dumps({
+            'connected_at': ao_info.get('connected_at', 0),
+            'name': ao_info.get('name', ''),
+            'user_id': ao_info.get('user_id', ''),
+            'rating': ao_info.get('rating'),
+            'join_date': ao_info.get('join_date'),
+            'user_code': ao_info.get('user_code', '')
+        })
+    
+    @pyqtSlot(result=str)
+    def getGoogleSheetConnectionInfo(self):
+        """Get Google Sheet connection info as JSON string."""
+        connections = self._load_connections()
+        gs_info = connections.get('google_sheet', {})
+        if not gs_info.get('connected', False):
+            return json.dumps({})
+        
+        return json.dumps({
+            'connected_at': gs_info.get('connected_at', 0),
+            'user_email': gs_info.get('user_email', '')
+        })
+    
+    @pyqtSlot()
+    def connectArcaeaOnline(self):
+        """Connect to Arcaea Online."""
+        def _connect():
+            try:
+                # Create a temporary ArcaeaOnline instance for login
+                temp_analyzer = ArcaeaOnline()
+                temp_analyzer.log = lambda msg: print(f"[ArcaeaOnline] {msg}")
+                
+                lang = 'ko'
+                url = f'https://arcaea.lowiro.com/{lang}/profile/scores?page=1'
+                
+                # Initialize browser and login
+                from playwright.sync_api import sync_playwright
+                from browser_utils import get_browser
+                
+                temp_analyzer.playwright = sync_playwright().start()
+                temp_analyzer.browser = get_browser(temp_analyzer.playwright, headless=False)
+                temp_analyzer.context = temp_analyzer.browser.new_context(
+                    viewport={'width': 600, 'height': 1000}
+                )
+                temp_analyzer.page = temp_analyzer.context.new_page()
+                
+                # Perform login (this will save to account_connections.json)
+                temp_analyzer.login(url)
+                
+                # Clean up
+                temp_analyzer.stop()
+                
+                # Emit signal to update UI (on main thread)
+                self.arcaeaOnlineConnectionChanged.emit()
+                
+            except Exception as e:
+                print(f"[SettingsHandler] Error connecting Arcaea Online: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Run in separate thread to avoid blocking UI
+        thread = threading.Thread(target=_connect, daemon=True)
+        thread.start()
+    
+    @pyqtSlot()
+    def disconnectArcaeaOnline(self):
+        """Disconnect Arcaea Online."""
+        try:
+            connections = self._load_connections()
+            if 'arcaea_online' in connections:
+                del connections['arcaea_online']
+                self._save_connections(connections)
+            
+            # Remove sensitive cookies from keyring
+            try:
+                keyring.delete_password('ArcaeaNap', 'sid')
+            except:
+                pass
+            try:
+                keyring.delete_password('ArcaeaNap', '__stripe_sid')
+            except:
+                pass
+            try:
+                keyring.delete_password('ArcaeaNap', '__stripe_mid')
+            except:
+                pass
+            
+            self.arcaeaOnlineConnectionChanged.emit()
+        except Exception as e:
+            print(f"[SettingsHandler] Error disconnecting Arcaea Online: {e}")
+    
+    @pyqtSlot()
+    def connectGoogleSheet(self):
+        """Connect to Google Sheet."""
+        def _connect():
+            try:
+                from web_consultantsheet import get_creds
+                creds = get_creds()
+                
+                if creds and creds.valid:
+                    # get_creds() already saves to account_connections.json
+                    # Emit signal to update UI (on main thread)
+                    self.googleSheetConnectionChanged.emit()
+            except Exception as e:
+                print(f"[SettingsHandler] Error connecting Google Sheet: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Run in separate thread to avoid blocking UI
+        thread = threading.Thread(target=_connect, daemon=True)
+        thread.start()
+    
+    @pyqtSlot()
+    def disconnectGoogleSheet(self):
+        """Disconnect Google Sheet."""
+        try:
+            connections = self._load_connections()
+            if 'google_sheet' in connections:
+                del connections['google_sheet']
+                self._save_connections(connections)
+            
+            # Remove sensitive tokens from keyring
+            try:
+                keyring.delete_password('ArcaeaNap', 'google_token')
+            except:
+                pass
+            try:
+                keyring.delete_password('ArcaeaNap', 'google_refresh_token')
+            except:
+                pass
+            try:
+                keyring.delete_password('ArcaeaNap', 'google_client_secret')
+            except:
+                pass
+            
+            self.googleSheetConnectionChanged.emit()
+        except Exception as e:
+            print(f"[SettingsHandler] Error disconnecting Google Sheet: {e}")
+    
+    # Signals for connection changes
+    arcaeaOnlineConnectionChanged = pyqtSignal()
+    googleSheetConnectionChanged = pyqtSignal()
 
 
 def main():
@@ -1653,6 +1841,7 @@ def main():
 
     settings_handler = SettingsHandler()
     settings_handler.set_analyzer(analysis_handler.analyzer)
+    analysis_handler.set_settings_handler(settings_handler)  # Enable connection status updates
     engine.rootContext().setContextProperty("settingsHandler", settings_handler)
 
     qml_filename = "main.qml"

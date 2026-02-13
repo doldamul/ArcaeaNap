@@ -37,6 +37,20 @@ Window {
                 errorPopup.open()
             }
         }
+        function onArcaeaOnlineConnectionChanged() {
+            // Force property update by reassigning
+            if (arcaeaButton) {
+                arcaeaButton.isConnected = settingsHandler.isArcaeaOnlineConnected()
+                arcaeaButton.connectionInfo = settingsHandler.getArcaeaOnlineConnectionInfo()
+            }
+        }
+        function onGoogleSheetConnectionChanged() {
+            // Force property update by reassigning
+            if (googleButton) {
+                googleButton.isConnected = settingsHandler.isGoogleSheetConnected()
+                googleButton.connectionInfo = settingsHandler.getGoogleSheetConnectionInfo()
+            }
+        }
     }
     
     Timer {
@@ -316,45 +330,285 @@ Window {
                     RowLayout {
                         spacing: 20
                         
-                        // Arcaea Online
+                        // Arcaea Online Button
                         Rectangle {
-                            width: 200; height: 50
+                            id: arcaeaButton
+                            width: 200; height: 80
                             radius: 10
-                            color: "#F8F9FA"
-                            border.color: "#E0E0E0"; border.width: 1
+                            color: isConnected ? "#F3E5F5" : "#F0F0F0"
                             
-                            Text { 
+                            property bool isConnected: settingsHandler ? settingsHandler.isArcaeaOnlineConnected() : false
+                            property string connectionInfo: settingsHandler ? settingsHandler.getArcaeaOnlineConnectionInfo() : "{}"
+                            
+                            Column {
                                 anchors.centerIn: parent
-                                text: "Arcaea Online"
-                                font.bold: true
-                                color: (settingsHandler && settingsHandler.isArcaeaOnlineConnected()) ? "#4CAF50" : "#555"
+                                spacing: 4
+                                
+                                Text { 
+                                    text: "Arcaea Online"
+                                    font.bold: true
+                                    font.pixelSize: 14
+                                    color: arcaeaButton.isConnected ? "#6A0DAD" : "#424242"
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                                
+                                Text {
+                                    visible: arcaeaButton.isConnected
+                                    text: {
+                                        if (!arcaeaButton.connectionInfo || arcaeaButton.connectionInfo === "{}") return ""
+                                        try {
+                                            var info = JSON.parse(arcaeaButton.connectionInfo)
+                                            var displayName = info.name || info.user_id || ""
+                                            if (displayName) {
+                                                var date = new Date(info.connected_at * 1000)
+                                                return displayName + "\n" + Qt.formatDateTime(date, "yyyy-MM-dd hh:mm")
+                                            }
+                                        } catch(e) {
+                                            console.log("Error parsing Arcaea connection info:", e)
+                                        }
+                                        return ""
+                                    }
+                                    font.pixelSize: 10
+                                    color: "#757575"
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+                                
+                                Text {
+                                    visible: !arcaeaButton.isConnected
+                                    text: "Not Connected"
+                                    font.pixelSize: 11
+                                    color: "#E53935"
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                            }
+                            
+                            // Hover overlay
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "#80000000"
+                                radius: parent.radius
+                                visible: arcaeaButtonMouseArea.containsMouse
+                                
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: arcaeaButton.isConnected ? "Disconnect" : "Connect"
+                                    color: "white"
+                                    font.bold: true
+                                    font.pixelSize: 14
+                                }
                             }
 
                             MouseArea {
+                                id: arcaeaButtonMouseArea
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: console.log("Bind Arcaea Online clicked")
+                                hoverEnabled: true
+                                onClicked: {
+                                    if (arcaeaButton.isConnected) {
+                                        disconnectArcaeaDialog.open()
+                                    } else {
+                                        if (settingsHandler) settingsHandler.connectArcaeaOnline()
+                                    }
+                                }
                             }
                         }
                         
-                        // Google Sheet
+                        // Google Sheet Button
                         Rectangle {
-                            width: 200; height: 50
+                            id: googleButton
+                            width: 200; height: 80
                             radius: 10
-                            color: "#F8F9FA"
-                            border.color: "#E0E0E0"; border.width: 1
+                            color: isConnected ? "#E8F5E9" : "#F0F0F0"
                             
-                            Text { 
+                            property bool isConnected: settingsHandler ? settingsHandler.isGoogleSheetConnected() : false
+                            property string connectionInfo: settingsHandler ? settingsHandler.getGoogleSheetConnectionInfo() : "{}"
+                            
+                            Column {
                                 anchors.centerIn: parent
-                                text: "Google Sheet"
-                                font.bold: true
-                                color: (settingsHandler && settingsHandler.isGoogleSheetConnected()) ? "#4CAF50" : "#555"
+                                spacing: 4
+                                
+                                Text { 
+                                    text: "Google Sheet"
+                                    font.bold: true
+                                    font.pixelSize: 14
+                                    color: googleButton.isConnected ? "#2E7D32" : "#424242"
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                                
+                                Text {
+                                    visible: googleButton.isConnected
+                                    text: {
+                                        if (!googleButton.connectionInfo || googleButton.connectionInfo === "{}") return ""
+                                        try {
+                                            var info = JSON.parse(googleButton.connectionInfo)
+                                            if (info && info.user_email) {
+                                                var date = new Date(info.connected_at * 1000)
+                                                return info.user_email + "\n" + Qt.formatDateTime(date, "yyyy-MM-dd hh:mm")
+                                            }
+                                        } catch(e) {
+                                            console.log("Error parsing Google connection info:", e)
+                                        }
+                                        return ""
+                                    }
+                                    font.pixelSize: 10
+                                    color: "#757575"
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+                                
+                                Text {
+                                    visible: !googleButton.isConnected
+                                    text: "Not Connected"
+                                    font.pixelSize: 11
+                                    color: "#E53935"
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+                            }
+                            
+                            // Hover overlay
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "#80000000"
+                                radius: parent.radius
+                                visible: googleButtonMouseArea.containsMouse
+                                
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: googleButton.isConnected ? "Disconnect" : "Connect"
+                                    color: "white"
+                                    font.bold: true
+                                    font.pixelSize: 14
+                                }
                             }
                             
                             MouseArea {
+                                id: googleButtonMouseArea
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: console.log("Bind Google Sheet clicked")
+                                hoverEnabled: true
+                                onClicked: {
+                                    if (googleButton.isConnected) {
+                                        disconnectGoogleDialog.open()
+                                    } else {
+                                        if (settingsHandler) settingsHandler.connectGoogleSheet()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Disconnect confirmation dialogs
+                    Dialog {
+                        id: disconnectArcaeaDialog
+                        title: "Disconnect Account"
+                        parent: settingsWindow.contentItem
+                        anchors.centerIn: parent
+                        width: 300
+                        height: 140
+                        modal: true
+                        
+                        background: Rectangle {
+                            color: "#FFFFFF"
+                            radius: 12
+                            border.color: "#E0E0E0"
+                            border.width: 1
+                        }
+                        
+                        Column {
+                            spacing: 20
+                            anchors.fill: parent
+                            anchors.margins: 20
+                            
+                            Text {
+                                text: "Disconnect Arcaea Online?"
+                                wrapMode: Text.WordWrap
+                                width: parent.width
+                                color: "#333"
+                            }
+                            
+                            RowLayout {
+                                anchors.right: parent.right
+                                spacing: 10
+                                
+                                Basic.Button {
+                                    text: "Cancel"
+                                    onClicked: disconnectArcaeaDialog.close()
+                                    background: Rectangle { color: "#F0F0F0"; radius: 6 }
+                                }
+                                
+                                Basic.Button {
+                                    text: "Disconnect"
+                                    onClicked: {
+                                        if (settingsHandler) settingsHandler.disconnectArcaeaOnline()
+                                        disconnectArcaeaDialog.close()
+                                    }
+                                    background: Rectangle { color: "#E53935"; radius: 6 }
+                                    contentItem: Text {
+                                        text: parent.text
+                                        color: "white"
+                                        font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Dialog {
+                        id: disconnectGoogleDialog
+                        title: "Disconnect Account"
+                        parent: settingsWindow.contentItem
+                        anchors.centerIn: parent
+                        width: 300
+                        height: 140
+                        modal: true
+                        
+                        background: Rectangle {
+                            color: "#FFFFFF"
+                            radius: 12
+                            border.color: "#E0E0E0"
+                            border.width: 1
+                        }
+                        
+                        Column {
+                            spacing: 20
+                            anchors.fill: parent
+                            anchors.margins: 20
+                            
+                            Text {
+                                text: "Disconnect Google Sheet?"
+                                wrapMode: Text.WordWrap
+                                width: parent.width
+                                color: "#333"
+                            }
+                            
+                            RowLayout {
+                                anchors.right: parent.right
+                                spacing: 10
+                                
+                                Basic.Button {
+                                    text: "Cancel"
+                                    onClicked: disconnectGoogleDialog.close()
+                                    background: Rectangle { color: "#F0F0F0"; radius: 6 }
+                                }
+                                
+                                Basic.Button {
+                                    text: "Disconnect"
+                                    onClicked: {
+                                        if (settingsHandler) settingsHandler.disconnectGoogleSheet()
+                                        disconnectGoogleDialog.close()
+                                    }
+                                    background: Rectangle { color: "#E53935"; radius: 6 }
+                                    contentItem: Text {
+                                        text: parent.text
+                                        color: "white"
+                                        font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                }
                             }
                         }
                     }
