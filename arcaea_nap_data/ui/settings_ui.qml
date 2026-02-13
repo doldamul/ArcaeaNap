@@ -396,18 +396,26 @@ Window {
                                 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: arcaeaButton.isConnected ? "Disconnect" : "Connect"
-                                    color: "white"
+                                    text: {
+                                        if (arcaeaButton.isConnecting) return "Cancel"
+                                        return arcaeaButton.isConnected ? "Disconnect" : "Connect"
+                                    }
+                                    color: {
+                                        if (arcaeaButton.isConnecting) {
+                                            return arcaeaButtonMouseArea.containsMouse ? "white" : "#CCCCCC"
+                                        }
+                                        return "white"
+                                    }
                                     font.bold: true
-                                    font.pixelSize: 14
-                                    visible: !arcaeaButton.isConnecting
+                                    font.pixelSize: arcaeaButton.isConnecting ? 12 : 14
+                                    visible: true
                                 }
                             }
 
                             BusyIndicator {
                                 anchors.centerIn: parent
-                                width: 50
-                                height: 50
+                                width: 64
+                                height: 64
                                 running: arcaeaButton.isConnecting
                                 visible: arcaeaButton.isConnecting
                                 
@@ -445,7 +453,10 @@ Window {
                                 cursorShape: arcaeaButton.isConnecting ? Qt.ArrowCursor : Qt.PointingHandCursor
                                 hoverEnabled: true
                                 onClicked: {
-                                    if (arcaeaButton.isConnecting) return
+                                    if (arcaeaButton.isConnecting) {
+                                        if (settingsHandler) settingsHandler.cancelArcaeaOnlineConnection()
+                                        return
+                                    }
                                     if (arcaeaButton.isConnected) {
                                         disconnectArcaeaDialog.open()
                                     } else {
@@ -518,18 +529,26 @@ Window {
                                 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: googleButton.isConnected ? "Disconnect" : "Connect"
-                                    color: "white"
+                                    text: {
+                                        if (googleButton.isConnecting) return "Cancel"
+                                        return googleButton.isConnected ? "Disconnect" : "Connect"
+                                    }
+                                    color: {
+                                        if (googleButton.isConnecting) {
+                                            return googleButtonMouseArea.containsMouse ? "white" : "#CCCCCC"
+                                        }
+                                        return "white"
+                                    }
                                     font.bold: true
-                                    font.pixelSize: 14
-                                    visible: !googleButton.isConnecting
+                                    font.pixelSize: googleButton.isConnecting ? 12 : 14
+                                    visible: true
                                 }
                             }
 
                             BusyIndicator {
                                 anchors.centerIn: parent
-                                width: 50
-                                height: 50
+                                width: 64
+                                height: 64
                                 running: googleButton.isConnecting
                                 visible: googleButton.isConnecting
                                 
@@ -567,7 +586,10 @@ Window {
                                 cursorShape: googleButton.isConnecting ? Qt.ArrowCursor : Qt.PointingHandCursor
                                 hoverEnabled: true
                                 onClicked: {
-                                    if (googleButton.isConnecting) return
+                                    if (googleButton.isConnecting) {
+                                        if (settingsHandler) settingsHandler.cancelGoogleSheetConnection()
+                                        return
+                                    }
                                     if (googleButton.isConnected) {
                                         disconnectGoogleDialog.open()
                                     } else {

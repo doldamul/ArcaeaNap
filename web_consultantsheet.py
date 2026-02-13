@@ -1,6 +1,12 @@
 import os
 import json
 import keyring
+import threading
+import socket
+import wsgiref.simple_server
+import wsgiref.util
+import webbrowser
+import time
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -199,7 +205,7 @@ def title_for_wiki(name):
     match = re.match(r'^(.*) \[(.*)\]$', name)
     return match.group(1), match.group(2)
 
-def get_creds():
+def get_creds(cancellation_context=None):
     connections_filepath = os.path.join(config['general']['cache_path'], 'account_connections.json')
     secret_filename = 'client_secret.json'
     secret_filepath = os.path.join(config['general']['cache_path'], secret_filename)
@@ -240,13 +246,18 @@ def get_creds():
             creds = None
     
     if not creds or not creds.valid:
+        if cancellation_context and cancellation_context.is_cancelled():
+             return None
+             
         flow = InstalledAppFlow.from_client_secrets_file(
             secret_filepath, SCOPES
         )
-        creds = flow.run_local_server(port=0) # TODO: mannually open URL to set the browser as configuration, and handle the redirect
+        # Use our custom cancellable flow
+        creds = run_cancellable_flow(flow, cancellation_context)
         
-        # Save credentials
-        _save_google_credentials(creds, connections_filepath)
+        if creds:
+            # Save credentials
+            _save_google_credentials(creds, connections_filepath)
     
     return creds
 
@@ -298,6 +309,121 @@ def _save_google_credentials(creds, connections_filepath):
             json.dump(connections, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"Error saving Google credentials: {e}")
+
+class CancellationContext:
+    def __init__(self):
+        self._cancel_event = threading.Event()
+        self._server = None
+        
+    def cancel(self):
+        """Signal cancellation and shutdown the server if running."""
+        self._cancel_event.set()
+        if self._server:
+            try:
+                self._server.shutdown()
+            except Exception as e:
+                print(f"Error shutting down server: {e}")
+            try:
+                self._server.server_close()
+            except Exception as e:
+                print(f"Error closing server socket: {e}")
+
+    def set_server(self, server):
+        self._server = server
+        
+    def is_cancelled(self):
+        return self._cancel_event.is_set()
+
+def run_cancellable_flow(flow, cancellation_context=None):
+    """
+    Run the OAuth flow using a local server that can be cancelled.
+    Based on InstalledAppFlow.run_local_server but with cancellation support.
+    """
+    # Find a free port
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('localhost', 0))
+    port = sock.getsockname()[1]
+    sock.close()
+
+    redirect_uri = f'http://localhost:{port}/'
+    flow.redirect_uri = redirect_uri
+    
+    auth_url, _ = flow.authorization_url(prompt='consent')
+    
+    # Shared state for the WSGI app
+    state = {'code': None}
+    
+    def simple_app(environ, start_response):
+        """WSGI app to handle the redirect."""
+        from urllib.parse import parse_qs
+        
+        if environ['PATH_INFO'] != '/':
+            start_response('404 Not Found', [('Content-type', 'text/plain')])
+            return [b'Not Found']
+
+        query = parse_qs(environ['QUERY_STRING'])
+        
+        if 'code' in query:
+            state['code'] = query['code'][0]
+            start_response('200 OK', [('Content-type', 'text/html; charset=utf-8')])
+            return [b'''
+            <html>
+                <head><title>Authentication Successful</title></head>
+                <body style="font-family: sans-serif; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0;">
+                    <h1 style="color: #4CAF50;">Authentication Successful!</h1>
+                    <p>You can close this window and return to Arcaea Nap.</p>
+                    <script>window.close()</script>
+                </body>
+            </html>
+            ''']
+        
+        if 'error' in query:
+            start_response('200 OK', [('Content-type', 'text/plain')])
+            return [f"Authentication error: {query['error'][0]}".encode('utf-8')]
+            
+        start_response('400 Bad Request', [('Content-type', 'text/plain')])
+        return [b'No code found in request']
+
+    # Create server
+    server = wsgiref.simple_server.make_server('localhost', port, simple_app)
+    
+    if cancellation_context:
+        cancellation_context.set_server(server)
+
+    # Open browser
+    print(f"Opening browser for OAuth: {auth_url}")
+    webbrowser.open(auth_url)
+
+    # Run server in a separate thread because serve_forever blocks
+    server_thread = threading.Thread(target=server.serve_forever)
+    server_thread.daemon = True
+    server_thread.start()
+    
+    # Main thread waits for code or cancellation
+    try:
+        while state['code'] is None:
+            if cancellation_context and cancellation_context.is_cancelled():
+                print("OAuth flow cancelled by user.")
+                # Server shutdown handles cleanup
+                return None
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        if cancellation_context:
+            cancellation_context.cancel()
+        return None
+    finally:
+        # Ensure server is shut down
+        try:
+            server.shutdown()
+            server.server_close()
+        except:
+            pass
+        server_thread.join(timeout=1.0)
+    
+    if state['code']:
+        flow.fetch_token(code=state['code'])
+        return flow.credentials
+    return None
 
 if __name__ == "__main__":
     open_sheet()

@@ -1413,6 +1413,8 @@ class SettingsHandler(QObject):
         self._connections_file = os.path.join(config['general']['cache_path'], 'account_connections.json')
         self._is_arcaea_connecting = False
         self._is_google_connecting = False
+        self._google_cancellation_context = None
+        self._arcaea_login_instance = None
 
     def set_analyzer(self, analyzer):
         """Connect to ArcaeaOnline instance for play count mode control."""
@@ -1731,6 +1733,13 @@ class SettingsHandler(QObject):
                 )
                 temp_analyzer.page = temp_analyzer.context.new_page()
                 
+                self._arcaea_login_instance = temp_analyzer
+                # Enable running status for polling loop in login()
+                temp_analyzer.status.is_running = True
+                
+                # Setup listeners for close events
+                temp_analyzer.setup_browser_listeners()
+
                 # Perform login (this will save to account_connections.json)
                 temp_analyzer.login(url)
                 
@@ -1743,12 +1752,25 @@ class SettingsHandler(QObject):
                 traceback.print_exc()
             finally:
                 self._is_arcaea_connecting = False
+                self._arcaea_login_instance = None
                 # Emit signal to update UI (on main thread)
                 self.arcaeaOnlineConnectionChanged.emit()
         
         # Run in separate thread to avoid blocking UI
         thread = threading.Thread(target=_connect, daemon=True)
         thread.start()
+    
+    @pyqtSlot()
+    def cancelArcaeaOnlineConnection(self):
+        """Cancel the ongoing Arcaea Online connection process."""
+        if self._arcaea_login_instance:
+            print("[SettingsHandler] Cancelling Arcaea Online connection...")
+            try:
+                self._arcaea_login_instance.cancel()
+            except Exception as e:
+                print(f"[SettingsHandler] Error cancelling Arcaea instance: {e}")
+            # The _connect thread will likely raise an exception or exit loop and finish
+
     
     @pyqtSlot()
     def disconnectArcaeaOnline(self):
@@ -1788,8 +1810,14 @@ class SettingsHandler(QObject):
 
         def _connect():
             try:
-                from web_consultantsheet import get_creds
-                creds = get_creds()
+                from web_consultantsheet import get_creds, CancellationContext
+                
+                self._google_cancellation_context = CancellationContext()
+                
+                # Pass context to get_creds
+                creds = get_creds(self._google_cancellation_context)
+                
+                self._google_cancellation_context = None # Clear context after done
                 
                 if creds and creds.valid:
                     # get_creds() already saves to account_connections.json
@@ -1807,6 +1835,15 @@ class SettingsHandler(QObject):
         thread = threading.Thread(target=_connect, daemon=True)
         thread.start()
     
+    @pyqtSlot()
+    def cancelGoogleSheetConnection(self):
+        """Cancel the ongoing Google Sheet connection process."""
+        if self._google_cancellation_context:
+            print("[SettingsHandler] Cancelling Google Sheet connection...")
+            self._google_cancellation_context.cancel()
+            self._google_cancellation_context = None
+            # The _connect thread will finish (returning None) and update UI state
+            
     @pyqtSlot()
     def disconnectGoogleSheet(self):
         """Disconnect Google Sheet."""

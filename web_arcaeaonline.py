@@ -261,14 +261,8 @@ class ArcaeaOnline:
             )
             self.page = self.context.new_page()
             
-            # 브라우저 종료 이벤트 리스너
-            self._browser_closed = False
-            self.page.on("close", lambda: setattr(self, '_browser_closed', True))
-            self.context.on("close", lambda: setattr(self, '_browser_closed', True))
-            self.browser.on("disconnected", lambda: setattr(self, '_browser_closed', True))
-            
             # Response 인터셉트 설정 (썸네일 캐싱용)
-            self.page.on("response", self.thumbnail_collector.handle_response)
+            self.setup_browser_listeners()
 
             self.login(url)
             
@@ -368,6 +362,12 @@ class ArcaeaOnline:
         ]
         return any(indicator in error_msg for indicator in closed_indicators)
 
+    def cancel(self):
+        """Signal cancellation without closing resources (thread-safe)."""
+        self.status.is_running = False
+        self.status.status = 'closed'
+        self.notify_status_changed()
+
     def stop(self):
         self.status.is_running = False
         self.status.status = 'closed'
@@ -402,7 +402,25 @@ class ArcaeaOnline:
         self.browser = None
         self.playwright = None
 
+    
+    def setup_browser_listeners(self):
+        """Set up browser event listeners for close detection and response interception."""
+        if not self.page or not self.context or not self.browser:
+             return
+
+        self._browser_closed = False
+        self.page.on("close", lambda: setattr(self, '_browser_closed', True))
+        self.context.on("close", lambda: setattr(self, '_browser_closed', True))
+        self.browser.on("disconnected", lambda: setattr(self, '_browser_closed', True))
+        
+        # Response intercept
+        self.page.on("response", self.thumbnail_collector.handle_response)
+
     def login(self, url):        
+        # Initialize browser closed flag if not set (needed for direct login calls)
+        if not hasattr(self, '_browser_closed'):
+            self._browser_closed = False
+
         # check login session from account_connections.json
         connections_filepath = os.path.join(config['general']['cache_path'], 'account_connections.json')
         login_exists = False
@@ -503,7 +521,28 @@ class ArcaeaOnline:
             if ARCAEAONLINE_DOMAIN not in self.page.url:
                 self.page.goto(url)
 
-            self.page.wait_for_selector(VUE_COMPONENT_SELECTOR, timeout=300000)
+            # Polling instead of blocking wait to allow cancellation
+            start_time = time.time()
+            login_success = False
+            while self.status.is_running and (time.time() - start_time < 300):
+                 if self._browser_closed: 
+                      break
+                 try:
+                      # Use a short timeout suitable for polling loop check
+                      # Note: is_visible is better than count for visibility check
+                      if self.page.locator(VUE_COMPONENT_SELECTOR).count() > 0:
+                           login_success = True
+                           break
+                 except:
+                      pass
+                 time.sleep(0.5)
+            
+            if not login_success:
+                 if not self.status.is_running:
+                      self.log("Login cancelled.")
+                 else:
+                      self.log("Login timeout.")
+                 return
             
             self.log("Login complete.")
 
