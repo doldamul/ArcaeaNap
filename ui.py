@@ -1411,6 +1411,8 @@ class SettingsHandler(QObject):
         self._pending_migration_path = None  # Stores the new path during migration
         self._analyzer = None
         self._connections_file = os.path.join(config['general']['cache_path'], 'account_connections.json')
+        self._is_arcaea_connecting = False
+        self._is_google_connecting = False
 
     def set_analyzer(self, analyzer):
         """Connect to ArcaeaOnline instance for play count mode control."""
@@ -1655,12 +1657,20 @@ class SettingsHandler(QObject):
         """Check if Arcaea Online is connected."""
         connections = self._load_connections()
         return connections.get('arcaea_online', {}).get('connected', False)
+
+    @pyqtSlot(result=bool)
+    def isArcaeaOnlineConnecting(self):
+        return self._is_arcaea_connecting
     
     @pyqtSlot(result=bool)
     def isGoogleSheetConnected(self):
         """Check if Google Sheet is connected."""
         connections = self._load_connections()
         return connections.get('google_sheet', {}).get('connected', False)
+
+    @pyqtSlot(result=bool)
+    def isGoogleSheetConnecting(self):
+        return self._is_google_connecting
     
     @pyqtSlot(result=str)
     def getArcaeaOnlineConnectionInfo(self):
@@ -1695,6 +1705,12 @@ class SettingsHandler(QObject):
     @pyqtSlot()
     def connectArcaeaOnline(self):
         """Connect to Arcaea Online."""
+        if self._is_arcaea_connecting:
+            return
+
+        self._is_arcaea_connecting = True
+        self.arcaeaOnlineConnectionChanged.emit()
+
         def _connect():
             try:
                 # Create a temporary ArcaeaOnline instance for login
@@ -1721,13 +1737,14 @@ class SettingsHandler(QObject):
                 # Clean up
                 temp_analyzer.stop()
                 
-                # Emit signal to update UI (on main thread)
-                self.arcaeaOnlineConnectionChanged.emit()
-                
             except Exception as e:
                 print(f"[SettingsHandler] Error connecting Arcaea Online: {e}")
                 import traceback
                 traceback.print_exc()
+            finally:
+                self._is_arcaea_connecting = False
+                # Emit signal to update UI (on main thread)
+                self.arcaeaOnlineConnectionChanged.emit()
         
         # Run in separate thread to avoid blocking UI
         thread = threading.Thread(target=_connect, daemon=True)
@@ -1763,6 +1780,12 @@ class SettingsHandler(QObject):
     @pyqtSlot()
     def connectGoogleSheet(self):
         """Connect to Google Sheet."""
+        if self._is_google_connecting:
+            return
+
+        self._is_google_connecting = True
+        self.googleSheetConnectionChanged.emit()
+
         def _connect():
             try:
                 from web_consultantsheet import get_creds
@@ -1770,12 +1793,15 @@ class SettingsHandler(QObject):
                 
                 if creds and creds.valid:
                     # get_creds() already saves to account_connections.json
-                    # Emit signal to update UI (on main thread)
-                    self.googleSheetConnectionChanged.emit()
+                    pass
             except Exception as e:
                 print(f"[SettingsHandler] Error connecting Google Sheet: {e}")
                 import traceback
                 traceback.print_exc()
+            finally:
+                self._is_google_connecting = False
+                # Emit signal to update UI (on main thread)
+                self.googleSheetConnectionChanged.emit()
         
         # Run in separate thread to avoid blocking UI
         thread = threading.Thread(target=_connect, daemon=True)

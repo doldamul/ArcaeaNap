@@ -41,6 +41,7 @@ Window {
             // Force property update by reassigning
             if (arcaeaButton) {
                 arcaeaButton.isConnected = settingsHandler.isArcaeaOnlineConnected()
+                arcaeaButton.isConnecting = settingsHandler.isArcaeaOnlineConnecting()
                 arcaeaButton.connectionInfo = settingsHandler.getArcaeaOnlineConnectionInfo()
             }
         }
@@ -48,6 +49,7 @@ Window {
             // Force property update by reassigning
             if (googleButton) {
                 googleButton.isConnected = settingsHandler.isGoogleSheetConnected()
+                googleButton.isConnecting = settingsHandler.isGoogleSheetConnecting()
                 googleButton.connectionInfo = settingsHandler.getGoogleSheetConnectionInfo()
             }
         }
@@ -336,8 +338,10 @@ Window {
                             width: 200; height: 80
                             radius: 10
                             color: isConnected ? "#F3E5F5" : "#F0F0F0"
+                            Behavior on color { PropertyAction {} }
                             
                             property bool isConnected: settingsHandler ? settingsHandler.isArcaeaOnlineConnected() : false
+                            property bool isConnecting: settingsHandler ? settingsHandler.isArcaeaOnlineConnecting() : false
                             property string connectionInfo: settingsHandler ? settingsHandler.getArcaeaOnlineConnectionInfo() : "{}"
                             
                             Column {
@@ -388,7 +392,7 @@ Window {
                                 anchors.fill: parent
                                 color: "#80000000"
                                 radius: parent.radius
-                                visible: arcaeaButtonMouseArea.containsMouse
+                                visible: arcaeaButtonMouseArea.containsMouse || arcaeaButton.isConnecting
                                 
                                 Text {
                                     anchors.centerIn: parent
@@ -396,15 +400,52 @@ Window {
                                     color: "white"
                                     font.bold: true
                                     font.pixelSize: 14
+                                    visible: !arcaeaButton.isConnecting
+                                }
+                            }
+
+                            BusyIndicator {
+                                anchors.centerIn: parent
+                                width: 50
+                                height: 50
+                                running: arcaeaButton.isConnecting
+                                visible: arcaeaButton.isConnecting
+                                
+                                contentItem: Item {
+                                    anchors.fill: parent
+                                    
+                                    Canvas {
+                                        anchors.fill: parent
+                                        rotation: 0
+                                        
+                                        onPaint: {
+                                            var ctx = getContext("2d")
+                                            ctx.clearRect(0, 0, width, height)
+                                            ctx.beginPath()
+                                            ctx.arc(width/2, height/2, width/2 - 4, 0, 0.7 * Math.PI)
+                                            ctx.lineWidth = 3
+                                            ctx.strokeStyle = "white"
+                                            ctx.lineCap = "round"
+                                            ctx.stroke()
+                                        }
+                                        
+                                        RotationAnimation on rotation {
+                                            from: 0; to: 360; duration: 1000; loops: Animation.Infinite
+                                            running: arcaeaButton.isConnecting
+                                        }
+                                        
+                                        onAvailableChanged: if(available) requestPaint()
+                                    }
                                 }
                             }
 
                             MouseArea {
                                 id: arcaeaButtonMouseArea
                                 anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
+                                cursorShape: arcaeaButton.isConnecting ? Qt.ArrowCursor : Qt.PointingHandCursor
                                 hoverEnabled: true
                                 onClicked: {
+                                    if (arcaeaButton.isConnecting) return
                                     if (arcaeaButton.isConnected) {
                                         disconnectArcaeaDialog.open()
                                     } else {
@@ -420,8 +461,10 @@ Window {
                             width: 200; height: 80
                             radius: 10
                             color: isConnected ? "#E8F5E9" : "#F0F0F0"
+                            Behavior on color { PropertyAction {} }
                             
                             property bool isConnected: settingsHandler ? settingsHandler.isGoogleSheetConnected() : false
+                            property bool isConnecting: settingsHandler ? settingsHandler.isGoogleSheetConnecting() : false
                             property string connectionInfo: settingsHandler ? settingsHandler.getGoogleSheetConnectionInfo() : "{}"
                             
                             Column {
@@ -471,7 +514,7 @@ Window {
                                 anchors.fill: parent
                                 color: "#80000000"
                                 radius: parent.radius
-                                visible: googleButtonMouseArea.containsMouse
+                                visible: googleButtonMouseArea.containsMouse || googleButton.isConnecting
                                 
                                 Text {
                                     anchors.centerIn: parent
@@ -479,15 +522,52 @@ Window {
                                     color: "white"
                                     font.bold: true
                                     font.pixelSize: 14
+                                    visible: !googleButton.isConnecting
+                                }
+                            }
+
+                            BusyIndicator {
+                                anchors.centerIn: parent
+                                width: 50
+                                height: 50
+                                running: googleButton.isConnecting
+                                visible: googleButton.isConnecting
+                                
+                                contentItem: Item {
+                                    anchors.fill: parent
+                                    
+                                    Canvas {
+                                        anchors.fill: parent
+                                        rotation: 0
+                                        
+                                        onPaint: {
+                                            var ctx = getContext("2d")
+                                            ctx.clearRect(0, 0, width, height)
+                                            ctx.beginPath()
+                                            ctx.arc(width/2, height/2, width/2 - 4, 0, 1.0 * Math.PI)
+                                            ctx.lineWidth = 3
+                                            ctx.strokeStyle = "white"
+                                            ctx.lineCap = "round"
+                                            ctx.stroke()
+                                        }
+                                        
+                                        RotationAnimation on rotation {
+                                            from: 0; to: 360; duration: 1000; loops: Animation.Infinite
+                                            running: googleButton.isConnecting
+                                        }
+                                        
+                                        onAvailableChanged: if(available) requestPaint()
+                                    }
                                 }
                             }
                             
                             MouseArea {
                                 id: googleButtonMouseArea
                                 anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
+                                cursorShape: googleButton.isConnecting ? Qt.ArrowCursor : Qt.PointingHandCursor
                                 hoverEnabled: true
                                 onClicked: {
+                                    if (googleButton.isConnecting) return
                                     if (googleButton.isConnected) {
                                         disconnectGoogleDialog.open()
                                     } else {
