@@ -52,6 +52,24 @@ Window {
                 googleButton.isConnecting = settingsHandler.isGoogleSheetConnecting()
                 googleButton.connectionInfo = settingsHandler.getGoogleSheetConnectionInfo()
             }
+            // Also refresh sheet binding state when connection changes
+            if (sheetMgmtCard) {
+                sheetMgmtCard.isGoogleConnected = settingsHandler.isGoogleSheetConnected()
+                sheetMgmtCard.boundSheetInfo = settingsHandler.getBoundSheetInfo()
+                sheetMgmtCard.isBinding = settingsHandler.isBindingSheet()
+            }
+        }
+        function onSheetBindingChanged() {
+            if (sheetMgmtCard) {
+                sheetMgmtCard.boundSheetInfo = settingsHandler.getBoundSheetInfo()
+                sheetMgmtCard.isBinding = settingsHandler.isBindingSheet()
+                sheetMgmtCard.lastSynced = settingsHandler.getLastSyncedTime()
+            }
+        }
+        function onSendDataStatusChanged() {
+            if (sheetMgmtCard) {
+                sheetMgmtCard.isSending = settingsHandler.isSendingData()
+            }
         }
     }
     
@@ -721,13 +739,33 @@ Window {
                     // Arcaea Consultant Sheet Section
                     Text { text: "Arcaea Consultant Sheet"; font.bold: true; color: "#333" }
                     
-                    // 1. Sheet Management Card
+                    // Sheet Management Card
                     Rectangle {
+                        id: sheetMgmtCard
                         Layout.fillWidth: true
                         height: sheetMgmtLayout.implicitHeight + 30
                         color: "#FFFFFF"
                         radius: 12
                         border.color: "#E0E0E0"; border.width: 1
+                        
+                        property bool isGoogleConnected: settingsHandler ? settingsHandler.isGoogleSheetConnected() : false
+                        property string boundSheetInfo: settingsHandler ? settingsHandler.getBoundSheetInfo() : "{}"
+                        property bool isBinding: settingsHandler ? settingsHandler.isBindingSheet() : false
+                        property bool isSending: settingsHandler ? settingsHandler.isSendingData() : false
+                        property real lastSynced: settingsHandler ? settingsHandler.getLastSyncedTime() : 0
+                        
+                        property bool hasBoundSheet: {
+                            try {
+                                var info = JSON.parse(boundSheetInfo)
+                                return info && info.sheet_id && info.sheet_id !== ""
+                            } catch(e) { return false }
+                        }
+                        property string boundSheetName: {
+                            try {
+                                var info = JSON.parse(boundSheetInfo)
+                                return (info && info.sheet_name) ? info.sheet_name : ""
+                            } catch(e) { return "" }
+                        }
                         
                         ColumnLayout {
                             id: sheetMgmtLayout
@@ -735,135 +773,160 @@ Window {
                             anchors.margins: 15
                             spacing: 12
                             
-                            // Header: Title & Shortcut
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Text { text: "Sheet Management"; font.bold: true; color: "#2E7D32"; font.pixelSize: 13 }
-                                Item { Layout.fillWidth: true }
-                                Basic.Button {
-                                    text: "🔗 Open Sheet"
-                                    font.pixelSize: 11
-                                    background: Rectangle { color: "#F1F8E9"; radius: 4; border.color: "#C5E1A5" }
-                                    contentItem: Text { text: parent.text; color: "#33691E"; font.pixelSize: 11; anchors.centerIn: parent }
-                                    onClicked: Qt.openUrlExternally("https://docs.google.com/spreadsheets/...") // TODO: Add link
-                                    implicitHeight: 24
-                                }
-                            }
+                            // Header
+                            Text { text: "Sheet Management"; font.bold: true; color: "#2E7D32"; font.pixelSize: 13 }
                             
-                            Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
-                            
-                            // Status Message
-                            Text { 
-                                text: "Update Available!" 
-                                color: "#E53935" 
-                                font.bold: true 
-                                font.pixelSize: 12 
-                            }
-                            
-                            // Version Info Grid
-                            GridLayout {
-                                Layout.fillWidth: true
-                                columns: 2
-                                columnSpacing: 20
-                                rowSpacing: 8
-                                
-                                // Headers
-                                Text { text: "Current Version"; color: "#757575"; font.pixelSize: 11 }
-                                Text { text: "Latest Version"; color: "#757575"; font.pixelSize: 11 }
-                                
-                                // Values
-                                Text { text: "v7.5.3 (Arc v6.11.0)"; font.bold: true; color: "#333" }
-                                Text { text: "v7.5.7 (Arc v6.12.0)"; font.bold: true; color: "#2E7D32" }
-                            }
-                            
-                            // Changelog Box
-                            Rectangle {
-                                Layout.fillWidth: true
-                                height: changelogCol.implicitHeight + 16
-                                color: "#FAFAFA"
-                                radius: 6
-                                
-                                ColumnLayout {
-                                    id: changelogCol
-                                    anchors.fill: parent
-                                    anchors.margins: 8
-                                    spacing: 4
-                                    
-                                    Text { text: "Changelog"; font.pixelSize: 10; font.bold: true; color: "#555" }
-                                    Text { 
-                                        text: "• Added 1 new song (Arcaea v6.11.8)"
-                                        font.pixelSize: 11
-                                        color: "#333"
-                                        wrapMode: Text.WordWrap
-                                        Layout.fillWidth: true
-                                    }
-                                }
-                            }
-                            
-                            // Update Button
+                            // State: No sheet bound - show Bind Sheet button
                             Basic.Button {
+                                id: bindSheetButton
                                 Layout.fillWidth: true
-                                Layout.topMargin: 5
-                                text: "Update Sheet to v7.5.7"
-                                onClicked: console.log("Update sheet clicked")
+                                visible: !sheetMgmtCard.hasBoundSheet && !sheetMgmtCard.isBinding
+                                text: "Bind Sheet"
+                                onClicked: if (settingsHandler) settingsHandler.bindSheet()
                                 background: Rectangle {
-                                    color: parent.down ? "#43A047" : "#4CAF50" // Green for update
+                                    color: bindSheetButton.down ? "#43A047" : "#4CAF50"
                                     radius: 8
                                 }
                                 contentItem: Text {
-                                    text: parent.text
+                                    text: bindSheetButton.text
                                     color: "white"
                                     font.bold: true
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
+                            }
+                            
+                            // State: Binding in progress
+                            RowLayout {
+                                Layout.fillWidth: true
+                                visible: sheetMgmtCard.isBinding
+                                spacing: 10
+                                
+                                BusyIndicator {
+                                    width: 24; height: 24
+                                    running: sheetMgmtCard.isBinding
+                                }
+                                Text {
+                                    text: "Opening Google Picker..."
+                                    color: "#757575"
+                                    font.pixelSize: 12
+                                    Layout.fillWidth: true
+                                }
+                                Basic.Button {
+                                    text: "Cancel"
+                                    onClicked: if (settingsHandler) settingsHandler.cancelBindSheet()
+                                    background: Rectangle { color: "#F0F0F0"; radius: 6 }
+                                    contentItem: Text { text: "Cancel"; color: "#333"; font.pixelSize: 11; anchors.centerIn: parent }
+                                }
+                            }
+                            
+                            // State: Sheet bound - show sheet info + actions
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                visible: sheetMgmtCard.hasBoundSheet && !sheetMgmtCard.isBinding
+                                spacing: 10
+                                
+                                // Sheet name + Open Sheet + Change icon
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 8
+                                    
+                                    // Sheet name
+                                    Text {
+                                        text: sheetMgmtCard.boundSheetName
+                                        font.bold: true
+                                        font.pixelSize: 13
+                                        color: "#333"
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+                                    
+                                    // Open Sheet button
+                                    Basic.Button {
+                                        text: "Open Sheet"
+                                        onClicked: if (settingsHandler) settingsHandler.openBoundSheet()
+                                        background: Rectangle { color: "#F1F8E9"; radius: 4; border.color: "#C5E1A5" }
+                                        contentItem: Text { text: "Open Sheet"; color: "#33691E"; font.pixelSize: 11; anchors.centerIn: parent }
+                                        implicitHeight: 26
+                                    }
+                                    
+                                    // Change sheet icon button
+                                    Basic.Button {
+                                        text: "🔄"
+                                        onClicked: if (settingsHandler) settingsHandler.bindSheet()
+                                        background: Rectangle { color: "#F5F5F5"; radius: 4; border.color: "#E0E0E0" }
+                                        contentItem: Text { text: "🔄"; font.pixelSize: 14; anchors.centerIn: parent }
+                                        implicitWidth: 30; implicitHeight: 26
+                                    }
+                                }
+                                
+                                // Send Data button (full width)
+                                Basic.Button {
+                                    id: sendDataButton
+                                    Layout.fillWidth: true
+                                    enabled: !sheetMgmtCard.isSending
+                                    onClicked: if (settingsHandler) settingsHandler.sendData()
+                                    background: Rectangle {
+                                        color: {
+                                            if (!sendDataButton.enabled) return "#B0BEC5"
+                                            return sendDataButton.down ? "#5E35B1" : "#673AB7"
+                                        }
+                                        radius: 8
+                                    }
+                                    contentItem: RowLayout {
+                                        spacing: 8
+                                        Item { Layout.fillWidth: true }
+                                        BusyIndicator {
+                                            width: 16; height: 16
+                                            running: sheetMgmtCard.isSending
+                                            visible: sheetMgmtCard.isSending
+                                        }
+                                        Text {
+                                            text: sheetMgmtCard.isSending ? "Sending..." : "Send Data"
+                                            color: "white"
+                                            font.bold: true
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                        Item { Layout.fillWidth: true }
+                                    }
+                                }
+                                
+                                // Last synced info
+                                Text {
+                                    text: {
+                                        if (sheetMgmtCard.lastSynced <= 0) return "Last synced: Never"
+                                        var date = new Date(sheetMgmtCard.lastSynced * 1000)
+                                        return "Last synced: " + Qt.formatDateTime(date, "yyyy-MM-dd hh:mm")
+                                    }
+                                    font.pixelSize: 11
+                                    color: "#757575"
+                                }
+                            }
+                        }
+                        
+                        // Disabled overlay when Google account not connected
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#D0FFFFFF"
+                            radius: parent.radius
+                            visible: !sheetMgmtCard.isGoogleConnected
+                            
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Connect Google account first"
+                                font.pixelSize: 12
+                                color: "#999"
+                                font.italic: true
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                // Block all interactions
                             }
                         }
                     }
                     
-                    // 2. Data Sync Card
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 60
-                        color: "#FFFFFF"
-                        radius: 12
-                        border.color: "#E0E0E0"; border.width: 1
-                        
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 20; anchors.rightMargin: 20
-                            spacing: 15
-                            
-                            Rectangle {
-                                width: 32; height: 32; radius: 16; color: "#E8EAF6"
-                                Text { text: "🔄"; anchors.centerIn: parent }
-                            }
-                            
-                            Column {
-                                Layout.fillWidth: true
-                                spacing: 2
-                                Text { text: "Sync Play Data"; font.bold: true; color: "#333" }
-                                Text { text: "Send your latest records to the sheet"; font.pixelSize: 11; color: "#757575" }
-                            }
-                            
-                            Basic.Button {
-                                text: "Send Data"
-                                onClicked: console.log("Send data clicked")
-                                background: Rectangle {
-                                    color: parent.down ? "#5E35B1" : "#673AB7" // Deep Purple
-                                    radius: 6
-                                }
-                                contentItem: Text {
-                                    text: parent.text
-                                    color: "white"
-                                    font.bold: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                }
-                            }
-                        }
-                    }
-
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
 
                     // Database Management

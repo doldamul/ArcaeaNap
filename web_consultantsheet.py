@@ -26,6 +26,495 @@ SCOPES = [
 
 SPREADSHEET_ID = "1myl8cFTgMX6tim7Eqci4LNl6fzisuxcFrWt9EX0_obs" # Arcaea Song Database from ConsultantSheet
 
+# Reverse alias map: Official Title (DB) -> Simplified Title (Sheet)
+# Built from TITLE_ALIAS_MAP in db_utils.py (which maps Sheet -> DB)
+REVERSE_ALIAS_MAP = {
+    '͟͝͞Ⅱ́̕': 'II',
+    'Anökumene': 'Anokumene',
+    'nέo κósmo': 'neo kosmo',
+    'Alice à la mode': 'Alice a la mode',
+    'April showers': 'April Showers',
+}
+
+def _get_bound_sheet_id():
+    """Get bound sheet ID from account_connections.json, or None if not bound."""
+    connections_filepath = os.path.join(config['general']['cache_path'], 'account_connections.json')
+    if os.path.exists(connections_filepath):
+        try:
+            with open(connections_filepath, 'r', encoding='utf-8') as f:
+                connections = json.load(f)
+                gs_info = connections.get('google_sheet', {})
+                bound_id = gs_info.get('bound_sheet_id', '')
+                if bound_id:
+                    return bound_id
+        except Exception:
+            pass
+    return None
+
+
+def run_google_picker(cancellation_context=None):
+    """
+    Open Google Picker in browser to let user select a spreadsheet.
+    Returns (sheet_id, sheet_title) on success, None if cancelled/failed.
+    """
+    creds = get_creds(cancellation_context)
+    if not creds:
+        return None
+    
+    access_token = creds.token
+    
+    # Read optional API key / app ID from client_secret.json
+    secret_filepath = os.path.join(config['general']['cache_path'], 'client_secret.json')
+    api_key = ''
+    app_id = ''
+    try:
+        with open(secret_filepath, 'r') as f:
+            secret_data = json.load(f)
+        installed = secret_data.get('installed', secret_data.get('web', {}))
+        api_key = installed.get('api_key', secret_data.get('api_key', ''))
+        app_id = installed.get('app_id', secret_data.get('app_id', ''))
+
+        # If app_id is not explicitly available, derive numeric project number
+        # from OAuth client_id prefix (e.g. 1234567890-xxxxx.apps.googleusercontent.com)
+        if not app_id:
+            client_id = installed.get('client_id', '')
+            match = re.match(r'^(\d+)-', client_id)
+            if match:
+                app_id = match.group(1)
+    except Exception:
+        pass
+
+    if not api_key:
+        raise Exception(
+            "Google Picker requires API key. Add installed.api_key in client_secret.json."
+        )
+    
+    # Find a free port
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('localhost', 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    
+    state = {
+        'result': None,
+        'done': False,
+        'reason': None,
+        'page_loaded': False,
+        'last_ping_at': None
+    }
+    picker_html = _build_picker_html(access_token, api_key, app_id, port)
+    
+    def picker_app(environ, start_response):
+        path = environ['PATH_INFO']
+        now = time.monotonic()
+
+        if state['done']:
+            start_response('200 OK', [('Content-type', 'text/plain')])
+            return [b'OK']
+        
+        if path == '/':
+            state['page_loaded'] = True
+            state['last_ping_at'] = now
+            start_response('200 OK', [('Content-type', 'text/html; charset=utf-8')])
+            return [picker_html.encode('utf-8')]
+        elif path == '/heartbeat':
+            state['last_ping_at'] = now
+            start_response('204 No Content', [])
+            return [b'']
+        elif path == '/picked':
+            from urllib.parse import parse_qs
+            query = parse_qs(environ['QUERY_STRING'])
+            sheet_id = query.get('id', [''])[0]
+            sheet_name = query.get('name', [''])[0]
+            if sheet_id:
+                state['result'] = (sheet_id, sheet_name)
+                state['reason'] = 'picked'
+            state['done'] = True
+            start_response('200 OK', [('Content-type', 'text/html; charset=utf-8')])
+            return [b'''<html><body style="font-family:sans-serif;text-align:center;padding-top:40vh">
+                <h2 style="color:#4CAF50">Sheet Selected!</h2>
+                <p>You can close this window and return to Arcaea Nap.</p>
+                <script>window.close()</script></body></html>''']
+        elif path == '/cancelled':
+            state['reason'] = 'cancelled'
+            state['done'] = True
+            print("Google Picker cancelled from browser UI.")
+            start_response('200 OK', [('Content-type', 'text/html; charset=utf-8')])
+            return [b'''<html><body style="font-family:sans-serif;text-align:center;padding-top:40vh">
+                <p>Cancelled. You can close this window.</p>
+                <script>setTimeout(function(){window.close();}, 0)</script></body></html>''']
+        elif path == '/window_closed':
+            state['reason'] = 'window_closed'
+            state['done'] = True
+            start_response('204 No Content', [])
+            return [b'']
+        
+        start_response('404 Not Found', [('Content-type', 'text/plain')])
+        return [b'Not Found']
+    
+    server = wsgiref.simple_server.make_server('localhost', port, picker_app)
+    
+    if cancellation_context:
+        cancellation_context.set_server(server)
+    
+    print(f"Opening Google Picker at http://localhost:{port}/")
+    webbrowser.open(f'http://localhost:{port}/')
+    
+    server_thread = threading.Thread(target=server.serve_forever)
+    server_thread.daemon = True
+    server_thread.start()
+    
+    try:
+        while not state['done']:
+            if cancellation_context and cancellation_context.is_cancelled():
+                print("Google Picker cancelled by user.")
+                return None
+
+            # Browser session close detection fallback:
+            # if picker page was loaded but heartbeat stopped for a while,
+            # assume browser window/tab was closed by user.
+            if state['page_loaded'] and state['last_ping_at'] is not None:
+                if time.monotonic() - state['last_ping_at'] > 3.0:
+                    state['reason'] = state['reason'] or 'window_closed_timeout'
+                    state['done'] = True
+                    break
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        if cancellation_context:
+            cancellation_context.cancel()
+        return None
+    finally:
+        def _shutdown_server():
+            try:
+                server.shutdown()
+            except Exception:
+                pass
+            try:
+                server.server_close()
+            except Exception:
+                pass
+
+        shutdown_thread = threading.Thread(target=_shutdown_server, daemon=True)
+        shutdown_thread.start()
+        shutdown_thread.join(timeout=1.0)
+        server_thread.join(timeout=1.0)
+
+        if shutdown_thread.is_alive():
+            print("Google Picker server shutdown timeout; continuing cleanup.")
+    
+    if state['reason'] in ('cancelled', 'window_closed', 'window_closed_timeout'):
+        print(f"Google Picker ended without selection ({state['reason']}).")
+
+    return state['result']
+
+
+def _build_picker_html(access_token, api_key, app_id, callback_port):
+    """Build HTML page with Google Picker for spreadsheet selection."""
+    picker_config_parts = []
+    if api_key:
+        picker_config_parts.append(f'.setDeveloperKey("{api_key}")')
+    if app_id:
+        picker_config_parts.append(f'.setAppId("{app_id}")')
+    picker_config = '\n                '.join(picker_config_parts)
+    
+    return f"""<!DOCTYPE html>
+<html><head>
+    <title>Select a Spreadsheet - Arcaea Nap</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            height: 100vh; margin: 0; background: #fafafa;
+        }}
+        .status {{ color: #666; font-size: 16px; margin-bottom: 16px; }}
+        .cancel-btn {{
+            padding: 8px 24px; border: 1px solid #ccc;
+            border-radius: 6px; background: white;
+            cursor: pointer; font-size: 14px; color: #333;
+        }}
+        .cancel-btn:hover {{ background: #f0f0f0; }}
+    </style>
+</head><body>
+    <p class="status" id="status">Loading Google Picker...</p>
+    <button class="cancel-btn" onclick="onCancelClick()">Cancel</button>
+    <script>
+        var sessionTerminated = false;
+        var heartbeatTimer = null;
+
+        function markSessionTerminated() {{
+            sessionTerminated = true;
+            if (heartbeatTimer) {{
+                clearInterval(heartbeatTimer);
+                heartbeatTimer = null;
+            }}
+        }}
+
+        function pingHeartbeat() {{
+            fetch('http://localhost:{callback_port}/heartbeat', {{
+                method: 'GET',
+                cache: 'no-store',
+                keepalive: true
+            }}).catch(function() {{}});
+        }}
+
+        function startHeartbeat() {{
+            pingHeartbeat();
+            heartbeatTimer = setInterval(pingHeartbeat, 1000);
+        }}
+
+        function notifyWindowClosed() {{
+            if (sessionTerminated) return;
+
+            markSessionTerminated();
+            var closeUrl = 'http://localhost:{callback_port}/window_closed';
+            try {{
+                if (navigator.sendBeacon) {{
+                    navigator.sendBeacon(closeUrl, 'closed');
+                    return;
+                }}
+            }} catch (e) {{}}
+
+            try {{
+                fetch(closeUrl, {{ method: 'POST', keepalive: true }}).catch(function() {{}});
+            }} catch (e) {{}}
+        }}
+
+        function onCancelClick() {{
+            markSessionTerminated();
+            location.href = 'http://localhost:{callback_port}/cancelled';
+        }}
+
+        window.onerror = function(message) {{
+            document.getElementById('status').textContent = 'Picker error: ' + message;
+        }};
+
+        window.addEventListener('beforeunload', notifyWindowClosed);
+        window.addEventListener('pagehide', notifyWindowClosed);
+
+        function onApiLoad() {{
+            if (!window.gapi) {{
+                document.getElementById('status').textContent = 'Failed to load Google API script.';
+                return;
+            }}
+            gapi.load('picker', {{ callback: createPicker }});
+        }}
+
+        window.addEventListener('load', function() {{
+            var script = document.createElement('script');
+            script.src = 'https://apis.google.com/js/api.js';
+            script.async = true;
+            script.defer = true;
+            script.onload = onApiLoad;
+            script.onerror = function() {{
+                document.getElementById('status').textContent = 'Could not load https://apis.google.com/js/api.js';
+            }};
+            document.head.appendChild(script);
+        }});
+
+        function createPicker() {{
+            try {{
+                startHeartbeat();
+                var view = new google.picker.DocsView(google.picker.ViewId.SPREADSHEETS);
+                view.setMimeTypes('application/vnd.google-apps.spreadsheet');
+                var picker = new google.picker.PickerBuilder()
+                    .addView(view)
+                    .setOAuthToken('{access_token}')
+                    .setCallback(pickerCallback)
+                    .setTitle('Select a Spreadsheet')
+                    {picker_config}
+                    .build();
+                picker.setVisible(true);
+                document.getElementById('status').textContent = 'Select a spreadsheet from the picker.';
+            }} catch (e) {{
+                document.getElementById('status').textContent = 'Failed to open picker: ' + e.message;
+            }}
+        }}
+        function pickerCallback(data) {{
+            if (data.action === google.picker.Action.PICKED) {{
+                markSessionTerminated();
+                var doc = data.docs[0];
+                location.href = 'http://localhost:{callback_port}/picked'
+                    + '?id=' + encodeURIComponent(doc.id)
+                    + '&name=' + encodeURIComponent(doc.name);
+            }} else if (data.action === google.picker.Action.CANCEL) {{
+                markSessionTerminated();
+                location.href = 'http://localhost:{callback_port}/cancelled';
+            }}
+        }}
+    </script>
+</body></html>"""
+
+
+def send_scores_to_sheet(sheet_id=None, log_callback=None, cancellation_context=None):
+    """
+    Send best scores from local DB to the bound Google Sheet's score input tab.
+    Finds the '점수 입력 [Score Input]' tab, matches Song title + Diff columns
+    with local DB, and batch-updates the Score column.
+    
+    Returns: (updated_count, total_rows) tuple
+    """
+    from db_utils import get_all_songs_with_charts, get_best_scores_per_chart, TITLE_ALIAS_MAP
+    
+    def log(msg):
+        print(f"[SendData] {msg}")
+        if log_callback:
+            log_callback(msg)
+    
+    if not sheet_id:
+        sheet_id = _get_bound_sheet_id()
+    
+    if not sheet_id:
+        raise Exception("No sheet bound. Please bind a sheet first.")
+    
+    creds = get_creds(cancellation_context)
+    if not creds:
+        raise Exception("Google authentication failed")
+    
+    gc = gspread.authorize(creds)
+    sheet = gc.open_by_key(sheet_id)
+    
+    # Find score input tab
+    score_tab = None
+    for ws in sheet.worksheets():
+        title_lower = ws.title.lower()
+        if '점수 입력' in title_lower or 'score input' in title_lower:
+            score_tab = ws
+            break
+    
+    if not score_tab:
+        raise Exception("Could not find '점수 입력 [Score Input]' tab in the sheet")
+    
+    log(f"Found tab: {score_tab.title}")
+    
+    # Read all values
+    all_values = score_tab.get_values()
+    if not all_values:
+        raise Exception("Score input tab is empty")
+    
+    # Parse headers - support multilingual column names
+    header = all_values[3]
+    title_col = None
+    diff_col = None
+    score_col = None
+    
+    TITLE_HEADERS = {'Song title', '곡명', '曲名'}
+    DIFF_HEADERS = {'Diff', '난이도', '難易度'}
+    SCORE_HEADERS = {'Score', '점수', 'スコア'}
+    
+    for idx, cell_val in enumerate(header):
+        cell_str = str(cell_val).strip()
+        if cell_str in TITLE_HEADERS:
+            title_col = idx
+        elif cell_str in DIFF_HEADERS:
+            diff_col = idx
+        elif cell_str in SCORE_HEADERS:
+            score_col = idx
+    
+    if title_col is None or diff_col is None or score_col is None:
+        raise Exception(
+            f"Missing required columns. Found: "
+            f"title={'yes' if title_col is not None else 'no'}, "
+            f"diff={'yes' if diff_col is not None else 'no'}, "
+            f"score={'yes' if score_col is not None else 'no'}"
+        )
+    
+    log(f"Columns: title={title_col}, diff={diff_col}, score={score_col}")
+    
+    # Load local data
+    songs_data = get_all_songs_with_charts()
+    best_scores = get_best_scores_per_chart()
+    
+    # Build title -> arcaea_id lookup (case-insensitive)
+    # DB titles are the "official" titles after TITLE_ALIAS_MAP resolution
+    title_to_arcaea_id = {}  # lower(title) -> arcaea_id
+    for song_data in songs_data.values():
+        title = song_data.get('title', '')
+        arcaea_id = song_data.get('arcaea_id', '')
+        if title and arcaea_id:
+            title_to_arcaea_id[title.lower()] = arcaea_id
+    
+    # Difficulty string -> int mapping
+    diff_str_to_int = {
+        'PST': Difficulty.PST.value,
+        'PRS': Difficulty.PRS.value,
+        'FTR': Difficulty.FTR.value,
+        'BYD': Difficulty.BYD.value,
+        'ETR': Difficulty.ETR.value,
+    }
+    
+    # Prepare batch updates
+    batch_updates = []
+    matched_count = 0
+    total_data_rows = 0
+    
+    for row_idx, row in enumerate(all_values[1:], start=2):  # 1-indexed, skip header
+        if cancellation_context and cancellation_context.is_cancelled():
+            raise Exception("Cancelled by user")
+        
+        # Ensure row has enough columns
+        if len(row) <= max(title_col, diff_col):
+            continue
+        
+        sheet_title = str(row[title_col]).strip()
+        sheet_diff = str(row[diff_col]).strip().upper()
+        
+        if not sheet_title or not sheet_diff:
+            continue
+        
+        total_data_rows += 1
+        
+        # Convert difficulty string
+        difficulty_int = diff_str_to_int.get(sheet_diff)
+        if difficulty_int is None:
+            continue
+        
+        # Match title: try direct match first, then alias map
+        lookup_title = sheet_title.lower()
+        
+        # Apply TITLE_ALIAS_MAP (Sheet simplified -> DB official)
+        mapped_title = TITLE_ALIAS_MAP.get(sheet_title)
+        if mapped_title:
+            lookup_title = mapped_title.lower()
+        
+        arcaea_id = title_to_arcaea_id.get(lookup_title)
+        if not arcaea_id:
+            continue
+        
+        # Look up best score
+        score_data = best_scores.get((arcaea_id, difficulty_int))
+        if not score_data or not score_data.get('score'):
+            continue
+        
+        # Convert score_col index to A1 notation
+        col_letter = _col_index_to_letter(score_col)
+        cell_ref = f"{col_letter}{row_idx}"
+        
+        batch_updates.append({
+            'range': cell_ref,
+            'values': [[score_data['score']]]
+        })
+        matched_count += 1
+    
+    if batch_updates:
+        log(f"Sending {matched_count} scores...")
+        score_tab.batch_update(batch_updates, value_input_option='RAW')
+    
+    log(f"Done: {matched_count}/{total_data_rows} rows updated")
+    return matched_count, total_data_rows
+
+
+def _col_index_to_letter(index):
+    """Convert 0-based column index to A1 notation letter (0->A, 1->B, ..., 25->Z, 26->AA)."""
+    result = ''
+    while True:
+        result = chr(ord('A') + index % 26) + result
+        index = index // 26 - 1
+        if index < 0:
+            break
+    return result
+
+
 def open_sheet():
     creds = get_creds()
     
@@ -314,19 +803,26 @@ class CancellationContext:
     def __init__(self):
         self._cancel_event = threading.Event()
         self._server = None
+        self._shutdown_started = False
         
     def cancel(self):
         """Signal cancellation and shutdown the server if running."""
         self._cancel_event.set()
-        if self._server:
-            try:
-                self._server.shutdown()
-            except Exception as e:
-                print(f"Error shutting down server: {e}")
-            try:
-                self._server.server_close()
-            except Exception as e:
-                print(f"Error closing server socket: {e}")
+        if self._server and not self._shutdown_started:
+            self._shutdown_started = True
+
+            def _shutdown_server():
+                try:
+                    self._server.shutdown()
+                except Exception as e:
+                    print(f"Error shutting down server: {e}")
+                try:
+                    self._server.server_close()
+                except Exception as e:
+                    print(f"Error closing server socket: {e}")
+
+            shutdown_thread = threading.Thread(target=_shutdown_server, daemon=True)
+            shutdown_thread.start()
 
     def set_server(self, server):
         self._server = server

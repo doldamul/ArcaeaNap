@@ -1405,6 +1405,9 @@ class SettingsHandler(QObject):
     # Account connection signals
     arcaeaOnlineConnectionChanged = pyqtSignal()
     googleSheetConnectionChanged = pyqtSignal()
+    # Sheet binding signals
+    sheetBindingChanged = pyqtSignal()
+    sendDataStatusChanged = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -1413,7 +1416,11 @@ class SettingsHandler(QObject):
         self._connections_file = os.path.join(config['general']['cache_path'], 'account_connections.json')
         self._is_arcaea_connecting = False
         self._is_google_connecting = False
+        self._is_binding_sheet = False
+        self._is_sending_data = False
         self._google_cancellation_context = None
+        self._bind_cancellation_context = None
+        self._send_cancellation_context = None
         self._arcaea_login_instance = None
 
     def set_analyzer(self, analyzer):
@@ -1574,6 +1581,157 @@ class SettingsHandler(QObject):
     def updateSongDatabase(self):
         print("[SettingsHandler] Update Song Database requested. (Not implemented yet)")
         # TODO: Implement database rebuild logic here (web_consultantsheet + web_wiki)
+
+    # --- Sheet Management ---
+    @pyqtSlot(result=str)
+    def getBoundSheetInfo(self):
+        """Get bound sheet info as JSON string."""
+        connections = self._load_connections()
+        gs_info = connections.get('google_sheet', {})
+        bound_id = gs_info.get('bound_sheet_id', '')
+        bound_name = gs_info.get('bound_sheet_name', '')
+        if not bound_id:
+            return json.dumps({})
+        return json.dumps({
+            'sheet_id': bound_id,
+            'sheet_name': bound_name
+        })
+
+    @pyqtSlot(result=bool)
+    def isBoundSheetAvailable(self):
+        """Check if a sheet is bound."""
+        connections = self._load_connections()
+        gs_info = connections.get('google_sheet', {})
+        return bool(gs_info.get('bound_sheet_id', ''))
+
+    @pyqtSlot(result=bool)
+    def isBindingSheet(self):
+        return self._is_binding_sheet
+
+    @pyqtSlot(result=bool)
+    def isSendingData(self):
+        return self._is_sending_data
+
+    @pyqtSlot()
+    def bindSheet(self):
+        """Open Google Picker to select and bind a spreadsheet."""
+        if self._is_binding_sheet:
+            return
+
+        self._is_binding_sheet = True
+        self.sheetBindingChanged.emit()
+
+        def _bind():
+            try:
+                from web_consultantsheet import run_google_picker, CancellationContext
+                self._bind_cancellation_context = CancellationContext()
+                
+                result = run_google_picker(self._bind_cancellation_context)
+                self._bind_cancellation_context = None
+
+                if result:
+                    sheet_id, sheet_name = result
+                    # Save to connections
+                    connections = self._load_connections()
+                    gs_info = connections.get('google_sheet', {})
+                    gs_info['bound_sheet_id'] = sheet_id
+                    gs_info['bound_sheet_name'] = sheet_name
+                    connections['google_sheet'] = gs_info
+                    self._save_connections(connections)
+                    
+                    print(f"[SettingsHandler] Sheet bound: {sheet_name} ({sheet_id})")
+                else:
+                    print("[SettingsHandler] Sheet binding cancelled")
+            except Exception as e:
+                print(f"[SettingsHandler] Error binding sheet: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                self._is_binding_sheet = False
+                self._bind_cancellation_context = None
+                self.sheetBindingChanged.emit()
+
+        thread = threading.Thread(target=_bind, daemon=True)
+        thread.start()
+
+    @pyqtSlot()
+    def cancelBindSheet(self):
+        """Cancel ongoing sheet binding."""
+        # Reflect cancellation in UI immediately to avoid stale "binding" state.
+        if self._is_binding_sheet:
+            self._is_binding_sheet = False
+            self.sheetBindingChanged.emit()
+
+        if self._bind_cancellation_context:
+            self._bind_cancellation_context.cancel()
+            self._bind_cancellation_context = None
+
+    @pyqtSlot()
+    def openBoundSheet(self):
+        """Open bound sheet in the default web browser."""
+        connections = self._load_connections()
+        gs_info = connections.get('google_sheet', {})
+        bound_id = gs_info.get('bound_sheet_id', '')
+        if bound_id:
+            import webbrowser
+            url = f"https://docs.google.com/spreadsheets/d/{bound_id}"
+            webbrowser.open(url)
+
+    @pyqtSlot()
+    def sendData(self):
+        """Send score data to the bound Google Sheet."""
+        if self._is_sending_data:
+            return
+
+        self._is_sending_data = True
+        self.sendDataStatusChanged.emit()
+
+        def _send():
+            try:
+                from web_consultantsheet import send_scores_to_sheet, CancellationContext
+                self._send_cancellation_context = CancellationContext()
+                
+                connections = self._load_connections()
+                gs_info = connections.get('google_sheet', {})
+                sheet_id = gs_info.get('bound_sheet_id', '')
+                
+                if not sheet_id:
+                    print("[SettingsHandler] No sheet bound for sending data")
+                    return
+                
+                updated, total = send_scores_to_sheet(
+                    sheet_id=sheet_id,
+                    cancellation_context=self._send_cancellation_context
+                )
+                self._send_cancellation_context = None
+                
+                # Update last synced time
+                config['sheet']['last_synced'] = str(time.time())
+                print(f"[SettingsHandler] Send data complete: {updated}/{total} rows")
+            except Exception as e:
+                print(f"[SettingsHandler] Error sending data: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                self._is_sending_data = False
+                self._send_cancellation_context = None
+                self.sendDataStatusChanged.emit()
+                self.sheetBindingChanged.emit()  # To update last synced display
+
+        thread = threading.Thread(target=_send, daemon=True)
+        thread.start()
+
+    @pyqtSlot()
+    def cancelSendData(self):
+        """Cancel ongoing data send."""
+        if self._send_cancellation_context:
+            self._send_cancellation_context.cancel()
+            self._send_cancellation_context = None
+
+    @pyqtSlot(result=float)
+    def getLastSyncedTime(self):
+        """Get the last synced timestamp."""
+        return config['sheet']['last_synced']
 
     # --- Profile Settings ---
     @pyqtSlot(result=bool)
@@ -1846,7 +2004,7 @@ class SettingsHandler(QObject):
             
     @pyqtSlot()
     def disconnectGoogleSheet(self):
-        """Disconnect Google Sheet."""
+        """Disconnect Google Sheet and clear bound sheet info."""
         try:
             connections = self._load_connections()
             if 'google_sheet' in connections:
@@ -1868,12 +2026,15 @@ class SettingsHandler(QObject):
                 pass
             
             self.googleSheetConnectionChanged.emit()
+            self.sheetBindingChanged.emit()
         except Exception as e:
             print(f"[SettingsHandler] Error disconnecting Google Sheet: {e}")
     
-    # Signals for connection changes
+    # Signals for connection changes (re-declared for PyQt6 metaclass resolution)
     arcaeaOnlineConnectionChanged = pyqtSignal()
     googleSheetConnectionChanged = pyqtSignal()
+    sheetBindingChanged = pyqtSignal()
+    sendDataStatusChanged = pyqtSignal()
 
 
 def main():
