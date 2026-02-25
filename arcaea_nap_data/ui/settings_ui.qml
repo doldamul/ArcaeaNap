@@ -49,14 +49,20 @@ Window {
             // Force property update by reassigning
             if (googleButton) {
                 googleButton.isConnected = settingsHandler.isGoogleSheetConnected()
-                googleButton.isConnecting = settingsHandler.isGoogleSheetConnecting()
                 googleButton.connectionInfo = settingsHandler.getGoogleSheetConnectionInfo()
             }
-            // Also refresh sheet binding state when connection changes
+            // Refresh all sheet binding state when connection changes
             if (sheetMgmtCard) {
-                sheetMgmtCard.isGoogleConnected = settingsHandler.isGoogleSheetConnected()
+                var connected = settingsHandler.isGoogleSheetConnected()
+                sheetMgmtCard.isGoogleConnected = connected
                 sheetMgmtCard.boundSheetInfo = settingsHandler.getBoundSheetInfo()
                 sheetMgmtCard.isBinding = settingsHandler.isBindingSheet()
+                // When disconnected, fully reset sheet state so UI reverts to "bind sheet" form
+                if (!connected) {
+                    sheetMgmtCard.sheetVersions = "{}"
+                    sheetMgmtCard.lastSynced = 0
+                    sheetMgmtCard.isSending = false
+                }
             }
         }
         function onSheetBindingChanged() {
@@ -64,11 +70,18 @@ Window {
                 sheetMgmtCard.boundSheetInfo = settingsHandler.getBoundSheetInfo()
                 sheetMgmtCard.isBinding = settingsHandler.isBindingSheet()
                 sheetMgmtCard.lastSynced = settingsHandler.getLastSyncedTime()
+                if (sheetMgmtCard.hasBoundSheet) settingsHandler.fetchSheetVersions()
+            }
+        }
+        function onSheetVersionsChanged() {
+            if (sheetMgmtCard) {
+                sheetMgmtCard.sheetVersions = settingsHandler.getSheetVersions()
             }
         }
         function onSendDataStatusChanged() {
             if (sheetMgmtCard) {
                 sheetMgmtCard.isSending = settingsHandler.isSendingData()
+                sheetMgmtCard.lastSynced = settingsHandler.getLastSyncedTime()
             }
         }
     }
@@ -182,7 +195,7 @@ Window {
             // --- 1. General Section ---
             Rectangle {
                 Layout.fillWidth: true
-                height: generalLayout.implicitHeight + 60
+                Layout.preferredHeight: generalLayout.implicitHeight + 60
                 color: "#FFFFFF"
                 radius: 20
                 border.color: "#E0E0E0"; border.width: 1
@@ -493,7 +506,6 @@ Window {
                             Behavior on color { PropertyAction {} }
                             
                             property bool isConnected: settingsHandler ? settingsHandler.isGoogleSheetConnected() : false
-                            property bool isConnecting: settingsHandler ? settingsHandler.isGoogleSheetConnecting() : false
                             property string connectionInfo: settingsHandler ? settingsHandler.getGoogleSheetConnectionInfo() : "{}"
                             
                             Column {
@@ -543,71 +555,23 @@ Window {
                                 anchors.fill: parent
                                 color: "#80000000"
                                 radius: parent.radius
-                                visible: googleButtonMouseArea.containsMouse || googleButton.isConnecting
+                                visible: googleButtonMouseArea.containsMouse
                                 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: {
-                                        if (googleButton.isConnecting) return "Cancel"
-                                        return googleButton.isConnected ? "Disconnect" : "Connect"
-                                    }
-                                    color: {
-                                        if (googleButton.isConnecting) {
-                                            return googleButtonMouseArea.containsMouse ? "white" : "#CCCCCC"
-                                        }
-                                        return "white"
-                                    }
+                                    text: googleButton.isConnected ? "Disconnect" : "Connect"
+                                    color: "white"
                                     font.bold: true
-                                    font.pixelSize: googleButton.isConnecting ? 12 : 14
-                                    visible: true
-                                }
-                            }
-
-                            BusyIndicator {
-                                anchors.centerIn: parent
-                                width: 64
-                                height: 64
-                                running: googleButton.isConnecting
-                                visible: googleButton.isConnecting
-                                
-                                contentItem: Item {
-                                    anchors.fill: parent
-                                    
-                                    Canvas {
-                                        anchors.fill: parent
-                                        rotation: 0
-                                        
-                                        onPaint: {
-                                            var ctx = getContext("2d")
-                                            ctx.clearRect(0, 0, width, height)
-                                            ctx.beginPath()
-                                            ctx.arc(width/2, height/2, width/2 - 4, 0, 1.0 * Math.PI)
-                                            ctx.lineWidth = 3
-                                            ctx.strokeStyle = "white"
-                                            ctx.lineCap = "round"
-                                            ctx.stroke()
-                                        }
-                                        
-                                        RotationAnimation on rotation {
-                                            from: 0; to: 360; duration: 1000; loops: Animation.Infinite
-                                            running: googleButton.isConnecting
-                                        }
-                                        
-                                        onAvailableChanged: if(available) requestPaint()
-                                    }
+                                    font.pixelSize: 14
                                 }
                             }
                             
                             MouseArea {
                                 id: googleButtonMouseArea
                                 anchors.fill: parent
-                                cursorShape: googleButton.isConnecting ? Qt.ArrowCursor : Qt.PointingHandCursor
+                                cursorShape: Qt.PointingHandCursor
                                 hoverEnabled: true
                                 onClicked: {
-                                    if (googleButton.isConnecting) {
-                                        if (settingsHandler) settingsHandler.cancelGoogleSheetConnection()
-                                        return
-                                    }
                                     if (googleButton.isConnected) {
                                         disconnectGoogleDialog.open()
                                     } else {
@@ -743,7 +707,7 @@ Window {
                     Rectangle {
                         id: sheetMgmtCard
                         Layout.fillWidth: true
-                        height: sheetMgmtLayout.implicitHeight + 30
+                        Layout.preferredHeight: sheetMgmtLayout.implicitHeight + 30
                         color: "#FFFFFF"
                         radius: 12
                         border.color: "#E0E0E0"; border.width: 1
@@ -753,18 +717,58 @@ Window {
                         property bool isBinding: settingsHandler ? settingsHandler.isBindingSheet() : false
                         property bool isSending: settingsHandler ? settingsHandler.isSendingData() : false
                         property real lastSynced: settingsHandler ? settingsHandler.getLastSyncedTime() : 0
+                        property string sheetVersions: settingsHandler ? settingsHandler.getSheetVersions() : "{}"
+                        property string parsedSheetVer: "?"
+                        property string parsedArcaeaVer: "?"
                         
-                        property bool hasBoundSheet: {
+                        onSheetVersionsChanged: {
                             try {
-                                var info = JSON.parse(boundSheetInfo)
-                                return info && info.sheet_id && info.sheet_id !== ""
-                            } catch(e) { return false }
+                                var v = JSON.parse(sheetVersions)
+                                parsedSheetVer = (v && v.sheet_ver) ? String(v.sheet_ver) : '?'
+                                parsedArcaeaVer = (v && v.arcaea_ver) ? String(v.arcaea_ver) : '?'
+                            } catch(e) {
+                                parsedSheetVer = '?'
+                                parsedArcaeaVer = '?'
+                            }
                         }
-                        property string boundSheetName: {
+                        
+                        property bool hasBoundSheet: false
+                        property string boundSheetName: ""
+                        
+                        // Explicitly update derived properties when boundSheetInfo changes
+                        // (JavaScript block bindings may fail to re-evaluate after imperative assignment)
+                        onBoundSheetInfoChanged: {
                             try {
                                 var info = JSON.parse(boundSheetInfo)
-                                return (info && info.sheet_name) ? info.sheet_name : ""
-                            } catch(e) { return "" }
+                                hasBoundSheet = !!(info && info.sheet_id && info.sheet_id !== "")
+                                boundSheetName = (info && info.sheet_name) ? info.sheet_name : ""
+                            } catch(e) {
+                                hasBoundSheet = false
+                                boundSheetName = ""
+                            }
+                        }
+                        
+                        Component.onCompleted: {
+                            // Compute initial derived properties
+                            try {
+                                var info = JSON.parse(boundSheetInfo)
+                                hasBoundSheet = !!(info && info.sheet_id && info.sheet_id !== "")
+                                boundSheetName = (info && info.sheet_name) ? info.sheet_name : ""
+                            } catch(e) {
+                                hasBoundSheet = false
+                                boundSheetName = ""
+                            }
+                            try {
+                                var v = JSON.parse(sheetVersions)
+                                parsedSheetVer = (v && v.sheet_ver) ? String(v.sheet_ver) : '?'
+                                parsedArcaeaVer = (v && v.arcaea_ver) ? String(v.arcaea_ver) : '?'
+                            } catch(e) {
+                                parsedSheetVer = '?'
+                                parsedArcaeaVer = '?'
+                            }
+                            if (settingsHandler && hasBoundSheet) {
+                                settingsHandler.fetchSheetVersions()
+                            }
                         }
                         
                         ColumnLayout {
@@ -773,8 +777,8 @@ Window {
                             anchors.margins: 15
                             spacing: 12
                             
-                            // Header
-                            Text { text: "Sheet Management"; font.bold: true; color: "#2E7D32"; font.pixelSize: 13 }
+                            // Header removed as requested
+                            // Text { text: "Sheet Management"; font.bold: true; color: "#2E7D32"; font.pixelSize: 13 }
                             
                             // State: No sheet bound - show Bind Sheet button
                             Basic.Button {
@@ -826,27 +830,116 @@ Window {
                                 visible: sheetMgmtCard.hasBoundSheet && !sheetMgmtCard.isBinding
                                 spacing: 10
                                 
-                                // Sheet name + Open Sheet + Change icon
+                                // Sheet title
+                                Text {
+                                    text: sheetMgmtCard.boundSheetName
+                                    font.bold: true
+                                    font.pixelSize: 14
+                                    color: "#333"
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                
+                                // Sheet versions + Open Sheet + Change icon
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: 8
                                     
-                                    // Sheet name
-                                    Text {
-                                        text: sheetMgmtCard.boundSheetName
-                                        font.bold: true
-                                        font.pixelSize: 13
-                                        color: "#333"
-                                        elide: Text.ElideRight
-                                        Layout.fillWidth: true
+                                    // Version Badges
+                                    RowLayout {
+                                        spacing: 8
+                                        
+                                        Rectangle {
+                                            color: "#E8F5E9"
+                                            radius: 4
+                                            implicitWidth: verRow1.implicitWidth + 16
+                                            implicitHeight: verRow1.implicitHeight + 8
+                                            
+                                            RowLayout {
+                                                id: verRow1
+                                                anchors.centerIn: parent
+                                                spacing: 4
+                                                Text { text: "Sheet"; font.pixelSize: 11; color: "#2E7D32"; font.bold: true }
+                                                Item {
+                                                    implicitWidth: 11; implicitHeight: 11
+                                                    visible: !sheetMgmtCard.parsedSheetVer || sheetMgmtCard.parsedSheetVer === '?'
+                                                    Canvas {
+                                                        anchors.fill: parent
+                                                        onPaint: {
+                                                            var ctx = getContext("2d")
+                                                            ctx.clearRect(0, 0, width, height)
+                                                            ctx.beginPath()
+                                                            ctx.arc(width/2, height/2, width/2 - 1.5, 0, 1.4 * Math.PI)
+                                                            ctx.lineWidth = 1.5
+                                                            ctx.strokeStyle = "#333"
+                                                            ctx.lineCap = "round"
+                                                            ctx.stroke()
+                                                        }
+                                                        RotationAnimation on rotation {
+                                                            from: 0; to: 360; duration: 1000; loops: Animation.Infinite
+                                                            running: parent.visible
+                                                        }
+                                                        onAvailableChanged: if(available) requestPaint()
+                                                    }
+                                                }
+                                                Text {
+                                                    text: sheetMgmtCard.parsedSheetVer || ''
+                                                    font.pixelSize: 11; color: "#333"
+                                                    visible: sheetMgmtCard.parsedSheetVer && sheetMgmtCard.parsedSheetVer !== '?'
+                                                }
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            color: "#E3F2FD"
+                                            radius: 4
+                                            implicitWidth: verRow2.implicitWidth + 16
+                                            implicitHeight: verRow2.implicitHeight + 8
+                                            
+                                            RowLayout {
+                                                id: verRow2
+                                                anchors.centerIn: parent
+                                                spacing: 4
+                                                Text { text: "Arcaea"; font.pixelSize: 11; color: "#1565C0"; font.bold: true }
+                                                Item {
+                                                    implicitWidth: 11; implicitHeight: 11
+                                                    visible: !sheetMgmtCard.parsedArcaeaVer || sheetMgmtCard.parsedArcaeaVer === '?'
+                                                    Canvas {
+                                                        anchors.fill: parent
+                                                        onPaint: {
+                                                            var ctx = getContext("2d")
+                                                            ctx.clearRect(0, 0, width, height)
+                                                            ctx.beginPath()
+                                                            ctx.arc(width/2, height/2, width/2 - 1.5, 0, 1.4 * Math.PI)
+                                                            ctx.lineWidth = 1.5
+                                                            ctx.strokeStyle = "#333"
+                                                            ctx.lineCap = "round"
+                                                            ctx.stroke()
+                                                        }
+                                                        RotationAnimation on rotation {
+                                                            from: 0; to: 360; duration: 1000; loops: Animation.Infinite
+                                                            running: parent.visible
+                                                        }
+                                                        onAvailableChanged: if(available) requestPaint()
+                                                    }
+                                                }
+                                                Text {
+                                                    text: sheetMgmtCard.parsedArcaeaVer || ''
+                                                    font.pixelSize: 11; color: "#333"
+                                                    visible: sheetMgmtCard.parsedArcaeaVer && sheetMgmtCard.parsedArcaeaVer !== '?'
+                                                }
+                                            }
+                                        }
                                     }
+                                    
+                                    Item { Layout.fillWidth: true }
                                     
                                     // Open Sheet button
                                     Basic.Button {
                                         text: "Open Sheet"
                                         onClicked: if (settingsHandler) settingsHandler.openBoundSheet()
                                         background: Rectangle { color: "#F1F8E9"; radius: 4; border.color: "#C5E1A5" }
-                                        contentItem: Text { text: "Open Sheet"; color: "#33691E"; font.pixelSize: 11; anchors.centerIn: parent }
+                                        contentItem: Text { text: "Open Sheet"; color: "#33691E"; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                         implicitHeight: 26
                                     }
                                     
@@ -855,10 +948,13 @@ Window {
                                         text: "🔄"
                                         onClicked: if (settingsHandler) settingsHandler.bindSheet()
                                         background: Rectangle { color: "#F5F5F5"; radius: 4; border.color: "#E0E0E0" }
-                                        contentItem: Text { text: "🔄"; font.pixelSize: 14; anchors.centerIn: parent }
+                                        contentItem: Text { text: "🔄"; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                         implicitWidth: 30; implicitHeight: 26
                                     }
                                 }
+                                
+                                // Spacer for visual balance
+                                Item { height: 4 }
                                 
                                 // Send Data button (full width)
                                 Basic.Button {
@@ -876,10 +972,29 @@ Window {
                                     contentItem: RowLayout {
                                         spacing: 8
                                         Item { Layout.fillWidth: true }
-                                        BusyIndicator {
-                                            width: 16; height: 16
-                                            running: sheetMgmtCard.isSending
+                                        Item {
+                                            Layout.preferredWidth: 14
+                                            Layout.preferredHeight: 14
                                             visible: sheetMgmtCard.isSending
+                                            
+                                            Canvas {
+                                                anchors.fill: parent
+                                                onPaint: {
+                                                    var ctx = getContext("2d")
+                                                    ctx.clearRect(0, 0, width, height)
+                                                    ctx.beginPath()
+                                                    ctx.arc(width/2, height/2, width/2 - 1.5, 0, 1.4 * Math.PI)
+                                                    ctx.lineWidth = 2
+                                                    ctx.strokeStyle = "white"
+                                                    ctx.lineCap = "round"
+                                                    ctx.stroke()
+                                                }
+                                                RotationAnimation on rotation {
+                                                    from: 0; to: 360; duration: 1000; loops: Animation.Infinite
+                                                    running: parent.visible
+                                                }
+                                                onAvailableChanged: if(available) requestPaint()
+                                            }
                                         }
                                         Text {
                                             text: sheetMgmtCard.isSending ? "Sending..." : "Send Data"
@@ -974,7 +1089,7 @@ Window {
             // --- 2. Profile Section ---
             Rectangle {
                 Layout.fillWidth: true
-                height: profileLayout.implicitHeight + 60
+                Layout.preferredHeight: profileLayout.implicitHeight + 60
                 color: "#FFFFFF"
                 radius: 20
                 border.color: "#E0E0E0"; border.width: 1

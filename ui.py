@@ -12,7 +12,7 @@ from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtCore import QUrl, QObject, pyqtSlot, pyqtSignal, pyqtProperty, QVariant
 from PyQt6.QtGui import QImage, QColor, QSurfaceFormat
 from web_arcaeaonline import ArcaeaOnline
-from web_consultantsheet import open_sheet
+from web_consultantsheet import open_sheet, get_sheet_version_info
 from web_wiki import open_wiki
 from db_utils import (
     get_db_path, play_stats_total, play_stats_difficulty, get_top_10_most_played,
@@ -1408,6 +1408,7 @@ class SettingsHandler(QObject):
     # Sheet binding signals
     sheetBindingChanged = pyqtSignal()
     sendDataStatusChanged = pyqtSignal()
+    sheetVersionsChanged = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -1415,13 +1416,13 @@ class SettingsHandler(QObject):
         self._analyzer = None
         self._connections_file = os.path.join(config['general']['cache_path'], 'account_connections.json')
         self._is_arcaea_connecting = False
-        self._is_google_connecting = False
         self._is_binding_sheet = False
         self._is_sending_data = False
         self._google_cancellation_context = None
         self._bind_cancellation_context = None
         self._send_cancellation_context = None
         self._arcaea_login_instance = None
+        self._sheet_versions = {'sheet_ver': '?', 'arcaea_ver': '?'}
 
     def set_analyzer(self, analyzer):
         """Connect to ArcaeaOnline instance for play count mode control."""
@@ -1597,12 +1598,28 @@ class SettingsHandler(QObject):
             'sheet_name': bound_name
         })
 
-    @pyqtSlot(result=bool)
-    def isBoundSheetAvailable(self):
-        """Check if a sheet is bound."""
-        connections = self._load_connections()
-        gs_info = connections.get('google_sheet', {})
-        return bool(gs_info.get('bound_sheet_id', ''))
+    @pyqtSlot()
+    def fetchSheetVersions(self):
+        """Fetch sheet version info in a background thread."""
+        self._sheet_versions = {'sheet_ver': '?', 'arcaea_ver': '?'}
+        self.sheetVersionsChanged.emit()
+
+        def task():
+            print("[SettingsHandler] Fetching sheet versions...")
+            # We don't have a specific cancellation context for this yet, pass None
+            versions = get_sheet_version_info()
+            self._sheet_versions = versions
+            print(f"[SettingsHandler] Sheet versions fetched: {versions}")
+            self.sheetVersionsChanged.emit()
+            
+        thread = threading.Thread(target=task, daemon=True)
+        thread.start()
+
+    @pyqtSlot(result=str)
+    def getSheetVersions(self):
+        """Get cached sheet versions as JSON string."""
+        return json.dumps(self._sheet_versions)
+
 
     @pyqtSlot(result=bool)
     def isBindingSheet(self):
@@ -1716,17 +1733,10 @@ class SettingsHandler(QObject):
                 self._is_sending_data = False
                 self._send_cancellation_context = None
                 self.sendDataStatusChanged.emit()
-                self.sheetBindingChanged.emit()  # To update last synced display
 
         thread = threading.Thread(target=_send, daemon=True)
         thread.start()
 
-    @pyqtSlot()
-    def cancelSendData(self):
-        """Cancel ongoing data send."""
-        if self._send_cancellation_context:
-            self._send_cancellation_context.cancel()
-            self._send_cancellation_context = None
 
     @pyqtSlot(result=float)
     def getLastSyncedTime(self):
@@ -1828,9 +1838,6 @@ class SettingsHandler(QObject):
         connections = self._load_connections()
         return connections.get('google_sheet', {}).get('connected', False)
 
-    @pyqtSlot(result=bool)
-    def isGoogleSheetConnecting(self):
-        return self._is_google_connecting
     
     @pyqtSlot(result=str)
     def getArcaeaOnlineConnectionInfo(self):
@@ -1959,52 +1966,58 @@ class SettingsHandler(QObject):
     
     @pyqtSlot()
     def connectGoogleSheet(self):
-        """Connect to Google Sheet."""
-        if self._is_google_connecting:
-            return
-
-        self._is_google_connecting = True
-        self.googleSheetConnectionChanged.emit()
+        """Connect to Google Sheet (fire-and-forget).
+        
+        Opens the OAuth browser page and immediately returns.
+        If a previous session is in progress, it is cancelled first.
+        """
+        # Cancel any existing session before starting a new one
+        if self._google_cancellation_context:
+            print("[SettingsHandler] Cancelling previous Google Sheet session...")
+            self._google_cancellation_context.cancel()
+            self._google_cancellation_context = None
 
         def _connect():
             try:
                 from web_consultantsheet import get_creds, CancellationContext
                 
-                self._google_cancellation_context = CancellationContext()
+                ctx = CancellationContext()
+                self._google_cancellation_context = ctx
                 
                 # Pass context to get_creds
-                creds = get_creds(self._google_cancellation_context)
+                creds = get_creds(ctx)
+                
+                if ctx.is_cancelled():
+                    print("[SettingsHandler] Google Sheet session was superseded.")
+                    return
                 
                 self._google_cancellation_context = None # Clear context after done
                 
                 if creds and creds.valid:
                     # get_creds() already saves to account_connections.json
-                    pass
+                    print("[SettingsHandler] Google Sheet connected successfully.")
+                    self.googleSheetConnectionChanged.emit()
             except Exception as e:
                 print(f"[SettingsHandler] Error connecting Google Sheet: {e}")
                 import traceback
                 traceback.print_exc()
-            finally:
-                self._is_google_connecting = False
-                # Emit signal to update UI (on main thread)
-                self.googleSheetConnectionChanged.emit()
         
         # Run in separate thread to avoid blocking UI
         thread = threading.Thread(target=_connect, daemon=True)
         thread.start()
     
-    @pyqtSlot()
-    def cancelGoogleSheetConnection(self):
-        """Cancel the ongoing Google Sheet connection process."""
+    def _cancelGoogleSheetSession(self):
+        """Cancel any ongoing Google Sheet OAuth session (internal use)."""
         if self._google_cancellation_context:
-            print("[SettingsHandler] Cancelling Google Sheet connection...")
             self._google_cancellation_context.cancel()
             self._google_cancellation_context = None
-            # The _connect thread will finish (returning None) and update UI state
             
     @pyqtSlot()
     def disconnectGoogleSheet(self):
         """Disconnect Google Sheet and clear bound sheet info."""
+        # Cancel any ongoing OAuth session
+        self._cancelGoogleSheetSession()
+        
         try:
             connections = self._load_connections()
             if 'google_sheet' in connections:

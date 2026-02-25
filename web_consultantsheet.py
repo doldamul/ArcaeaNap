@@ -317,8 +317,10 @@ def _build_picker_html(access_token, api_key, app_id, callback_port):
                 startHeartbeat();
                 var view = new google.picker.DocsView(google.picker.ViewId.SPREADSHEETS);
                 view.setMimeTypes('application/vnd.google-apps.spreadsheet');
+                view.setMode(google.picker.DocsViewMode.LIST);
                 var picker = new google.picker.PickerBuilder()
                     .addView(view)
+                    .enableFeature(google.picker.Feature.NAV_HIDDEN)
                     .setOAuthToken('{access_token}')
                     .setCallback(pickerCallback)
                     .setTitle('Select a Spreadsheet')
@@ -603,6 +605,85 @@ def open_sheet():
     print(f"Total unique songs combined: {len(merged_data)}")
     save_to_db(merged_data.values())
 
+def get_sheet_version_info(sheet_id=None, cancellation_context=None):
+    """
+    Get version information from the bound Google Sheet's 'Main' tab.
+    Looks for:
+    - '현재 버전' / 'Current version' / '現在バージョン' -> Returns value in right cell
+    - '대응 Arcaea 버전' / 'Arcaea's version' / 'Arcaeaバージョン' -> Returns value in right cell
+    
+    Returns: dict { 'sheet_ver': str, 'arcaea_ver': str }
+    """
+    if not sheet_id:
+        sheet_id = _get_bound_sheet_id()
+    
+    if not sheet_id:
+        return {'sheet_ver': '?', 'arcaea_ver': '?'}
+    
+    try:
+        # Request non-interactive credentials (don't open browser automatically)
+        creds = get_creds(cancellation_context, interactive=False)
+        if not creds:
+            return {'sheet_ver': '?', 'arcaea_ver': '?'}
+        
+        gc = gspread.authorize(creds)
+        sheet = gc.open_by_key(sheet_id)
+        
+        # Find Main tab - look for English/Korean/Japanese variations
+        main_tab = None
+        target_names = ['main', '메인', '메인 [main]', 'main [메인]']
+        
+        for ws in sheet.worksheets():
+            ws_title = ws.title.lower().strip()
+            # Check exact match or partial match for target names
+            if any(t in ws_title for t in target_names):
+                main_tab = ws
+                break
+        
+        if not main_tab:
+            # Fallback: try first tab if named roughly right, or just first tab? No, risky.
+            return {'sheet_ver': '?', 'arcaea_ver': '?'}
+            
+        # Read a reasonable chunk of data (e.g., A1:Z50) to find the labels
+        # Labels are usually near the top
+        data = main_tab.get('A1:Z50')
+        
+        sheet_ver = '?'
+        arcaea_ver = '?'
+        
+        # Labels to search for
+        SHEET_VER_LABELS = ['현재 버전', 'current version', '現在バージョン']
+        ARCAEA_VER_LABELS = ['대응 arcaea 버전', "arcaea's version", 'arcaeaバージョン']
+        
+        for row_idx, row in enumerate(data):
+            for col_idx, cell_value in enumerate(row):
+                if not isinstance(cell_value, str):
+                    continue
+                    
+                cell_lower = cell_value.lower().strip()
+                
+                # Check for Sheet Version
+                if sheet_ver == '?' and any(label in cell_lower for label in SHEET_VER_LABELS):
+                    # version is in the cell to the right
+                    if col_idx + 1 < len(row):
+                        sheet_ver = str(row[col_idx + 1]).strip()
+                
+                # Check for Arcaea Version
+                if arcaea_ver == '?' and any(label in cell_lower for label in ARCAEA_VER_LABELS):
+                    # version is in the cell to the right
+                    if col_idx + 1 < len(row):
+                        arcaea_ver = str(row[col_idx + 1]).strip()
+                        
+            if sheet_ver != '?' and arcaea_ver != '?':
+                break
+                
+        return {'sheet_ver': sheet_ver, 'arcaea_ver': arcaea_ver}
+        
+    except Exception as e:
+        print(f"Error fetching sheet version info: {e}")
+        return {'sheet_ver': '?', 'arcaea_ver': '?'}
+
+
 def save_to_db(data):
     conn = get_connection()
     cursor = conn.cursor()
@@ -694,7 +775,7 @@ def title_for_wiki(name):
     match = re.match(r'^(.*) \[(.*)\]$', name)
     return match.group(1), match.group(2)
 
-def get_creds(cancellation_context=None):
+def get_creds(cancellation_context=None, interactive=True):
     connections_filepath = os.path.join(config['general']['cache_path'], 'account_connections.json')
     secret_filename = 'client_secret.json'
     secret_filepath = os.path.join(config['general']['cache_path'], secret_filename)
@@ -735,6 +816,9 @@ def get_creds(cancellation_context=None):
             creds = None
     
     if not creds or not creds.valid:
+        if not interactive:
+            return None
+
         if cancellation_context and cancellation_context.is_cancelled():
              return None
              
@@ -752,28 +836,39 @@ def get_creds(cancellation_context=None):
 
 def _save_google_credentials(creds, connections_filepath):
     """Save Google credentials to account_connections.json."""
+    print("[GoogleAuth] Saving credentials...")
     try:
         # Extract user email using Google API Client
         user_email = ''
         try:
+            print("[GoogleAuth] Fetching user info...")
+            # Set a timeout for this discovery build/execute to prevent hanging
+            socket.setdefaulttimeout(10) 
             user_info_service = build('oauth2', 'v2', credentials=creds)
             user_info = user_info_service.userinfo().get().execute()
             user_email = user_info.get('email', '')
+            print(f"[GoogleAuth] User email: {user_email}")
         except Exception as e:
-            print(f"Error extracting user email: {e}")
+            print(f"[GoogleAuth] Error extracting user email (non-critical): {e}")
+        finally:
+             socket.setdefaulttimeout(None) # Reset timeout
         
         # Get token info
         token_info = json.loads(creds.to_json())
         
         # Save sensitive data to keyring
+        print("[GoogleAuth] Saving to keyring...")
         if 'token' in token_info:
-            keyring.set_password('ArcaeaNap', 'google_token', token_info['token'])
+            try: keyring.set_password('ArcaeaNap', 'google_token', token_info['token'])
+            except Exception as e: print(f"[GoogleAuth] Keyring error (token): {e}")
             token_info['token'] = ''
         if 'refresh_token' in token_info:
-            keyring.set_password('ArcaeaNap', 'google_refresh_token', token_info['refresh_token'])
+            try: keyring.set_password('ArcaeaNap', 'google_refresh_token', token_info['refresh_token'])
+            except Exception as e: print(f"[GoogleAuth] Keyring error (refresh_token): {e}")
             token_info['refresh_token'] = ''
         if 'client_secret' in token_info:
-            keyring.set_password('ArcaeaNap', 'google_client_secret', token_info['client_secret'])
+            try: keyring.set_password('ArcaeaNap', 'google_client_secret', token_info['client_secret'])
+            except Exception as e: print(f"[GoogleAuth] Keyring error (client_secret): {e}")
             token_info['client_secret'] = ''
         
         # Load existing connections or create new
@@ -794,8 +889,11 @@ def _save_google_credentials(creds, connections_filepath):
             'token': token_info
         }
         
+        print(f"[GoogleAuth] Writing to {connections_filepath}...")
         with open(connections_filepath, 'w', encoding='utf-8') as f:
             json.dump(connections, f, ensure_ascii=False, indent=2)
+        print("[GoogleAuth] Credentials saved successfully.")
+        
     except Exception as e:
         print(f"Error saving Google credentials: {e}")
 
@@ -807,13 +905,16 @@ class CancellationContext:
         
     def cancel(self):
         """Signal cancellation and shutdown the server if running."""
+        print("[CancellationContext] Cancel requested")
         self._cancel_event.set()
         if self._server and not self._shutdown_started:
             self._shutdown_started = True
 
             def _shutdown_server():
                 try:
+                    print("[CancellationContext] Shutting down server...")
                     self._server.shutdown()
+                    print("[CancellationContext] Server shutdown complete.")
                 except Exception as e:
                     print(f"Error shutting down server: {e}")
                 try:
@@ -847,7 +948,7 @@ def run_cancellable_flow(flow, cancellation_context=None):
     auth_url, _ = flow.authorization_url(prompt='consent')
     
     # Shared state for the WSGI app
-    state = {'code': None}
+    state = {'code': None, 'error': None}
     
     def simple_app(environ, start_response):
         """WSGI app to handle the redirect."""
@@ -874,6 +975,7 @@ def run_cancellable_flow(flow, cancellation_context=None):
             ''']
         
         if 'error' in query:
+            state['error'] = query['error'][0]
             start_response('200 OK', [('Content-type', 'text/plain')])
             return [f"Authentication error: {query['error'][0]}".encode('utf-8')]
             
@@ -891,16 +993,17 @@ def run_cancellable_flow(flow, cancellation_context=None):
     webbrowser.open(auth_url)
 
     # Run server in a separate thread because serve_forever blocks
+    print("[OAuth] Starting local server...")
     server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True
     server_thread.start()
     
-    # Main thread waits for code or cancellation
+    # Main thread waits for code, error, or cancellation
     try:
-        while state['code'] is None:
+        while state['code'] is None and state['error'] is None:
             if cancellation_context and cancellation_context.is_cancelled():
                 print("OAuth flow cancelled by user.")
-                # Server shutdown handles cleanup
+                # Server shutdown handles cleanup via cancellation_context.cancel() or below
                 return None
             time.sleep(0.1)
     except KeyboardInterrupt:
@@ -909,16 +1012,49 @@ def run_cancellable_flow(flow, cancellation_context=None):
         return None
     finally:
         # Ensure server is shut down
+        print("[OAuth] Stopping local server...")
         try:
-            server.shutdown()
-            server.server_close()
-        except:
-            pass
-        server_thread.join(timeout=1.0)
-    
+             # Use a separate thread to shutdown to avoid stalling main thread if it blocks
+            def _shutdown():
+                 try: server.shutdown()
+                 except: pass
+                 try: server.server_close()
+                 except: pass
+            
+            t = threading.Thread(target=_shutdown, daemon=True)
+            t.start()
+            t.join(timeout=2.0) # Wait max 2 seconds for shutdown
+            if t.is_alive():
+                 print("[OAuth] Server shutdown timed out (continuing).")
+        except Exception as e:
+            print(f"[OAuth] Server cleanup error: {e}")
+
+        # server_thread.join(timeout=1.0) # We don't necessarily need to join it if we don't care
+
+    if state['error']:
+        print(f"[OAuth] Authentication failed from browser: {state['error']}")
+        return None
+
     if state['code']:
-        flow.fetch_token(code=state['code'])
-        return flow.credentials
+        print("[OAuth] Code received, fetching token...")
+        
+        # Check cancellation before fetching token
+        if cancellation_context and cancellation_context.is_cancelled():
+            return None
+            
+        try:
+            # Set timeout for token fetch
+            socket.setdefaulttimeout(15) 
+            flow.fetch_token(code=state['code'])
+            print("[OAuth] Token fetched successfully.")
+            return flow.credentials
+        except Exception as e:
+             print(f"[OAuth] Error fetching token: {e}")
+             return None
+        finally:
+             socket.setdefaulttimeout(None)
+             
+    print("[OAuth] No code received.")
     return None
 
 if __name__ == "__main__":
