@@ -795,7 +795,15 @@ def get_creds(cancellation_context=None, interactive=True):
                     # Restore sensitive data from keyring
                     token_data['token'] = keyring.get_password('ArcaeaNap', 'google_token') or ''
                     token_data['refresh_token'] = keyring.get_password('ArcaeaNap', 'google_refresh_token') or ''
-                    token_data['client_secret'] = keyring.get_password('ArcaeaNap', 'google_client_secret') or ''
+                    
+                    # Read client_secret from client_secret.json (canonical source)
+                    try:
+                        with open(secret_filepath, 'r') as f:
+                            secret_data = json.load(f)
+                        installed = secret_data.get('installed', secret_data.get('web', {}))
+                        token_data['client_secret'] = installed.get('client_secret', '')
+                    except Exception:
+                        token_data['client_secret'] = ''
                     
                     # Create Credentials object
                     try:
@@ -866,9 +874,8 @@ def _save_google_credentials(creds, connections_filepath):
             try: keyring.set_password('ArcaeaNap', 'google_refresh_token', token_info['refresh_token'])
             except Exception as e: print(f"[GoogleAuth] Keyring error (refresh_token): {e}")
             token_info['refresh_token'] = ''
+        # client_secret is available in client_secret.json; just blank it from token_info
         if 'client_secret' in token_info:
-            try: keyring.set_password('ArcaeaNap', 'google_client_secret', token_info['client_secret'])
-            except Exception as e: print(f"[GoogleAuth] Keyring error (client_secret): {e}")
             token_info['client_secret'] = ''
         
         # Load existing connections or create new
@@ -880,14 +887,16 @@ def _save_google_credentials(creds, connections_filepath):
             except Exception:
                 pass
         
-        # Update google_sheet section
+        # Update google_sheet section (merge to preserve bound_sheet_id/name)
         import time
-        connections['google_sheet'] = {
+        gs_info = connections.get('google_sheet', {})
+        gs_info.update({
             'connected': True,
             'connected_at': int(time.time()),
             'user_email': user_email,
             'token': token_info
-        }
+        })
+        connections['google_sheet'] = gs_info
         
         print(f"[GoogleAuth] Writing to {connections_filepath}...")
         with open(connections_filepath, 'w', encoding='utf-8') as f:

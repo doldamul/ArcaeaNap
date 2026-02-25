@@ -2033,10 +2033,6 @@ class SettingsHandler(QObject):
                 keyring.delete_password('ArcaeaNap', 'google_refresh_token')
             except:
                 pass
-            try:
-                keyring.delete_password('ArcaeaNap', 'google_client_secret')
-            except:
-                pass
             
             self.googleSheetConnectionChanged.emit()
             self.sheetBindingChanged.emit()

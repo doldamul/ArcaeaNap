@@ -20,6 +20,15 @@ Window {
     // 메인 윈도우 위에 고정되지 않도록 부모 관계 해제
     transientParent: null
 
+    // Re-fetch sheet versions when window becomes visible
+    // (Component.onCompleted fires before the window is shown,
+    //  so the loading spinner is never seen by the user)
+    onVisibleChanged: {
+        if (visible && settingsHandler && sheetMgmtCard && sheetMgmtCard.hasBoundSheet) {
+            settingsHandler.fetchSheetVersions()
+        }
+    }
+
     // Cache Migration Loading Modal
     property bool isMigrating: false
     
