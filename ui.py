@@ -20,6 +20,22 @@ from db_utils import (
     get_this_year_play_counts, calculate_rank
 )
 
+def rebuild_songs_db():
+    """Delete existing songs.db and rebuild from online sources (ConsultantSheet + Wiki)."""
+    db_path = get_db_path()
+    if os.path.exists(db_path):
+        os.remove(db_path)
+        print(f"[rebuild_songs_db] Deleted existing {db_path}")
+
+    print("[rebuild_songs_db] Loading data from Consultant Sheet...")
+    open_sheet()
+    print("[rebuild_songs_db] Consultant Sheet load successful.")
+
+    print("[rebuild_songs_db] Loading data from Wiki...")
+    open_wiki()
+    print("[rebuild_songs_db] Wiki load successful.")
+
+
 class StartupHandler(QObject):
     loadingStarted = pyqtSignal()
     loadingFinished = pyqtSignal()
@@ -46,16 +62,8 @@ class StartupHandler(QObject):
 
     def _load_data(self):
         try:
-            print("Loading data from Consultant Sheet...")
-            open_sheet()
-            print("Consultant Sheet load successful.")
-            
-            print("Loading data from Wiki...")
-            open_wiki()
-            print("Wiki load successful.")
-            
+            rebuild_songs_db()
             self.loadingFinished.emit()
-            
         except Exception as e:
             print(f"Data loading failed: {e}")
             self.errorOccurred.emit(str(e))
@@ -1447,6 +1455,9 @@ class SettingsHandler(QObject):
     sheetBindingChanged = pyqtSignal()
     sendDataStatusChanged = pyqtSignal()
     sheetVersionsChanged = pyqtSignal()
+    # Song database update signals
+    songDatabaseUpdateStarting = pyqtSignal()
+    songDatabaseUpdateFinished = pyqtSignal(bool, str, arguments=['success', 'message'])
 
     def __init__(self):
         super().__init__()
@@ -1456,6 +1467,7 @@ class SettingsHandler(QObject):
         self._is_arcaea_connecting = False
         self._is_binding_sheet = False
         self._is_sending_data = False
+        self._is_updating_song_db = False
         self._google_cancellation_context = None
         self._bind_cancellation_context = None
         self._send_cancellation_context = None
@@ -1616,10 +1628,31 @@ class SettingsHandler(QObject):
         self.analyzeModeChanged.emit(enabled)
         self.settingsChanged.emit()
         
+    @pyqtSlot(result=bool)
+    def isUpdatingSongDatabase(self):
+        return self._is_updating_song_db
+
     @pyqtSlot()
     def updateSongDatabase(self):
-        print("[SettingsHandler] Update Song Database requested. (Not implemented yet)")
-        # TODO: Implement database rebuild logic here (web_consultantsheet + web_wiki)
+        if self._is_updating_song_db:
+            return
+
+        self._is_updating_song_db = True
+        self.songDatabaseUpdateStarting.emit()
+
+        def worker():
+            import traceback
+            try:
+                rebuild_songs_db()
+                self.songDatabaseUpdateFinished.emit(True, "Song database updated successfully.")
+            except Exception as e:
+                print(f"[SettingsHandler] Song database update failed: {e}")
+                traceback.print_exc()
+                self.songDatabaseUpdateFinished.emit(False, str(e))
+            finally:
+                self._is_updating_song_db = False
+
+        threading.Thread(target=worker, daemon=True).start()
 
     # --- Sheet Management ---
     @pyqtSlot(result=str)

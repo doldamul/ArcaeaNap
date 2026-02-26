@@ -1,6 +1,7 @@
 // main.qml
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
 import QtQuick.Window
 
@@ -273,6 +274,107 @@ ApplicationWindow {
                 if (statisticsHandler) {
                     statisticsHandler.refreshData()
                 }
+            }
+        }
+        function onSongDatabaseUpdateStarting() {
+            songDbUpdateModal.show()
+        }
+        function onSongDatabaseUpdateFinished(success, message) {
+            songDbUpdateModal.close()
+            if (success) {
+                if (statsHandler) statsHandler.refreshStats()
+                if (statisticsHandler) statisticsHandler.refreshData()
+            } else {
+                songDbErrorText.text = message
+                songDbErrorPopup.open()
+            }
+        }
+    }
+
+    // --- Song Database Update Modal (ApplicationModal blocks all windows) ---
+    Window {
+        id: songDbUpdateModal
+        modality: Qt.ApplicationModal
+        flags: Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint
+        title: "Updating Song Database"
+        width: 350
+        height: 160
+        minimumWidth: 350
+        maximumWidth: 350
+        minimumHeight: 160
+        maximumHeight: 160
+        color: "#F3F4F8"
+        visible: false
+
+        Column {
+            anchors.centerIn: parent
+            spacing: 16
+
+            BusyIndicator {
+                anchors.horizontalCenter: parent.horizontalCenter
+                running: songDbUpdateModal.visible
+            }
+
+            Text {
+                text: "Updating song database..."
+                font.pixelSize: 15
+                font.bold: true
+                color: "#333"
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+
+            Text {
+                text: "This may take a minute."
+                font.pixelSize: 12
+                color: "#888"
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+        }
+    }
+
+    // --- Song Database Update Error Popup ---
+    Popup {
+        id: songDbErrorPopup
+        anchors.centerIn: parent
+        width: 380
+        height: songDbErrorContent.implicitHeight + 40
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        z: 1001
+
+        background: Rectangle {
+            color: "#FFFFFF"
+            radius: 12
+            border.color: "#E53935"
+            border.width: 2
+        }
+
+        Column {
+            id: songDbErrorContent
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 12
+
+            Text {
+                text: "Update Failed"
+                font.bold: true
+                font.pixelSize: 16
+                color: "#E53935"
+            }
+
+            Text {
+                id: songDbErrorText
+                wrapMode: Text.WordWrap
+                width: parent.width
+                color: "#333"
+            }
+
+            Basic.Button {
+                text: "OK"
+                anchors.right: parent.right
+                onClicked: songDbErrorPopup.close()
+                background: Rectangle { color: "#F0F0F0"; radius: 6 }
             }
         }
     }

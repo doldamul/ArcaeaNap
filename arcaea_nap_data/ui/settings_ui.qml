@@ -1054,7 +1054,7 @@ Window {
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
 
                     // Database Management
-                    Text { text: "Song Database Management"; font.bold: true; color: "#333" }
+                    Text { text: "Song Database"; font.bold: true; color: "#333" }
                     
                     Rectangle {
                         Layout.fillWidth: true
@@ -1076,14 +1076,20 @@ Window {
                             Item { Layout.fillWidth: true }
                             
                             Basic.Button {
-                                text: "Update"
-                                onClicked: settingsHandler.updateSongDatabase()
+                                id: updateDbButton
+                                text: settingsHandler && settingsHandler.isUpdatingSongDatabase() ? "Updating..." : "Update"
+                                enabled: !settingsHandler || !settingsHandler.isUpdatingSongDatabase()
+                                onClicked: if (settingsHandler) settingsHandler.updateSongDatabase()
+
                                 background: Rectangle {
-                                    color: parent.down ? "#42A5F5" : "#64B5F6"
+                                    color: {
+                                        if (!updateDbButton.enabled) return "#B0BEC5"
+                                        return updateDbButton.down ? "#42A5F5" : "#64B5F6"
+                                    }
                                     radius: 6
                                 }
                                 contentItem: Text {
-                                    text: parent.text
+                                    text: updateDbButton.text
                                     color: "white"
                                     font.bold: true
                                     horizontalAlignment: Text.AlignHCenter
