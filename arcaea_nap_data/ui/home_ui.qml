@@ -16,6 +16,56 @@ Item {
     // Cache migration state - prevents image load errors during migration
     property bool isMigrating: false
 
+    // Profile data from account_connections.json
+    property var profileData: ({})
+
+    // Potential 등급별 색상
+    function getPotentialColor(rating) {
+        if (rating === null || rating === undefined || rating < 0) return "#999999" // 미사용 시 (회색)
+        if (rating >= 1300) return "#D14A6B" // 13.00 ~ : 밝은 크림슨/핑크 (3★)
+        if (rating >= 1200) return "#C12955" // 12.00 ~ 12.99 : 진한 크림슨/레드 (1★, 2★)
+        if (rating >= 1100) return "#C62828" // 11.00 ~ 11.99 : 붉은색
+        if (rating >= 1000) return "#8E24AA" // 10.00 ~ 10.99 : 짙은 보라
+        if (rating >= 700)  return "#AB47BC" // 7.00 ~ 9.99  : 보라
+        if (rating >= 300)  return "#4CAF50" // 3.00 ~ 6.99  : 초록
+        return "#29B6F6"                     // 0.00 ~ 2.99  : 파랑/하늘색
+    }
+
+    // Potential 등급 배지 텍스트
+    function getPotentialBadge(rating) {
+        if (rating === null || rating === undefined) return ""
+        if (rating >= 1300) return "TRIPLE STAR"
+        if (rating >= 1250) return "DOUBLE STAR"
+        if (rating >= 1200) return "STAR"
+        if (rating >= 1100) return "RED"
+        if (rating >= 700)  return "PURPLE"
+        if (rating >= 350)  return "GREEN"
+        return "BLUE"
+    }
+
+    // Potential 등급에 따른 별 개수
+    function getPotentialStars(rating) {
+        if (rating === null || rating === undefined) return 0
+        if (rating >= 1300) return 3
+        if (rating >= 1250) return 2
+        if (rating >= 1200) return 1
+        return 0
+    }
+
+    // user_code를 "XXX XXX XXX" 형태로 포맷
+    function formatUserCode(code) {
+        if (!code || code.length === 0) return ""
+        var digits = code.replace(/\s/g, '')
+        if (digits.length !== 9) return code
+        return digits.substring(0, 3) + " " + digits.substring(3, 6) + " " + digits.substring(6, 9)
+    }
+
+    function loadProfile() {
+        if (profileHandler) {
+            profileData = profileHandler.getProfile() || {}
+        }
+    }
+
     Connections {
         target: statsHandler
         function onStatsChanged() {
@@ -23,6 +73,13 @@ Item {
             playTimeText.text = statsHandler.getTotalPlayTime()
             difficultyStatsData = statsHandler.getDifficultyStats()
             updateTop10()
+        }
+    }
+
+    Connections {
+        target: profileHandler
+        function onProfileChanged() {
+            loadProfile()
         }
     }
     
@@ -55,6 +112,7 @@ Item {
             difficultyStatsData = statsHandler.getDifficultyStats()
             updateTop10()
         }
+        loadProfile()
     }
 
     ScrollView {
@@ -124,16 +182,19 @@ Item {
                             }
 
                             Text {
-                                text: "Nickname"
+                                text: profileData.connected ? (profileData.name || "—") : "—"
                                 color: "#1A1A1A"
                                 font.pixelSize: 42
                                 font.bold: true
                             }
 
                             Text {
-                                text: "ID: 123 456 789"
+                                text: profileData.connected && profileData.user_code
+                                      ? "ID: " + formatUserCode(profileData.user_code)
+                                      : ""
                                 color: "#999999"
                                 font.pixelSize: 16
+                                visible: profileData.connected && profileData.user_code ? true : false
                             }
 
                             Item { height: 20 } // Spacer
@@ -145,31 +206,76 @@ Item {
                                 font.letterSpacing: 1.5
                             }
 
-                            RowLayout {
-                                spacing: 15
+                            Column {
+                                id: potentialContainer
+                                spacing: 2
+                                
+                                property string colorTheme: getPotentialColor(profileData.connected ? profileData.rating : null)
+                                property int starCount: getPotentialStars(profileData.connected ? profileData.rating : null)
+                                property bool hasRating: profileData.connected && profileData.rating !== null && profileData.rating !== undefined
+
+                                // Rating Value (floating directly on background)
                                 Text {
-                                    text: "12.50"
-                                    color: "#BC00FF" // 밝은 보라색
-                                    font.pixelSize: 56
+                                    text: potentialContainer.hasRating ? (profileData.rating / 100).toFixed(2) : "—"
+                                    color: potentialContainer.hasRating ? "#2A2A2A" : "#999999"
+                                    font.pixelSize: 42
                                     font.bold: true
                                 }
-                                
-                                // Double Star 배지
+
+                                // Stars inside a small pill-shaped border
                                 Rectangle {
-                                    width: 100; height: 24
-                                    color: "#F0E0FF"
-                                    radius: 12
-                                    Text {
-                                        text: "DOUBLE STAR"
-                                        color: "#6A0DAD"
-                                        font.bold: true
-                                        font.pixelSize: 10
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    visible: potentialContainer.starCount > 0
+                                    
+                                    width: starsRow.implicitWidth + 24
+                                    height: starsRow.implicitHeight + 8
+                                    radius: 3 // 곡률 확 줄임
+                                    color: "transparent"
+                                    border.color: Qt.rgba(Qt.color(potentialContainer.colorTheme).r, Qt.color(potentialContainer.colorTheme).g, Qt.color(potentialContainer.colorTheme).b, 0.4)
+                                    border.width: 1.5
+                                    
+                                    // Subtle tint inside
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        anchors.margins: 1.5
+                                        radius: 1.5
+                                        color: Qt.rgba(Qt.color(potentialContainer.colorTheme).r, Qt.color(potentialContainer.colorTheme).g, Qt.color(potentialContainer.colorTheme).b, 0.05)
+                                    }
+
+                                    layer.enabled: true
+                                    layer.effect: MultiEffect {
+                                        shadowEnabled: true
+                                        shadowColor: Qt.rgba(Qt.color(potentialContainer.colorTheme).r, Qt.color(potentialContainer.colorTheme).g, Qt.color(potentialContainer.colorTheme).b, 0.2)
+                                        shadowBlur: 8
+                                    }
+
+                                    Row {
+                                        id: starsRow
                                         anchors.centerIn: parent
+                                        spacing: 4
+                                        
+                                        Repeater {
+                                            model: potentialContainer.starCount
+                                            Text {
+                                                text: "★"
+                                                color: potentialContainer.colorTheme
+                                                font.pixelSize: 14
+                                                
+                                                layer.enabled: true
+                                                layer.effect: MultiEffect {
+                                                    shadowEnabled: true
+                                                    shadowColor: Qt.rgba(Qt.color(potentialContainer.colorTheme).r, Qt.color(potentialContainer.colorTheme).g, Qt.color(potentialContainer.colorTheme).b, 0.5)
+                                                    shadowBlur: 4
+                                                    shadowHorizontalOffset: 0
+                                                    shadowVerticalOffset: 0
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                             
-                            Item { height: 20 }
+                            Item { height: 10 }
 
                             // Stats & Difficulty Group (3-Column Layout for alignment)
                             RowLayout {

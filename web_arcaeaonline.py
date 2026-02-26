@@ -508,6 +508,8 @@ class ArcaeaOnline:
                 
                 if result == "verified":
                     self.log("Login session verified.")
+                    # Update profile from Vue even on session load
+                    self._update_profile_from_vue(connections_filepath)
                 else:
                     self.log("Login session expired.")
                     login_exists = False
@@ -546,25 +548,8 @@ class ArcaeaOnline:
             
             self.log("Login complete.")
 
-            # Extract authUser information from Vue component
-            auth_user = {}
-            try:
-                vue_element = self.page.locator(VUE_COMPONENT_SELECTOR)
-                if vue_element.count() > 0:
-                    auth_user_data = self.page.evaluate("""(element) => {
-                        var vue = element.__vue__;
-                        var authUser = vue.authUser;
-                        return {
-                            name: authUser.name || '',
-                            user_id: authUser.user_id || '',
-                            rating: authUser.rating || null,
-                            join_date: authUser.join_date || null,
-                            user_code: authUser.user_code || ''
-                        };
-                    }""", vue_element.nth(0).element_handle())
-                    auth_user = auth_user_data or {}
-            except Exception as e:
-                self.log(f'Could not extract authUser: {e}')
+            # Extract authUser and save login session (cookies + profile)
+            auth_user = self._extract_auth_user()
 
             # save login session to account_connections.json
             LOGIN_COOKIE = {'sid', '__stripe_sid', '__stripe_mid'}
@@ -613,12 +598,74 @@ class ArcaeaOnline:
 
             self.log("Login session saved.")
             
-            # Notify that login is completed (for updating settings UI)
+            # Notify that login is completed (for updating settings/profile UI)
             if self.login_completed_callback:
                 try:
                     self.login_completed_callback()
                 except Exception as e:
                     self.log(f"Login completed callback error: {e}")
+
+    def _extract_auth_user(self) -> dict:
+        """Vue 컴포넌트에서 authUser 정보를 추출합니다."""
+        auth_user = {}
+        try:
+            vue_element = self.page.locator(VUE_COMPONENT_SELECTOR)
+            if vue_element.count() > 0:
+                auth_user_data = self.page.evaluate("""(element) => {
+                    var vue = element.__vue__;
+                    var authUser = vue.authUser;
+                    return {
+                        name: authUser.name || '',
+                        user_id: authUser.user_id || '',
+                        rating: authUser.rating || null,
+                        join_date: authUser.join_date || null,
+                        user_code: authUser.user_code || ''
+                    };
+                }""", vue_element.nth(0).element_handle())
+                auth_user = auth_user_data or {}
+        except Exception as e:
+            self.log(f'Could not extract authUser: {e}')
+        return auth_user
+
+    def _update_profile_from_vue(self, connections_filepath: str):
+        """Vue에서 최신 프로필 데이터를 추출하여 account_connections.json의 프로필 필드만 갱신합니다.
+        
+        cookies 등 기존 세션 데이터는 유지하고, name/user_id/rating/join_date/user_code만 업데이트합니다.
+        """
+        auth_user = self._extract_auth_user()
+        if not auth_user:
+            return
+        
+        try:
+            connections = {}
+            if os.path.exists(connections_filepath):
+                with open(connections_filepath, 'r', encoding='utf-8') as f:
+                    connections = json.load(f)
+            
+            ao_info = connections.get('arcaea_online', {})
+            
+            # 프로필 필드만 업데이트 (cookies, connected, connected_at 등은 유지)
+            ao_info['name'] = auth_user.get('name', '')
+            ao_info['user_id'] = auth_user.get('user_id', '')
+            ao_info['rating'] = auth_user.get('rating')
+            ao_info['join_date'] = auth_user.get('join_date')
+            ao_info['user_code'] = auth_user.get('user_code', '')
+            
+            connections['arcaea_online'] = ao_info
+            
+            with open(connections_filepath, 'w', encoding='utf-8') as f:
+                json.dump(connections, f, ensure_ascii=False, indent=2)
+            
+            self.log("Profile data updated.")
+            
+            # Notify UI to refresh profile
+            if self.login_completed_callback:
+                try:
+                    self.login_completed_callback()
+                except Exception as e:
+                    self.log(f"Login completed callback error: {e}")
+        except Exception as e:
+            self.log(f"Error updating profile: {e}")
 
     def has_page_changed(self) -> bool:
         if not self.status.is_running:

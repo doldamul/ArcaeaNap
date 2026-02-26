@@ -1140,13 +1140,49 @@ Window {
                         }
                         
                         ColumnLayout {
+                            id: profileInfoLayout
+                            
+                            property var profileData: profileHandler ? profileHandler.getProfile() : {"connected": false}
+                            
+                            Connections {
+                                target: profileHandler
+                                function onProfileChanged() {
+                                    profileInfoLayout.profileData = profileHandler.getProfile()
+                                }
+                            }
+                            
+                            ColumnLayout {
+                                visible: profileInfoLayout.profileData.connected
+                                spacing: 2
+                                
+                                Text {
+                                    text: profileInfoLayout.profileData.name || "Unknown"
+                                    font.pixelSize: 18
+                                    font.bold: true
+                                    color: "#333"
+                                }
+                                RowLayout {
+                                    spacing: 12
+                                    Text {
+                                        text: "ID: " + (profileInfoLayout.profileData.user_code || "Unknown")
+                                        font.pixelSize: 13
+                                        color: "#666"
+                                    }
+                                    Text {
+                                        text: "PTT: " + (profileInfoLayout.profileData.rating !== undefined && profileInfoLayout.profileData.rating >= 0 ? (profileInfoLayout.profileData.rating / 100).toFixed(2) : "-")
+                                        font.pixelSize: 13
+                                        color: "#666"
+                                    }
+                                }
+                            }
+                            
+                            Item {
+                                Layout.preferredHeight: profileInfoLayout.profileData.connected ? 10 : 0
+                            }
+                            
                             Button {
                                 text: "Set Profile Image"
                                 onClicked: fileDialog.open()
-                            }
-                            Button {
-                                text: "Scan Profile from Arcaea Online"
-                                onClicked: console.log("Scan profile clicked")
                             }
                         }
                         

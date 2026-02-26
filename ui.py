@@ -1395,6 +1395,44 @@ class StatisticsHandler(QObject):
 
 
 
+class ProfileHandler(QObject):
+    """프로필 데이터를 account_connections.json에서 읽어 QML에 제공하는 핸들러."""
+    profileChanged = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+        self._connections_file = os.path.join(config['general']['cache_path'], 'account_connections.json')
+
+    def _load_connections(self):
+        if not os.path.exists(self._connections_file):
+            return {}
+        try:
+            with open(self._connections_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    @pyqtSlot(result='QVariant')
+    def getProfile(self):
+        """프로필 데이터를 dict로 반환. 미연결 시 connected=False."""
+        connections = self._load_connections()
+        ao_info = connections.get('arcaea_online', {})
+        if not ao_info.get('connected', False):
+            return {'connected': False}
+        return {
+            'connected': True,
+            'name': ao_info.get('name', ''),
+            'user_code': ao_info.get('user_code', ''),
+            'rating': ao_info.get('rating'),
+            'join_date': ao_info.get('join_date'),
+        }
+
+    @pyqtSlot()
+    def refreshProfile(self):
+        """프로필 데이터를 다시 읽고 QML에 알림."""
+        self.profileChanged.emit()
+
+
 class SettingsHandler(QObject):
     settingsChanged = pyqtSignal()
     cachePathChanged = pyqtSignal()
@@ -2072,10 +2110,16 @@ def main():
     statistics_handler = StatisticsHandler()
     engine.rootContext().setContextProperty("statisticsHandler", statistics_handler)
 
+    profile_handler = ProfileHandler()
+    engine.rootContext().setContextProperty("profileHandler", profile_handler)
+
     settings_handler = SettingsHandler()
     settings_handler.set_analyzer(analysis_handler.analyzer)
     analysis_handler.set_settings_handler(settings_handler)  # Enable connection status updates
     engine.rootContext().setContextProperty("settingsHandler", settings_handler)
+
+    # Refresh profile when Arcaea Online connection changes
+    settings_handler.arcaeaOnlineConnectionChanged.connect(profile_handler.refreshProfile)
 
     qml_filename = "main.qml"
     qml_filepath = os.path.join(config['general']['cache_path'], 'ui', qml_filename)
