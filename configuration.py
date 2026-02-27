@@ -21,6 +21,7 @@ _config_default = {
         'profile_description': '',
         'grouping_criteria': 'song',  # 'song' or 'chart'
         'difficulty_filter': 'all',  # 'all' or comma-separated string like 'pst,prs'
+        'most_played_scope': 'total',  # 'total' or 'this_year'
     },
     'sheet': {
         'last_synced': 0,
@@ -61,6 +62,7 @@ _converters = {
         'profile_description': str,
         'grouping_criteria': str,
         'difficulty_filter': str,
+        'most_played_scope': str,
     },
     'sheet': {
         'last_synced': float,

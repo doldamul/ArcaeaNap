@@ -505,53 +505,116 @@ def get_this_year_play_counts():
         conn.close()
 
 
+# Difficulty code (string) -> int for play_count table. Matches ui.py DIFFICULTY_NAMES/COLORS.
+DIFFICULTY_CODE_TO_INT = {'pst': 0, 'prs': 1, 'ftr': 2, 'byd': 3, 'etr': 4}
+DIFFICULTY_NAMES = {0: 'PST', 1: 'PRS', 2: 'FTR', 3: 'BYD', 4: 'ETR'}
+DIFFICULTY_COLORS = {0: '#00A0E9', 1: '#50C050', 2: '#A060FF', 3: '#E04040', 4: '#808080'}
+
+
+def _allowed_difficulties():
+    """Return set of difficulty integers to include based on config difficulty_filter."""
+    raw = config['profile']['difficulty_filter']
+    if raw == 'all':
+        return {0, 1, 2, 3, 4}
+    if not raw:
+        return set()
+    return {DIFFICULTY_CODE_TO_INT.get(p.strip().lower()) for p in raw.split(',') if p.strip().lower() in DIFFICULTY_CODE_TO_INT}
+
+
 def get_top_10_most_played():
     """
-    Returns the top 10 most played songs across all difficulties.
+    Returns the top 10 most played songs or charts based on config:
+    - grouping_criteria: 'song' (aggregate by song) or 'chart' (per difficulty)
+    - difficulty_filter: 'all' or comma-separated codes (e.g. 'pst,prs,ftr') to include
+    - most_played_scope: 'total' (all years) or 'this_year'
+
     Returns:
-        list of dict: [{'title': str, 'artist': str, 'playCount': int, 'arcaeaId': str}, ...]
+        list of dict: by song: [{'title', 'artist', 'playCount', 'arcaeaId', 'colorCode'}, ...]
+                      by chart: same + 'difficulty' (int), 'difficultyName', 'difficultyColor'
     """
     scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
     songs_db_path = get_db_path()
-
     if not os.path.exists(scores_db_path) or not os.path.exists(songs_db_path):
         return []
 
-    conn = sqlite3.connect(scores_db_path)
+    scope = config['profile']['most_played_scope']
+    grouping = config['profile']['grouping_criteria']
+    allowed = _allowed_difficulties()
+
+    if scope == 'this_year':
+        raw_counts = get_this_year_play_counts()
+    else:
+        raw_counts = get_play_counts()
+
+    # Filter by allowed difficulties; key is (arcaea_id, difficulty), difficulty may be int
+    filtered = {}
+    for (aid, diff), count in raw_counts.items():
+        d = int(diff) if diff is not None else 0
+        if d in allowed and count:
+            filtered[(aid, d)] = count
+
+    if not filtered:
+        return []
+
+    if grouping == 'chart':
+        # Top 10 charts by play count
+        sorted_charts = sorted(filtered.items(), key=lambda x: -x[1])[:10]
+        conn = sqlite3.connect(songs_db_path)
+        try:
+            cursor = conn.cursor()
+            results = []
+            for (arcaea_id, difficulty), play_count in sorted_charts:
+                cursor.execute("SELECT title, artist FROM songs WHERE arcaea_id = ?", (arcaea_id,))
+                row = cursor.fetchone()
+                title = row[0] if row and row[0] else 'Unknown Title'
+                artist = row[1] if row and row[1] else 'Unknown Artist'
+                results.append({
+                    'title': title,
+                    'artist': artist,
+                    'playCount': play_count,
+                    'arcaeaId': arcaea_id or '',
+                    'colorCode': '#FFFFFF',
+                    'difficulty': difficulty,
+                    'difficultyName': DIFFICULTY_NAMES.get(difficulty, ''),
+                    'difficultyColor': DIFFICULTY_COLORS.get(difficulty, '#888'),
+                })
+            return results
+        except Exception as e:
+            print(f"Error fetching top 10 (chart): {e}")
+            return []
+        finally:
+            conn.close()
+
+    # grouping == 'song': aggregate by arcaea_id
+    by_song = {}
+    for (aid, _), count in filtered.items():
+        by_song[aid] = by_song.get(aid, 0) + count
+    sorted_songs = sorted(by_song.items(), key=lambda x: -x[1])[:10]
+    if not sorted_songs:
+        return []
+
+    conn = sqlite3.connect(songs_db_path)
     try:
-        conn.execute(f"ATTACH DATABASE ? AS songs_db", (songs_db_path,))
         cursor = conn.cursor()
-        
-        # Query play_count table
-        # Join songs and charts to ensure validity
-        query = """
-            SELECT 
-                s.title,
-                s.artist,
-                SUM(pc.yearly_play_count) as total_plays,
-                s.arcaea_id
-            FROM play_count pc
-            JOIN songs_db.songs s ON pc.arcaea_id = s.arcaea_id
-            JOIN songs_db.charts c ON s.id = c.song_id AND pc.difficulty = c.difficulty
-            GROUP BY s.title, s.arcaea_id
-            ORDER BY total_plays DESC
-            LIMIT 10
-        """
-        
-        cursor.execute(query)
         results = []
-        for row in cursor.fetchall():
+        for arcaea_id, play_count in sorted_songs:
+            cursor.execute("SELECT title, artist FROM songs WHERE arcaea_id = ?", (arcaea_id,))
+            row = cursor.fetchone()
+            title = row[0] if row and row[0] else 'Unknown Title'
+            artist = row[1] if row and row[1] else 'Unknown Artist'
             results.append({
-                'title': row[0] if row[0] else 'Unknown Title',
-                'artist': row[1] if row[1] else 'Unknown Artist',
-                'playCount': row[2] if row[2] else 0,
-                'arcaeaId': row[3] if row[3] else '',
-                'colorCode': "#FFFFFF"  # Placeholder for UI consistency
+                'title': title,
+                'artist': artist,
+                'playCount': play_count,
+                'arcaeaId': arcaea_id or '',
+                'colorCode': '#FFFFFF',
+                'difficulty': -1,
+                'difficultyName': '',
+                'difficultyColor': '#888',
             })
-            
         return results
     except Exception as e:
-        print(f"Error fetching top 10: {e}")
+        print(f"Error fetching top 10 (song): {e}")
         return []
     finally:
         conn.close()

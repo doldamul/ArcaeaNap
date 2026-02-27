@@ -1308,42 +1308,157 @@ Window {
                         
                         // Difficulty Filter
                         RowLayout {
-                            spacing: 10
-                            Text { text: "Difficulty Filter:" }
-                            
-                            property string currentFilters: settingsHandler ? settingsHandler.getDifficultyFilter() : 'all'
-                            
-                            CheckBox {
-                                text: "All"
-                                checked: parent.currentFilters === 'all'
-                                onToggled: if(checked && settingsHandler) settingsHandler.setDifficultyFilter('all')
-                            }
-                            
-                            // Helper to toggle specific diff
-                            function toggleDiff(diffCode) {
+                            id: diffFilterRow
+                            // 개별 난이도 체크 상태를 로컬로 관리
+                            property bool pstChecked: true
+                            property bool prsChecked: true
+                            property bool ftrChecked: true
+                            property bool etrChecked: true
+                            property bool bydChecked: true
+
+                            // 설정에서 초기값 로드
+                            function loadFromConfig() {
                                 if (!settingsHandler) return
-                                if (currentFilters === 'all') {
-                                    settingsHandler.setDifficultyFilter(diffCode)
+                                var raw = settingsHandler.getDifficultyFilter()
+                                if (raw === "all") {
+                                    pstChecked = prsChecked = ftrChecked = etrChecked = bydChecked = true
                                 } else {
-                                    var parts = currentFilters.split(',')
-                                    var idx = parts.indexOf(diffCode)
-                                    if (idx >= 0) parts.splice(idx, 1)
-                                    else parts.push(diffCode)
-                                    
-                                    if (parts.length === 0) settingsHandler.setDifficultyFilter('all')
-                                    else settingsHandler.setDifficultyFilter(parts.join(','))
+                                    var parts = raw ? raw.split(",") : []
+                                    pstChecked = parts.indexOf("pst") >= 0
+                                    prsChecked = parts.indexOf("prs") >= 0
+                                    ftrChecked = parts.indexOf("ftr") >= 0
+                                    etrChecked = parts.indexOf("etr") >= 0
+                                    bydChecked = parts.indexOf("byd") >= 0
+                                }
+                                updateAllState()
+                            }
+
+                            // 현재 체크 상태를 config 문자열로 반영
+                            function applyToConfig() {
+                                if (!settingsHandler) return
+                                var parts = []
+                                if (pstChecked) parts.push("pst")
+                                if (prsChecked) parts.push("prs")
+                                if (ftrChecked) parts.push("ftr")
+                                if (etrChecked) parts.push("etr")
+                                if (bydChecked) parts.push("byd")
+
+                                if (parts.length === 5) {
+                                    settingsHandler.setDifficultyFilter("all")
+                                } else if (parts.length === 0) {
+                                    // 아무 난이도도 선택되지 않은 상태는 빈 문자열로 저장
+                                    settingsHandler.setDifficultyFilter("")
+                                } else {
+                                    settingsHandler.setDifficultyFilter(parts.join(","))
                                 }
                             }
-                            
-                            function isDiffChecked(diffCode) {
-                                return currentFilters !== 'all' && currentFilters.split(',').includes(diffCode)
+
+                            function updateAllState() {
+                                var count =
+                                    (pstChecked ? 1 : 0) +
+                                    (prsChecked ? 1 : 0) +
+                                    (ftrChecked ? 1 : 0) +
+                                    (etrChecked ? 1 : 0) +
+                                    (bydChecked ? 1 : 0)
+                                if (count === 0)
+                                    allCheck.checkState = Qt.Unchecked
+                                else if (count === 5)
+                                    allCheck.checkState = Qt.Checked
+                                else
+                                    allCheck.checkState = Qt.PartiallyChecked
                             }
-                            
-                            CheckBox { text: "PST"; checked: parent.isDiffChecked('pst'); onToggled: parent.toggleDiff('pst') }
-                            CheckBox { text: "PRS"; checked: parent.isDiffChecked('prs'); onToggled: parent.toggleDiff('prs') }
-                            CheckBox { text: "FTR"; checked: parent.isDiffChecked('ftr'); onToggled: parent.toggleDiff('ftr') }
-                            CheckBox { text: "ETR"; checked: parent.isDiffChecked('etr'); onToggled: parent.toggleDiff('etr') }
-                            CheckBox { text: "BYD"; checked: parent.isDiffChecked('byd'); onToggled: parent.toggleDiff('byd') }
+
+                            Component.onCompleted: loadFromConfig()
+
+                            spacing: 10
+                            Text { text: "Difficulty Filter:" }
+
+                            // All 체크박스: pst/prs/ftr/etr/byd 상태에 따라 삼진(check / partial / unchecked)
+                            CheckBox {
+                                id: allCheck
+                                text: "All"
+                                tristate: true
+                                onClicked: {
+                                    // 현재 개별 난이도 상태 기준으로 토글:
+                                    // 5개 모두 체크 상태이면 모두 해제, 그 외(0개 또는 일부 체크)는 모두 선택
+                                    var count =
+                                        (diffFilterRow.pstChecked ? 1 : 0) +
+                                        (diffFilterRow.prsChecked ? 1 : 0) +
+                                        (diffFilterRow.ftrChecked ? 1 : 0) +
+                                        (diffFilterRow.etrChecked ? 1 : 0) +
+                                        (diffFilterRow.bydChecked ? 1 : 0)
+                                    var makeChecked = !(count === 5)
+                                    diffFilterRow.pstChecked = makeChecked
+                                    diffFilterRow.prsChecked = makeChecked
+                                    diffFilterRow.ftrChecked = makeChecked
+                                    diffFilterRow.etrChecked = makeChecked
+                                    diffFilterRow.bydChecked = makeChecked
+                                    diffFilterRow.applyToConfig()
+                                    diffFilterRow.updateAllState()
+                                }
+                            }
+
+                            CheckBox {
+                                text: "PST"
+                                checked: diffFilterRow.pstChecked
+                                onToggled: {
+                                    diffFilterRow.pstChecked = checked
+                                    diffFilterRow.applyToConfig()
+                                    diffFilterRow.updateAllState()
+                                }
+                            }
+                            CheckBox {
+                                text: "PRS"
+                                checked: diffFilterRow.prsChecked
+                                onToggled: {
+                                    diffFilterRow.prsChecked = checked
+                                    diffFilterRow.applyToConfig()
+                                    diffFilterRow.updateAllState()
+                                }
+                            }
+                            CheckBox {
+                                text: "FTR"
+                                checked: diffFilterRow.ftrChecked
+                                onToggled: {
+                                    diffFilterRow.ftrChecked = checked
+                                    diffFilterRow.applyToConfig()
+                                    diffFilterRow.updateAllState()
+                                }
+                            }
+                            CheckBox {
+                                text: "ETR"
+                                checked: diffFilterRow.etrChecked
+                                onToggled: {
+                                    diffFilterRow.etrChecked = checked
+                                    diffFilterRow.applyToConfig()
+                                    diffFilterRow.updateAllState()
+                                }
+                            }
+                            CheckBox {
+                                text: "BYD"
+                                checked: diffFilterRow.bydChecked
+                                onToggled: {
+                                    diffFilterRow.bydChecked = checked
+                                    diffFilterRow.applyToConfig()
+                                    diffFilterRow.updateAllState()
+                                }
+                            }
+                        }
+
+                        // Aggregation scope (Most Played count: total vs this year)
+                        RowLayout {
+                            spacing: 10
+                            Text { text: "Aggregation Scope:" }
+                            RadioButton {
+                                text: "Total plays"
+                                checked: settingsHandler ? settingsHandler.getMostPlayedScope() === 'total' : true
+                                onToggled: if(checked && settingsHandler) settingsHandler.setMostPlayedScope('total')
+                            }
+                            RadioButton {
+                                text: "This year plays"
+                                checked: settingsHandler ? settingsHandler.getMostPlayedScope() === 'this_year' : false
+                                onToggled: if(checked && settingsHandler) settingsHandler.setMostPlayedScope('this_year')
+                            }
                         }
                     }
 

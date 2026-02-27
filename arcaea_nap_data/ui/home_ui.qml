@@ -102,10 +102,13 @@ Item {
                 updateTop10()
             }
         }
-        function onSettingsChanged() {
+        function onProfileDisplayChanged() {
             profileImagePath = (settingsHandler && settingsHandler.getProfileImage()) ? settingsHandler.getProfileImage() : ""
             homeRoot.showFriendCodeInProfile = settingsHandler ? settingsHandler.getShowFriendCode() : homeRoot.showFriendCodeInProfile
             homeRoot.showPotentialInProfile = settingsHandler ? settingsHandler.getShowPotential() : homeRoot.showPotentialInProfile
+        }
+        function onMostPlayedOrderChanged() {
+            updateTop10()
         }
     }
     
@@ -612,17 +615,22 @@ Item {
                         }
                     }
 
-                    // 리스트 뷰
-                    ListView {
+                    // 리스트 영역 + 비어 있을 때 오버레이
+                    Item {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        clip: true
-                        model: songModel
-                        spacing: 2
 
-                        delegate: RowLayout {
-                            width: ListView.view.width
-                            spacing: 4
+                        // 리스트 뷰
+                        ListView {
+                            id: mostPlayedList
+                            anchors.fill: parent
+                            clip: true
+                            model: songModel
+                            spacing: 2
+
+                            delegate: RowLayout {
+                                width: ListView.view.width
+                                spacing: 4
 
                             // Calculate rank-specific properties
                             readonly property bool isRank1: index === 0
@@ -714,7 +722,7 @@ Item {
                                     Image {
                                         id: thumbnailImage
                                         anchors.fill: parent
-                                        source: (statsHandler && !homeRoot.isMigrating) ? statsHandler.getThumbnailPath(model.arcaeaId) : ""
+                                        source: (statsHandler && !homeRoot.isMigrating) ? (model.difficultyName ? statsHandler.getThumbnailPathForDifficulty(model.arcaeaId, model.difficulty) : statsHandler.getThumbnailPath(model.arcaeaId)) : ""
                                         fillMode: Image.PreserveAspectCrop
                                         mipmap: true
                                         antialiasing: true
@@ -743,13 +751,28 @@ Item {
                             // Song Info
                             Column {
                                 Layout.fillWidth: true
-                                Text {
-                                    text: model.title
-                                    font.bold: true
-                                    font.pixelSize: titleFontSize
-                                    color: titleColor
-                                    elide: Text.ElideRight
+                                Row {
                                     width: parent.width
+                                    spacing: 8
+                                    Text {
+                                        id: titleLabel
+                                        width: Math.min(implicitWidth, parent.width - (diffLabel.visible ? diffLabel.implicitWidth + 8 : 0))
+                                        text: model.title
+                                        font.bold: true
+                                        font.pixelSize: titleFontSize
+                                        color: titleColor
+                                        elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        id: diffLabel
+                                        text: model.difficultyName || ""
+                                        font.pixelSize: 13
+                                        font.bold: true
+                                        color: model.difficultyColor || "#888"
+                                        visible: !!model.difficultyName
+                                        anchors.bottom: titleLabel.bottom
+                                        anchors.bottomMargin: 2
+                                    }
                                 }
                                 Text {
                                     text: model.artist
@@ -780,9 +803,45 @@ Item {
                             }
                         }
                     }
+
+                    // Most Played 비어 있을 때 중앙 오버레이 안내
+                    Rectangle {
+                        id: emptyOverlay
+                        anchors.fill: parent
+                        color: "transparent"
+                        visible: songModel.count === 0
+                        z: 10
+
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 12
+                            width: emptyOverlay.width - 40
+
+                            Text {
+                                text: "No Most Played Data"
+                                font.pixelSize: 22
+                                font.bold: true
+                                color: "#999999"
+                                horizontalAlignment: Text.AlignHCenter
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: Math.min(implicitWidth, parent.width)
+                                wrapMode: Text.Wrap
+                            }
+                            Text {
+                                text: "Adjust Difficulty Filter or play some charts to see statistics here."
+                                font.pixelSize: 14
+                                color: "#BBBBBB"
+                                horizontalAlignment: Text.AlignHCenter
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: Math.min(implicitWidth, parent.width)
+                                wrapMode: Text.Wrap
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
     }
 
     // --- 목업 데이터 모델 ---

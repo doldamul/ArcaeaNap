@@ -1443,6 +1443,8 @@ class ProfileHandler(QObject):
 
 class SettingsHandler(QObject):
     settingsChanged = pyqtSignal()
+    profileDisplayChanged = pyqtSignal()  # Profile image, show friend code, show potential
+    mostPlayedOrderChanged = pyqtSignal()  # Grouping criteria, difficulty filter, most played scope
     cachePathChanged = pyqtSignal()
     analyzeModeChanged = pyqtSignal(bool, arguments=['enabled'])
     # Migration signals
@@ -1822,6 +1824,7 @@ class SettingsHandler(QObject):
     @pyqtSlot(bool)
     def setShowFriendCode(self, show):
         config['profile']['show_friend_code'] = str(show)
+        self.profileDisplayChanged.emit()
         self.settingsChanged.emit()
 
     @pyqtSlot(result=bool)
@@ -1831,6 +1834,7 @@ class SettingsHandler(QObject):
     @pyqtSlot(bool)
     def setShowPotential(self, show):
         config['profile']['show_potential'] = str(show)
+        self.profileDisplayChanged.emit()
         self.settingsChanged.emit()
 
     @pyqtSlot(result=str)
@@ -1842,6 +1846,7 @@ class SettingsHandler(QObject):
         if path.startswith("file:///"):
             path = path[8:]
         config['profile']['profile_image'] = path.replace("\\", "/")
+        self.profileDisplayChanged.emit()
         self.settingsChanged.emit()
 
     @pyqtSlot(result=str)
@@ -1861,6 +1866,7 @@ class SettingsHandler(QObject):
     def setGroupingCriteria(self, criteria):
         # 'song' or 'chart'
         config['profile']['grouping_criteria'] = criteria
+        self.mostPlayedOrderChanged.emit()
         self.settingsChanged.emit()
 
     @pyqtSlot(result=str)
@@ -1871,6 +1877,17 @@ class SettingsHandler(QObject):
     def setDifficultyFilter(self, filters):
         # 'all' or comma separated 'pst,prs'
         config['profile']['difficulty_filter'] = filters
+        self.mostPlayedOrderChanged.emit()
+        self.settingsChanged.emit()
+
+    @pyqtSlot(result=str)
+    def getMostPlayedScope(self):
+        return config['profile']['most_played_scope']
+
+    @pyqtSlot(str)
+    def setMostPlayedScope(self, scope):
+        config['profile']['most_played_scope'] = scope
+        self.mostPlayedOrderChanged.emit()
         self.settingsChanged.emit()
 
     # --- Account Connections ---
