@@ -22,6 +22,10 @@ Item {
     // Profile image path (refreshed on settingsChanged so Home reflects Settings changes)
     property string profileImagePath: (settingsHandler && settingsHandler.getProfileImage()) ? settingsHandler.getProfileImage() : ""
 
+    // Profile privacy options
+    property bool showFriendCodeInProfile: settingsHandler ? settingsHandler.getShowFriendCode() : true
+    property bool showPotentialInProfile: settingsHandler ? settingsHandler.getShowPotential() : false
+
     // Potential 등급별 색상
     function getPotentialColor(rating) {
         if (rating === null || rating === undefined || rating < 0) return "#999999" // 미사용 시 (회색)
@@ -86,7 +90,7 @@ Item {
         }
     }
     
-    // Refresh thumbnail paths after cache migration
+    // Refresh thumbnail paths after cache migration & reflect settings changes
     Connections {
         target: settingsHandler
         function onCacheMigrationStarting() {
@@ -100,6 +104,8 @@ Item {
         }
         function onSettingsChanged() {
             profileImagePath = (settingsHandler && settingsHandler.getProfileImage()) ? settingsHandler.getProfileImage() : ""
+            homeRoot.showFriendCodeInProfile = settingsHandler ? settingsHandler.getShowFriendCode() : homeRoot.showFriendCodeInProfile
+            homeRoot.showPotentialInProfile = settingsHandler ? settingsHandler.getShowPotential() : homeRoot.showPotentialInProfile
         }
     }
     
@@ -119,6 +125,10 @@ Item {
             updateTop10()
         }
         loadProfile()
+        if (settingsHandler) {
+            homeRoot.showFriendCodeInProfile = settingsHandler.getShowFriendCode()
+            homeRoot.showPotentialInProfile = settingsHandler.getShowPotential()
+        }
     }
 
     ScrollView {
@@ -203,21 +213,26 @@ Item {
                                       : ""
                                 color: "#999999"
                                 font.pixelSize: 16
-                                visible: profileData.connected && profileData.user_code ? true : false
+                                visible: profileData.connected && profileData.user_code && homeRoot.showFriendCodeInProfile
                             }
-
-                            Item { height: 20 } // Spacer
-
+                            
+                            Item {
+                                height: 20
+                                visible: homeRoot.showPotentialInProfile
+                            } // Spacer
+                            
                             Text {
                                 text: "POTENTIAL"
                                 color: "#999999"
                                 font.pixelSize: 12
                                 font.letterSpacing: 1.5
+                                visible: homeRoot.showPotentialInProfile
                             }
-
+                            
                             Column {
                                 id: potentialContainer
                                 spacing: 2
+                                visible: homeRoot.showPotentialInProfile
                                 
                                 property string colorTheme: getPotentialColor(profileData.connected ? profileData.rating : null)
                                 property int starCount: getPotentialStars(profileData.connected ? profileData.rating : null)
