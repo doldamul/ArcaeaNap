@@ -1136,6 +1136,7 @@ Window {
                             color: "#F0F0F0"
                             border.color: "#E0E0E0"
                             clip: true
+                            property bool hoverActive: false
                             
                             Image {
                                 id: profileImageSettings
@@ -1157,7 +1158,7 @@ Window {
                             Rectangle {
                                 anchors.fill: parent
                                 color: "#80000000"
-                                visible: profileImageMouse.containsMouse
+                                visible: profileImageRect.hoverActive
                                 
                                 Text {
                                     anchors.centerIn: parent
@@ -1167,12 +1168,48 @@ Window {
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                             }
+
+                            // Small clear (✕) button on hover, top-right
+                            Rectangle {
+                                id: profileImageClearButton
+                                width: 22; height: 22
+                                radius: 11
+                                color: clearProfileImageMouse.containsMouse ? "#F0F0F0" : "#E8E8E8"
+                                border.color: "#D0D0D0"
+                                anchors.top: parent.top
+                                anchors.right: parent.right
+                                anchors.topMargin: 4
+                                anchors.rightMargin: 4
+                                visible: profileImageRect.hoverActive && profileImageSettings.visible
+                                z: 200
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "✕"
+                                    font.pixelSize: 12
+                                    color: "#666"
+                                }
+
+                                MouseArea {
+                                    id: clearProfileImageMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (settingsHandler) settingsHandler.setProfileImage("")
+                                    }
+                                    onEntered: profileImageRect.hoverActive = true
+                                    onExited: profileImageRect.hoverActive = profileImageMouse.containsMouse || clearProfileImageMouse.containsMouse
+                                }
+                            }
                             
                             MouseArea {
                                 id: profileImageMouse
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 hoverEnabled: true
+                                onEntered: profileImageRect.hoverActive = true
+                                onExited: profileImageRect.hoverActive = profileImageMouse.containsMouse || clearProfileImageMouse.containsMouse
                                 onClicked: fileDialog.open()
                             }
                         }
