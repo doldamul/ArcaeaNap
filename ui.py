@@ -1841,7 +1841,7 @@ class SettingsHandler(QObject):
     def setProfileImage(self, path):
         if path.startswith("file:///"):
             path = path[8:]
-        config['profile']['profile_image'] = path
+        config['profile']['profile_image'] = path.replace("\\", "/")
         self.settingsChanged.emit()
 
     @pyqtSlot(result=str)

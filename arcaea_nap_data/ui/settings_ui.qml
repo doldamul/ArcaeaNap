@@ -1119,19 +1119,28 @@ Window {
 
                     // Profile Actions & Image (Moved)
                     RowLayout {
+                        id: profileImageRow
                         Layout.fillWidth: true
                         spacing: 20
+                        property string profileImageSource: (settingsHandler && settingsHandler.getProfileImage()) ? settingsHandler.getProfileImage() : ""
+                        Connections {
+                            target: settingsHandler
+                            function onSettingsChanged() {
+                                profileImageRow.profileImageSource = (settingsHandler && settingsHandler.getProfileImage()) ? settingsHandler.getProfileImage() : ""
+                            }
+                        }
                         
                         Rectangle {
+                            id: profileImageRect
                             width: 80; height: 80
-                            radius: 40
                             color: "#F0F0F0"
                             border.color: "#E0E0E0"
                             clip: true
                             
                             Image {
+                                id: profileImageSettings
                                 anchors.fill: parent
-                                source: (settingsHandler && settingsHandler.getProfileImage()) ? "file:///" + settingsHandler.getProfileImage() : ""
+                                source: profileImageRow.profileImageSource ? ("file:///" + profileImageRow.profileImageSource.replace(/\\/g, '/')) : ""
                                 fillMode: Image.PreserveAspectCrop
                                 visible: source != ""
                             }
@@ -1141,7 +1150,30 @@ Window {
                                 text: "No\nImg"
                                 font.pixelSize: 10
                                 horizontalAlignment: Text.AlignHCenter
-                                visible: parent.children[0].status !== Image.Ready
+                                visible: profileImageSettings.status !== Image.Ready
+                            }
+                            
+                            // Hover overlay: open file dialog on click
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "#80000000"
+                                visible: profileImageMouse.containsMouse
+                                
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "🖼️"
+                                    color: "white"
+                                    font.pixelSize: 24
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+                            }
+                            
+                            MouseArea {
+                                id: profileImageMouse
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                hoverEnabled: true
+                                onClicked: fileDialog.open()
                             }
                         }
                         
@@ -1185,17 +1217,12 @@ Window {
                             Item {
                                 Layout.preferredHeight: profileInfoLayout.profileData.connected ? 10 : 0
                             }
-                            
-                            Button {
-                                text: "Set Profile Image"
-                                onClicked: fileDialog.open()
-                            }
                         }
                         
                         FileDialog {
                             id: fileDialog
                             title: "Select Profile Image"
-                            nameFilters: ["Image files (*.png *.jpg *.jpeg)"]
+                            nameFilters: ["Image files (*.png *.jpg *.jpeg *.webp)"]
                             onAccepted: if (settingsHandler) settingsHandler.setProfileImage(fileDialog.selectedFile)
                         }
                     }
