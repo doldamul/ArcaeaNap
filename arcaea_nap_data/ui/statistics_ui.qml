@@ -653,6 +653,7 @@ Item {
         ScrollView {
             id: mainScroll // [1] 높이 참조를 위해 ID 부여
             contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
             clip: true
             padding: isNarrow ? 20 : 40
 
@@ -1289,7 +1290,7 @@ Item {
                 // [Song Header]
                 ScrollView {
                     Layout.fillWidth: true; Layout.fillHeight: true
-                    contentWidth: availableWidth; clip: true
+                    contentWidth: availableWidth; ScrollBar.horizontal.policy: ScrollBar.AlwaysOff; clip: true
                     
                     ColumnLayout {
                         width: parent.width; spacing: 0
@@ -1753,6 +1754,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 contentWidth: availableWidth
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                 clip: true
                 
                 ColumnLayout {

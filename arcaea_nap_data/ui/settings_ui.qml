@@ -194,6 +194,7 @@ Window {
         id: scrollView
         anchors.fill: parent
         contentWidth: availableWidth
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
         clip: true
         padding: 40
 

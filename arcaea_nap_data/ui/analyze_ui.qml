@@ -14,6 +14,7 @@ Item {
         
         // contentHeight 설정 삭제 (GridLayout의 height를 따르도록 자동 처리)
         contentWidth: availableWidth
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
         clip: true
 
         padding: 40 

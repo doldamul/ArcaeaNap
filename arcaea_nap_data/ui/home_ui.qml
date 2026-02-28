@@ -139,6 +139,7 @@ Item {
         anchors.fill: parent
         
         contentWidth: availableWidth
+        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
         clip: true
         
         // [핵심] 상하좌우 여백 40px 통일
