@@ -1741,6 +1741,7 @@ Item {
                             clearType0.checked = true
                             clearType1.checked = true
                             clearType2.checked = true
+                            clearType3.checked = true
                             clearType4.checked = true
                             clearType5.checked = true
                         }
@@ -2685,6 +2686,12 @@ Item {
                                 onCheckedChanged: filterPopup.updateClearTypeFilter()
                             }
                             CheckBox {
+                                id: clearType3
+                                text: "Pure Memory"
+                                checked: true
+                                onCheckedChanged: filterPopup.updateClearTypeFilter()
+                            }
+                            CheckBox {
                                 id: clearType4
                                 text: "Easy Clear"
                                 checked: true
@@ -2757,6 +2764,7 @@ Item {
             if (clearType0.checked) types.push(0)
             if (clearType1.checked) types.push(1)
             if (clearType2.checked) types.push(2)
+            if (clearType3.checked) types.push(3)
             if (clearType4.checked) types.push(4)
             if (clearType5.checked) types.push(5)
             
