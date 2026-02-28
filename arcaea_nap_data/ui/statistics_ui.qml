@@ -288,6 +288,8 @@ Item {
         property real shinyBp: 0
         property real perceivedBp: 0
         property bool hasScore: false  // True if this chart has been played
+        property bool ignoreChart: false  // Consultant Sheet: trap flag
+        property bool skillIssues: false  // Consultant Sheet: individual flag
         
         signal clicked(int diff)
         
@@ -609,16 +611,79 @@ Item {
                 }
             }
             
-            // Play Count Value - Separate to avoid Grid layout influence
-            Text {
-                Layout.alignment: Qt.AlignRight
-                text: {
-                    if (playCount <= 0) return "-"
-                    return playCount + " plays"
+            // Bottom row: Consultant Sheet badges (left) + Play Count (right)
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 6
+                
+                // Consultant Sheet flag badges
+                Row {
+                    spacing: 4
+                    visible: ignoreChart || skillIssues
+                    
+                    // ⛔ Trap badge
+                    Text {
+                        text: "⛔"
+                        font.pixelSize: 13
+                        visible: ignoreChart
+                        opacity: isFiltered ? 0.4 : 1.0
+                        
+                        MouseArea {
+                            id: trapBadgeMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                        }
+                        
+                        ToolTip {
+                            visible: trapBadgeMouse.containsMouse
+                            delay: 300
+                            contentItem: Column {
+                                spacing: 2
+                                Text { text: "Trap"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                                Text { text: "Flagged in Consultant Sheet"; color: "#BBB"; font.pixelSize: 10 }
+                            }
+                            background: Rectangle { color: "#333"; radius: 6 }
+                        }
+                    }
+                    
+                    // ⚠️ Individual badge
+                    Text {
+                        text: "⚠️"
+                        font.pixelSize: 13
+                        visible: skillIssues
+                        opacity: isFiltered ? 0.4 : 1.0
+                        
+                        MouseArea {
+                            id: skillBadgeMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                        }
+                        
+                        ToolTip {
+                            visible: skillBadgeMouse.containsMouse
+                            delay: 300
+                            contentItem: Column {
+                                spacing: 2
+                                Text { text: "Individual"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                                Text { text: "Flagged in Consultant Sheet"; color: "#BBB"; font.pixelSize: 10 }
+                            }
+                            background: Rectangle { color: "#333"; radius: 6 }
+                        }
+                    }
                 }
-                color: isFiltered ? effectiveSubTextColor : "#666"
-                font.pixelSize: 12
-                font.bold: true
+                
+                Item { Layout.fillWidth: true }
+                
+                // Play Count Value
+                Text {
+                    text: {
+                        if (playCount <= 0) return "-"
+                        return playCount + " plays"
+                    }
+                    color: isFiltered ? effectiveSubTextColor : "#666"
+                    font.pixelSize: 12
+                    font.bold: true
+                }
             }
         }
     }
@@ -1159,11 +1224,37 @@ Item {
                                                                 visible: index > 0
                                                             }
                                                             // Level with difficulty color (or gray if not highlighted)
-                                                            Text {
-                                                                text: modelData.level || ""
-                                                                font.bold: true
-                                                                font.pixelSize: difficultyRow.isStandaloneMode ? 13 : 11
-                                                                color: parent.isHighlighted ? (modelData.difficultyColor || "#888") : "#BBB"
+                                                            Item {
+                                                                width: levelText.width
+                                                                height: levelText.height
+                                                                Text {
+                                                                    id: levelText
+                                                                    text: modelData.level || ""
+                                                                    font.bold: true
+                                                                    font.pixelSize: difficultyRow.isStandaloneMode ? 13 : 11
+                                                                    color: isHighlighted ? (modelData.difficultyColor || "#888") : "#BBB"
+                                                                }
+                                                                // Floating badge overlay
+                                                                Row {
+                                                                    z: 10
+                                                                    spacing: 1
+                                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                                    anchors.bottom: parent.top
+                                                                    anchors.bottomMargin: -2
+                                                                    visible: (modelData.ignoreChart || false) || (modelData.skillIssues || false)
+                                                                    Text {
+                                                                        text: "⛔"
+                                                                        font.pixelSize: 7
+                                                                        visible: modelData.ignoreChart || false
+                                                                        opacity: isHighlighted ? 1.0 : 0.4
+                                                                    }
+                                                                    Text {
+                                                                        text: "⚠️"
+                                                                        font.pixelSize: 7
+                                                                        visible: modelData.skillIssues || false
+                                                                        opacity: isHighlighted ? 1.0 : 0.4
+                                                                    }
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -1188,11 +1279,36 @@ Item {
                                                     property bool isStandaloneMode: statisticsHandler && (statisticsHandler.sortMode === "title" || statisticsHandler.sortMode === "level")
                                                     property bool isLevelSort: statisticsHandler && statisticsHandler.sortMode === "level"
                                                     
-                                                    Text {
-                                                        text: (itemData.difficultyName || "") + " " + (itemData.level || "")
-                                                        font.bold: true
-                                                        font.pixelSize: parent.isStandaloneMode ? 13 : 11
-                                                        color: itemData.difficultyColor || "#888"
+                                                    // Difficulty name + level with floating badge
+                                                    Item {
+                                                        width: chartLevelText.width
+                                                        height: chartLevelText.height
+                                                        Text {
+                                                            id: chartLevelText
+                                                            text: (itemData.difficultyName || "") + " " + (itemData.level || "")
+                                                            font.bold: true
+                                                            font.pixelSize: parent.parent.isStandaloneMode ? 13 : 11
+                                                            color: itemData.difficultyColor || "#888"
+                                                        }
+                                                        // Floating badge overlay
+                                                        Row {
+                                                            z: 10
+                                                            spacing: 1
+                                                            anchors.right: parent.right
+                                                            anchors.bottom: parent.top
+                                                            anchors.bottomMargin: -2
+                                                            visible: (itemData.ignoreChart || false) || (itemData.skillIssues || false)
+                                                            Text {
+                                                                text: "⛔"
+                                                                font.pixelSize: 7
+                                                                visible: itemData.ignoreChart || false
+                                                            }
+                                                            Text {
+                                                                text: "⚠️"
+                                                                font.pixelSize: 7
+                                                                visible: itemData.skillIssues || false
+                                                            }
+                                                        }
                                                     }
                                                     
                                                     // BP value in parentheses for level sort (chart mode)
@@ -1202,6 +1318,7 @@ Item {
                                                         font.pixelSize: 13
                                                         color: "#7A6090"
                                                         visible: parent.isLevelSort
+                                                        anchors.bottom: parent.bottom
                                                     }
                                                 }
                                             }
@@ -1549,6 +1666,8 @@ Item {
                                                 shinyBp: modelData.s_bp || 0
                                                 perceivedBp: modelData.perceived_bp || 0
                                                 hasScore: modelData.hasScore || false
+                                                ignoreChart: modelData.ignoreChart || false
+                                                skillIssues: modelData.skillIssues || false
                                                 isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                                 isFiltered: modelData.isFiltered || false
                                                 
@@ -1600,6 +1719,8 @@ Item {
                                             shinyBp: modelData.s_bp || 0
                                             perceivedBp: modelData.perceived_bp || 0
                                             hasScore: modelData.hasScore || false
+                                            ignoreChart: modelData.ignoreChart || false
+                                            skillIssues: modelData.skillIssues || false
                                             isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                             isFiltered: modelData.isFiltered || false
                                             

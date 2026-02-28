@@ -724,6 +724,8 @@ class StatisticsHandler(QObject):
             'timePlayed': time_played,
             'lastPlayedDate': self._format_full_datetime(time_played),
             'scoreBelowMax': score_data.get('score_below_max', 0),
+            'ignoreChart': chart_data.get('ignore_chart', False),
+            'skillIssues': chart_data.get('skill_issues', False),
             'totalPlayCount': play_count,
             'thisYearPlayCount': this_year_play_count,
             'songTotalPlayCount': self._get_filtered_song_play_count(arcaea_id, song_data),
