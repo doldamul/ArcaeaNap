@@ -2342,8 +2342,8 @@ Item {
                             width: parent.width
                             height: 60
                             
-                            // Score grades: -, D, C, B, A, AA, EX, EX+, 99.5%, 99.8%, PM
-                            property var scoreGrades: statisticsHandler ? statisticsHandler.scoreRanks : ["-", "D", "C", "B", "A", "AA", "EX", "EX+", "99.5%", "99.8%", "PM"]
+                            // Score grades: -, D, C, B, A, AA, EX, EX+, 99.5%, 99.8%, PM, MAX
+                            property var scoreGrades: statisticsHandler ? statisticsHandler.scoreRanks : ["-", "D", "C", "B", "A", "AA", "EX", "EX+", "99.5%", "99.8%", "PM", "MAX"]
                             
                             // Independent handle indices
                             property int handleAIndex: 0
@@ -2361,10 +2361,11 @@ Item {
                             }
                             
                             // Color mapping for Score Range gradient
-                            // D (0/10) = burgundy #80354A
-                            // A (4/10) = brighter purple #9B6BB5
-                            // EX (6/10) = brighter blue-gray #6A8CAA
-                            // PM (10/10) = brighter teal #4AA8A8
+                            // D (0/11) = burgundy #80354A
+                            // A (4/11) = brighter purple #9B6BB5
+                            // EX (6/11) = brighter blue-gray #6A8CAA
+                            // PM (10/11) = brighter teal #4AA8A8
+                            // MAX (11/11) = sky blue #5AB8E0
                             function getColorForScoreIndex(idx) {
                                 if (scoreGrades.length <= 1) return "#80354A"
                                 
@@ -2372,34 +2373,42 @@ Item {
                                 
                                 // Key color points (positions on 0-1 scale)
                                 // D at 0 (idx 1, but we start from 0)
-                                // A at 0.4 (idx 4)
-                                // EX at 0.6 (idx 6)
-                                // PM at 1.0 (idx 10)
+                                // A at ~0.36 (idx 4)
+                                // EX at ~0.55 (idx 6)
+                                // PM at ~0.91 (idx 10)
+                                // MAX at 1.0 (idx 11)
                                 var dColor = {r: 0x80, g: 0x35, b: 0x4A}      // D - burgundy
                                 var aColor = {r: 0x9B, g: 0x6B, b: 0xB5}      // A - brighter purple
                                 var exColor = {r: 0x6A, g: 0x8C, b: 0xAA}     // EX - brighter blue-gray
                                 var pmColor = {r: 0x4A, g: 0xA8, b: 0xA8}     // PM - brighter teal
+                                var maxColor = {r: 0x5A, g: 0xB8, b: 0xE0}    // MAX - sky blue
                                 
                                 var r, g, b, t
                                 
-                                if (ratio <= 0.4) {
-                                    // D -> A gradient (0 to 0.4)
-                                    t = ratio / 0.4
+                                if (ratio <= 0.36) {
+                                    // D -> A gradient (0 to 0.36)
+                                    t = ratio / 0.36
                                     r = Math.round(dColor.r + (aColor.r - dColor.r) * t)
                                     g = Math.round(dColor.g + (aColor.g - dColor.g) * t)
                                     b = Math.round(dColor.b + (aColor.b - dColor.b) * t)
-                                } else if (ratio <= 0.6) {
-                                    // A -> EX gradient (0.4 to 0.6)
-                                    t = (ratio - 0.4) / 0.2
+                                } else if (ratio <= 0.55) {
+                                    // A -> EX gradient (0.36 to 0.55)
+                                    t = (ratio - 0.36) / 0.19
                                     r = Math.round(aColor.r + (exColor.r - aColor.r) * t)
                                     g = Math.round(aColor.g + (exColor.g - aColor.g) * t)
                                     b = Math.round(aColor.b + (exColor.b - aColor.b) * t)
-                                } else {
-                                    // EX -> PM gradient (0.6 to 1.0)
-                                    t = (ratio - 0.6) / 0.4
+                                } else if (ratio <= 0.91) {
+                                    // EX -> PM gradient (0.55 to 0.91)
+                                    t = (ratio - 0.55) / 0.36
                                     r = Math.round(exColor.r + (pmColor.r - exColor.r) * t)
                                     g = Math.round(exColor.g + (pmColor.g - exColor.g) * t)
                                     b = Math.round(exColor.b + (pmColor.b - exColor.b) * t)
+                                } else {
+                                    // PM -> MAX gradient (0.91 to 1.0)
+                                    t = (ratio - 0.91) / 0.09
+                                    r = Math.round(pmColor.r + (maxColor.r - pmColor.r) * t)
+                                    g = Math.round(pmColor.g + (maxColor.g - pmColor.g) * t)
+                                    b = Math.round(pmColor.b + (maxColor.b - pmColor.b) * t)
                                 }
                                 
                                 return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')

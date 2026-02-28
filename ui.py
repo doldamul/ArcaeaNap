@@ -422,8 +422,8 @@ DIFFICULTY_NAMES = {0: 'PST', 1: 'PRS', 2: 'FTR', 3: 'BYD', 4: 'ETR'}
 DIFFICULTY_COLORS = {0: '#00A0E9', 1: '#50C050', 2: '#A060FF', 3: '#E04040', 4: '#808080'}
 
 # Score rank grades in order (for Score Range filter)
-# '-' = no score, then grades up to PM
-SCORE_RANKS = ['-', 'D', 'C', 'B', 'A', 'AA', 'EX', 'EX+', '99.5%', '99.8%', 'PM']
+# '-' = no score, then grades up to MAX
+SCORE_RANKS = ['-', 'D', 'C', 'B', 'A', 'AA', 'EX', 'EX+', '99.5%', '99.8%', 'PM', 'MAX']
 
 
 class StatisticsHandler(QObject):
@@ -632,18 +632,20 @@ class StatisticsHandler(QObject):
         score = score_data.get('score', 0) if score_data else 0
         time_played = score_data.get('time_played', 0) if score_data else 0
         has_score = time_played > 0
-        rank_idx = self._get_score_rank_index(score, has_score)
+        score_below_max = score_data.get('score_below_max', None) if score_data else None
+        rank_idx = self._get_score_rank_index(score, has_score, score_below_max)
         if rank_idx < self._filter_score_min_rank or rank_idx > self._filter_score_max_rank:
             return False
         
         return True
     
-    def _get_score_rank_index(self, score, has_score=None):
+    def _get_score_rank_index(self, score, has_score=None, score_below_max=None):
         """Convert a score to its rank index in SCORE_RANKS.
         
         Args:
             score: The score value
             has_score: If True, score=0 means 'D' grade (Track Lost). If None, falls back to score > 0 check.
+            score_below_max: If 0, the score is MAX (all shiny perfects). If None, PM and MAX are not distinguished.
         """
         # Determine if this is an actual play record
         is_played = has_score if has_score is not None else (score > 0)
@@ -668,6 +670,8 @@ class StatisticsHandler(QObject):
             return 8  # '99.5%'
         elif score < 10000000:
             return 9  # '99.8%'
+        elif score_below_max is not None and score_below_max == 0:
+            return 11  # 'MAX'
         else:
             return 10  # 'PM'
     
