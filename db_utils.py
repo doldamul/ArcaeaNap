@@ -44,7 +44,6 @@ def init_songs_db():
             cut_200 INTEGER,
             ignore_chart INTEGER,
             skill_issues INTEGER,
-            contain_slowspeed INTEGER,
             UNIQUE(song_id, difficulty),
             FOREIGN KEY(song_id) REFERENCES songs(id)
         )
@@ -65,8 +64,6 @@ def init_songs_db():
         cursor.execute("ALTER TABLE charts ADD COLUMN ignore_chart INTEGER")
     if 'skill_issues' not in columns:
         cursor.execute("ALTER TABLE charts ADD COLUMN skill_issues INTEGER")
-    if 'contain_slowspeed' not in columns:
-        cursor.execute("ALTER TABLE charts ADD COLUMN contain_slowspeed INTEGER")
     
     conn.commit()
     conn.close()
@@ -319,7 +316,7 @@ def get_all_songs_with_charts():
     Returns:
         dict: {arcaea_id: {
             'title': str, 'artist': str, 'length': int, 'bpm': str,
-            'charts': {difficulty: {level, bp, s_bp, perceived_bp, note_count, ignore_chart, skill_issues, contain_slowspeed}}
+            'charts': {difficulty: {level, bp, s_bp, perceived_bp, note_count, ignore_chart, skill_issues}}
         }}
     """
     songs_db_path = get_db_path()
@@ -332,7 +329,7 @@ def get_all_songs_with_charts():
         cursor.execute("""
             SELECT s.arcaea_id, s.title, s.artist, s.length, s.bpm,
                    c.difficulty, c.level, c.bp, c.s_bp, c.perceived_bp, c.note_count,
-                   c.ignore_chart, c.skill_issues, c.contain_slowspeed, s.id
+                   c.ignore_chart, c.skill_issues, s.id
             FROM songs s
             LEFT JOIN charts c ON s.id = c.song_id
             WHERE s.arcaea_id IS NOT NULL AND s.arcaea_id != ''
@@ -341,7 +338,7 @@ def get_all_songs_with_charts():
         result = {}
         for row in cursor.fetchall():
             arcaea_id = row[0]
-            song_id = row[14]
+            song_id = row[13]
             
             if song_id not in result:
                 result[song_id] = {
@@ -362,7 +359,6 @@ def get_all_songs_with_charts():
                     'note_count': row[10] or 0,
                     'ignore_chart': bool(row[11]),
                     'skill_issues': bool(row[12]),
-                    'contain_slowspeed': bool(row[13]),
                 }
         
         return result

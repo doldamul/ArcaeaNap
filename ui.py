@@ -447,7 +447,6 @@ class StatisticsHandler(QObject):
         self._filter_bp_max = 13.0
         self._filter_ignore_chart = "contain"  # "off", "contain", "only"
         self._filter_skill_issues = "contain"
-        self._filter_contain_slowspeed = "contain"
         self._filter_score_min_rank = 0  # Index in SCORE_RANKS (0 = '-')
         self._filter_score_max_rank = len(SCORE_RANKS) - 1  # Index in SCORE_RANKS (last = 'PM')
         self._filter_clear_types = [0, 1, 2, 3, 4, 5]  # All clear types
@@ -611,8 +610,7 @@ class StatisticsHandler(QObject):
         # Chart flags filter
         for flag_name, flag_value in [
             ('ignore_chart', self._filter_ignore_chart),
-            ('skill_issues', self._filter_skill_issues),
-            ('contain_slowspeed', self._filter_contain_slowspeed)
+            ('skill_issues', self._filter_skill_issues)
         ]:
             chart_flag = chart_data.get(flag_name, False)
             if flag_value == "only" and not chart_flag:
@@ -1316,8 +1314,6 @@ class StatisticsHandler(QObject):
             self._filter_ignore_chart = str(value) if value else 'off'
         elif filter_type == 'skill_issues':
             self._filter_skill_issues = str(value) if value else 'off'
-        elif filter_type == 'contain_slowspeed':
-            self._filter_contain_slowspeed = str(value) if value else 'off'
         elif filter_type == 'clear_types':
             self._filter_clear_types = list(value) if value else []
         elif filter_type == 'score_min_rank':

@@ -1737,7 +1737,6 @@ Item {
                             
                             ignoreFlagSegment.selectedIndex = 1 // Show
                             skillFlagSegment.selectedIndex = 1 // Show
-                            slowFlagSegment.selectedIndex = 1 // Show
                             
                             clearType0.checked = true
                             clearType1.checked = true
@@ -2655,12 +2654,7 @@ Item {
                                 onIndexChanged: filterPopup.updateFlagFilter()
                             }
                             
-                            FlagSegmentedControl {
-                                id: slowFlagSegment
-                                flagName: "🔀 bpm"
-                                selectedIndex: 1  // Default: Show
-                                onIndexChanged: filterPopup.updateFlagFilter()
-                            }
+
                         }
                     }
                     
@@ -2764,7 +2758,6 @@ Item {
             if (statisticsHandler) {
                 statisticsHandler.setFilter("ignore_chart", map[ignoreFlagSegment.selectedIndex])
                 statisticsHandler.setFilter("skill_issues", map[skillFlagSegment.selectedIndex])
-                statisticsHandler.setFilter("contain_slowspeed", map[slowFlagSegment.selectedIndex])
             }
         }
 
