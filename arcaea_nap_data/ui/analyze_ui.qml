@@ -406,20 +406,6 @@ Item {
                         isPlayCountMode = analysisHandler.isPlayCountMode()
                     }
                     
-                    function formatPinDate(ts) {
-                        if (!ts || ts <= 0) return "-"
-                        
-                        var date = new Date(ts)
-                        
-                        var absDate = date.getFullYear() + "-" + 
-                                      (date.getMonth() + 1).toString().padStart(2, '0') + "-" + 
-                                      date.getDate().toString().padStart(2, '0') + " " +
-                                      date.getHours().toString().padStart(2, '0') + ":" +
-                                      date.getMinutes().toString().padStart(2, '0')
-                        
-                        return absDate
-                    }
-
                     // --- Difficulty Date List ---
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -604,7 +590,7 @@ Item {
                                             
                                             // Last Played Date (yyyy-mm-dd HH:mm)
                                             Text {
-                                                text: lastSavedInfoContent.formatPinDate(timePlayed)
+                                                text: pinData.formatted_time_played || "-"
                                                 font.pixelSize: 12
                                                 font.bold: true
                                                 color: "#333"
@@ -616,7 +602,7 @@ Item {
                                             Text { 
                                                 Layout.fillWidth: true
                                                 verticalAlignment: Text.AlignVCenter
-                                                text: lastSavedInfoContent.formatPinDate(updatedAt)
+                                                text: pinData.formatted_updated_at || "-"
                                                 font.pixelSize: 12
                                                 font.bold: true
                                                 color: "#333"

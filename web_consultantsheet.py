@@ -14,8 +14,8 @@ from googleapiclient.discovery import build
 from configuration import config
 import gspread
 import re
-from db_utils import init_songs_db, get_connection, resolve_song_id
-from common_types import Difficulty
+from repositories.song_repository import init_songs_db, get_connection, resolve_song_id
+from models.types import Difficulty
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -356,7 +356,8 @@ def send_scores_to_sheet(sheet_id=None, log_callback=None, cancellation_context=
     
     Returns: (updated_count, total_rows) tuple
     """
-    from db_utils import get_all_songs_with_charts, get_best_scores_per_chart, TITLE_ALIAS_MAP
+    from repositories.song_repository import get_all_songs_with_charts, TITLE_ALIAS_MAP
+    from services.score_query_service import get_best_scores_per_chart
     
     def log(msg):
         print(f"[SendData] {msg}")
@@ -425,7 +426,7 @@ def send_scores_to_sheet(sheet_id=None, log_callback=None, cancellation_context=
     
     # Load local data
     songs_data = get_all_songs_with_charts()
-    best_scores = get_best_scores_per_chart()
+    best_scores = get_best_scores_per_chart(config['general']['cache_path'])
     
     # Build title -> arcaea_id lookup (case-insensitive)
     # DB titles are the "official" titles after TITLE_ALIAS_MAP resolution
@@ -757,7 +758,7 @@ def save_to_db(data):
         print(f"Saved/Updated {updated_count} charts to database.")
         
         # Try to fill arcaea_id from user_scores.db
-        from db_utils import fill_missing_arcaea_ids_from_scores
+        from repositories.song_repository import fill_missing_arcaea_ids_from_scores
         fill_missing_arcaea_ids_from_scores()
     
     except Exception as e:

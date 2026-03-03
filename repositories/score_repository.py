@@ -204,10 +204,34 @@ class PinRepository:
             (difficulty, score_id, timestamp)
         )
     
-    def get_all_pin_updates(self, cursor: sqlite3.Cursor) -> dict[int, int]:
+    def get_all_pin_updates(self, cursor: sqlite3.Cursor) -> dict[int, int | None]:
         """모든 난이도의 pin 업데이트 시각 조회"""
         try:
-            cursor.execute('SELECT difficulty, updated_at FROM pin WHERE updated_at IS NOT NULL')
+            cursor.execute('SELECT difficulty, updated_at FROM pin')
             return {row[0]: row[1] for row in cursor.fetchall()}
+        except sqlite3.OperationalError:
+            return {}
+
+    def get_pin_details_with_scores(self, cursor: sqlite3.Cursor) -> dict[int, dict]:
+        """
+        모든 난이도의 pin 데이터를 연관된 score 정보와 함께 조회.
+        
+        Returns:
+            {difficulty: {'updated_at': int, 'time_played': int, 'arcaea_id': str}}
+        """
+        try:
+            cursor.execute('''
+                SELECT p.difficulty, p.updated_at, s.time_played, s.arcaea_id
+                FROM pin p
+                LEFT JOIN scores s ON p.score_id = s.id
+            ''')
+            result = {}
+            for row in cursor.fetchall():
+                result[row[0]] = {
+                    'updated_at': row[1] or 0,
+                    'time_played': row[2] or 0,
+                    'arcaea_id': row[3] or ''
+                }
+            return result
         except sqlite3.OperationalError:
             return {}

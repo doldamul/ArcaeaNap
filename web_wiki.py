@@ -1,7 +1,6 @@
-from configuration import config
 import requests
 from bs4 import BeautifulSoup
-from db_utils import get_connection, init_songs_db
+from repositories.song_repository import get_connection, init_songs_db
 
 WIKI_API_URL = 'https://arcaea.fandom.com/api.php'
 WIKI_PAGE = 'Songs_by_Date'
@@ -96,7 +95,7 @@ def save_data(data):
     
     try:
         updated_count = 0
-        from db_utils import resolve_song_id_with_artist, update_song_metadata, fill_missing_arcaea_ids_from_scores
+        from repositories.song_repository import resolve_song_id_with_artist, update_song_metadata, fill_missing_arcaea_ids_from_scores
         
         for title, artist, length_str, bpm in data:
             # Convert length "m:ss" to seconds (int)

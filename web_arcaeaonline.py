@@ -1,7 +1,7 @@
 from configuration import config
 from disrupt import block_pointer_events, restore_pointer_events
-from db_utils import get_connection, resolve_song_id_for_ao, init_songs_db
-from score_repository import ScoreRepository, PlayCountRepository, PinRepository
+from repositories.song_repository import get_connection, resolve_song_id_for_ao, init_songs_db
+from repositories.score_repository import ScoreRepository, PlayCountRepository, PinRepository
 import sqlite3
 import pandas as pd
 import keyring
@@ -16,7 +16,7 @@ from enum import IntEnum
 from dataclasses import dataclass, field
 from collections import deque
 from typing import Dict, Optional, Set
-from common_types import Difficulty
+from models.types import Difficulty
 
 VUE_COMPONENT_SELECTOR = "#app > section > div:nth-child(3)"
 LOGIN_COMPONENT_SELECTOR = ".button.login-button"
@@ -158,19 +158,13 @@ class ArcaeaOnline:
     def _load_pin_updates_from_db(self):
         """Load pin update timestamps from database on startup."""
         try:
-            score_filepath = os.path.join(config['general']['cache_path'], 'user_scores.db')
-            if not os.path.exists(score_filepath):
+            if not os.path.exists(self.db_path):
                 return
             
-            with sqlite3.connect(score_filepath) as conn:
+            with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pin'")
-                if not cursor.fetchone():
-                    return
-                
-                cursor.execute("SELECT difficulty, updated_at FROM pin")
-                for row in cursor.fetchall():
-                    self.status.pin_updates[row[0]] = row[1]
+                pin_updates = self._pin_repo.get_all_pin_updates(cursor)
+                self.status.pin_updates.update(pin_updates)
         except Exception as e:
             print(f"Error loading pin updates from DB: {e}")
 
@@ -1208,36 +1202,20 @@ class ArcaeaOnline:
             self.log(f"Thumbnail: saved={saved_count}, skipped={skipped_count}, not_found={not_found_count}")
 
     def get_pin_id(self, difficulty) -> int | None:
-        score_filepath = os.path.join(config['general']['cache_path'], 'user_scores.db')
         try:
-            with sqlite3.connect(score_filepath) as conn:
+            with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                try:
-                    cursor.execute('SELECT score_id FROM pin WHERE difficulty = ?', (difficulty,))
-                except sqlite3.OperationalError:
-                    cursor.execute('DROP TABLE IF EXISTS pin')
-                    cursor.execute('CREATE TABLE pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER, updated_at INTEGER)')
-                    cursor.execute('SELECT score_id FROM pin WHERE difficulty = ?', (difficulty,))
-                
-                row = cursor.fetchone()
-                
-                if row is None:
-                    cursor.execute('CREATE TABLE IF NOT EXISTS pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER, updated_at INTEGER)')
-                    cursor.execute('INSERT OR IGNORE INTO pin (difficulty, score_id) VALUES (?, NULL)', (difficulty,))
-                    conn.commit()
-                    return None
-                return row[0]
-                
+                pin_id = self._pin_repo.get_pin(cursor, difficulty)
+                conn.commit()  # get_pin may INSERT if row is None
+                return pin_id
         except Exception as e:
             self.log(f"get_pin_id Error: {e}")
             return None
 
     def save_pin_id(self, difficulty, score_id, cursor):
         try:
-            cursor.execute('CREATE TABLE IF NOT EXISTS pin (difficulty INTEGER PRIMARY KEY, score_id INTEGER, updated_at INTEGER)')
-            
             current_time = int(time.time() * 1000)
-            cursor.execute('INSERT OR REPLACE INTO pin (difficulty, score_id, updated_at) VALUES (?, ?, ?)', (difficulty, score_id, current_time))
+            self._pin_repo.save_pin(cursor, difficulty, score_id, current_time)
             
             # Update status object
             self.status.pin_updates[difficulty] = current_time

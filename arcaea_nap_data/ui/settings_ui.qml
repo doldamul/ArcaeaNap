@@ -68,7 +68,7 @@ Window {
                 sheetMgmtCard.isBinding = settingsHandler.isBindingSheet()
                 // When disconnected, fully reset sheet state so UI reverts to "bind sheet" form
                 if (!connected) {
-                    sheetMgmtCard.sheetVersions = "{}"
+                    sheetMgmtCard.sheetVersions = ({})
                     sheetMgmtCard.lastSynced = 0
                     sheetMgmtCard.isSending = false
                 }
@@ -383,7 +383,7 @@ Window {
                             
                             property bool isConnected: settingsHandler ? settingsHandler.isArcaeaOnlineConnected() : false
                             property bool isConnecting: settingsHandler ? settingsHandler.isArcaeaOnlineConnecting() : false
-                            property string connectionInfo: settingsHandler ? settingsHandler.getArcaeaOnlineConnectionInfo() : "{}"
+                            property var connectionInfo: settingsHandler ? settingsHandler.getArcaeaOnlineConnectionInfo() : ({})
                             
                             Column {
                                 anchors.centerIn: parent
@@ -400,18 +400,13 @@ Window {
                                 Text {
                                     visible: arcaeaButton.isConnected
                                     text: {
-                                        if (!arcaeaButton.connectionInfo || arcaeaButton.connectionInfo === "{}") return ""
-                                        try {
-                                            var info = JSON.parse(arcaeaButton.connectionInfo)
-                                            var displayName = info.name || info.user_id || ""
-                                            if (displayName) {
-                                                var date = new Date(info.connected_at * 1000)
-                                                return displayName + "\n" + Qt.formatDateTime(date, "yyyy-MM-dd hh:mm")
-                                            }
-                                        } catch(e) {
-                                            console.log("Error parsing Arcaea connection info:", e)
+                                        var info = arcaeaButton.connectionInfo
+                                        if (!info || Object.keys(info).length === 0) return ""
+                                        var displayName = info.name || info.user_id || ""
+                                        if (displayName && info.formatted_date) {
+                                            return displayName + "\n" + info.formatted_date
                                         }
-                                        return ""
+                                        return displayName
                                     }
                                     font.pixelSize: 10
                                     color: "#757575"
@@ -453,39 +448,13 @@ Window {
                                 }
                             }
 
-                            BusyIndicator {
+                            SpinnerIndicator {
                                 anchors.centerIn: parent
-                                width: 64
-                                height: 64
+                                width: 64; height: 64
+                                lineWidth: 3
+                                strokeColor: "white"
+                                radiusOffset: 4
                                 running: arcaeaButton.isConnecting
-                                visible: arcaeaButton.isConnecting
-                                
-                                contentItem: Item {
-                                    anchors.fill: parent
-                                    
-                                    Canvas {
-                                        anchors.fill: parent
-                                        rotation: 0
-                                        
-                                        onPaint: {
-                                            var ctx = getContext("2d")
-                                            ctx.clearRect(0, 0, width, height)
-                                            ctx.beginPath()
-                                            ctx.arc(width/2, height/2, width/2 - 4, 0, 0.7 * Math.PI)
-                                            ctx.lineWidth = 3
-                                            ctx.strokeStyle = "white"
-                                            ctx.lineCap = "round"
-                                            ctx.stroke()
-                                        }
-                                        
-                                        RotationAnimation on rotation {
-                                            from: 0; to: 360; duration: 1000; loops: Animation.Infinite
-                                            running: arcaeaButton.isConnecting
-                                        }
-                                        
-                                        onAvailableChanged: if(available) requestPaint()
-                                    }
-                                }
                             }
 
                             MouseArea {
@@ -516,7 +485,7 @@ Window {
                             Behavior on color { PropertyAction {} }
                             
                             property bool isConnected: settingsHandler ? settingsHandler.isGoogleSheetConnected() : false
-                            property string connectionInfo: settingsHandler ? settingsHandler.getGoogleSheetConnectionInfo() : "{}"
+                            property var connectionInfo: settingsHandler ? settingsHandler.getGoogleSheetConnectionInfo() : ({})
                             
                             Column {
                                 anchors.centerIn: parent
@@ -533,15 +502,13 @@ Window {
                                 Text {
                                     visible: googleButton.isConnected
                                     text: {
-                                        if (!googleButton.connectionInfo || googleButton.connectionInfo === "{}") return ""
-                                        try {
-                                            var info = JSON.parse(googleButton.connectionInfo)
-                                            if (info && info.user_email) {
-                                                var date = new Date(info.connected_at * 1000)
-                                                return info.user_email + "\n" + Qt.formatDateTime(date, "yyyy-MM-dd hh:mm")
+                                        var info = googleButton.connectionInfo
+                                        if (!info || Object.keys(info).length === 0) return ""
+                                        if (info.user_email) {
+                                            if (info.formatted_date) {
+                                                return info.user_email + "\n" + info.formatted_date
                                             }
-                                        } catch(e) {
-                                            console.log("Error parsing Google connection info:", e)
+                                            return info.user_email
                                         }
                                         return ""
                                     }
@@ -723,23 +690,18 @@ Window {
                         border.color: "#E0E0E0"; border.width: 1
                         
                         property bool isGoogleConnected: settingsHandler ? settingsHandler.isGoogleSheetConnected() : false
-                        property string boundSheetInfo: settingsHandler ? settingsHandler.getBoundSheetInfo() : "{}"
+                        property var boundSheetInfo: settingsHandler ? settingsHandler.getBoundSheetInfo() : ({})
                         property bool isBinding: settingsHandler ? settingsHandler.isBindingSheet() : false
                         property bool isSending: settingsHandler ? settingsHandler.isSendingData() : false
                         property real lastSynced: settingsHandler ? settingsHandler.getLastSyncedTime() : 0
-                        property string sheetVersions: settingsHandler ? settingsHandler.getSheetVersions() : "{}"
+                        property var sheetVersions: settingsHandler ? settingsHandler.getSheetVersions() : ({})
                         property string parsedSheetVer: "?"
                         property string parsedArcaeaVer: "?"
                         
                         onSheetVersionsChanged: {
-                            try {
-                                var v = JSON.parse(sheetVersions)
-                                parsedSheetVer = (v && v.sheet_ver) ? String(v.sheet_ver) : '?'
-                                parsedArcaeaVer = (v && v.arcaea_ver) ? String(v.arcaea_ver) : '?'
-                            } catch(e) {
-                                parsedSheetVer = '?'
-                                parsedArcaeaVer = '?'
-                            }
+                            var v = sheetVersions
+                            parsedSheetVer = (v && v.sheet_ver) ? String(v.sheet_ver) : '?'
+                            parsedArcaeaVer = (v && v.arcaea_ver) ? String(v.arcaea_ver) : '?'
                         }
                         
                         property bool hasBoundSheet: false
@@ -748,34 +710,21 @@ Window {
                         // Explicitly update derived properties when boundSheetInfo changes
                         // (JavaScript block bindings may fail to re-evaluate after imperative assignment)
                         onBoundSheetInfoChanged: {
-                            try {
-                                var info = JSON.parse(boundSheetInfo)
-                                hasBoundSheet = !!(info && info.sheet_id && info.sheet_id !== "")
-                                boundSheetName = (info && info.sheet_name) ? info.sheet_name : ""
-                            } catch(e) {
-                                hasBoundSheet = false
-                                boundSheetName = ""
-                            }
+                            var info = boundSheetInfo
+                            hasBoundSheet = !!(info && info.sheet_id && info.sheet_id !== "")
+                            boundSheetName = (info && info.sheet_name) ? info.sheet_name : ""
                         }
                         
                         Component.onCompleted: {
                             // Compute initial derived properties
-                            try {
-                                var info = JSON.parse(boundSheetInfo)
-                                hasBoundSheet = !!(info && info.sheet_id && info.sheet_id !== "")
-                                boundSheetName = (info && info.sheet_name) ? info.sheet_name : ""
-                            } catch(e) {
-                                hasBoundSheet = false
-                                boundSheetName = ""
-                            }
-                            try {
-                                var v = JSON.parse(sheetVersions)
-                                parsedSheetVer = (v && v.sheet_ver) ? String(v.sheet_ver) : '?'
-                                parsedArcaeaVer = (v && v.arcaea_ver) ? String(v.arcaea_ver) : '?'
-                            } catch(e) {
-                                parsedSheetVer = '?'
-                                parsedArcaeaVer = '?'
-                            }
+                            var info = boundSheetInfo
+                            hasBoundSheet = !!(info && info.sheet_id && info.sheet_id !== "")
+                            boundSheetName = (info && info.sheet_name) ? info.sheet_name : ""
+
+                            var v = sheetVersions
+                            parsedSheetVer = (v && v.sheet_ver) ? String(v.sheet_ver) : '?'
+                            parsedArcaeaVer = (v && v.arcaea_ver) ? String(v.arcaea_ver) : '?'
+
                             if (settingsHandler && hasBoundSheet) {
                                 settingsHandler.fetchSheetVersions()
                             }
@@ -870,27 +819,11 @@ Window {
                                                 anchors.centerIn: parent
                                                 spacing: 4
                                                 Text { text: "Sheet"; font.pixelSize: 11; color: "#2E7D32"; font.bold: true }
-                                                Item {
+                                                SpinnerIndicator {
                                                     implicitWidth: 11; implicitHeight: 11
-                                                    visible: !sheetMgmtCard.parsedSheetVer || sheetMgmtCard.parsedSheetVer === '?'
-                                                    Canvas {
-                                                        anchors.fill: parent
-                                                        onPaint: {
-                                                            var ctx = getContext("2d")
-                                                            ctx.clearRect(0, 0, width, height)
-                                                            ctx.beginPath()
-                                                            ctx.arc(width/2, height/2, width/2 - 1.5, 0, 1.4 * Math.PI)
-                                                            ctx.lineWidth = 1.5
-                                                            ctx.strokeStyle = "#333"
-                                                            ctx.lineCap = "round"
-                                                            ctx.stroke()
-                                                        }
-                                                        RotationAnimation on rotation {
-                                                            from: 0; to: 360; duration: 1000; loops: Animation.Infinite
-                                                            running: parent.visible
-                                                        }
-                                                        onAvailableChanged: if(available) requestPaint()
-                                                    }
+                                                    lineWidth: 1.5
+                                                    strokeColor: "#333"
+                                                    running: !sheetMgmtCard.parsedSheetVer || sheetMgmtCard.parsedSheetVer === '?'
                                                 }
                                                 Text {
                                                     text: sheetMgmtCard.parsedSheetVer || ''
@@ -911,27 +844,11 @@ Window {
                                                 anchors.centerIn: parent
                                                 spacing: 4
                                                 Text { text: "Arcaea"; font.pixelSize: 11; color: "#1565C0"; font.bold: true }
-                                                Item {
+                                                SpinnerIndicator {
                                                     implicitWidth: 11; implicitHeight: 11
-                                                    visible: !sheetMgmtCard.parsedArcaeaVer || sheetMgmtCard.parsedArcaeaVer === '?'
-                                                    Canvas {
-                                                        anchors.fill: parent
-                                                        onPaint: {
-                                                            var ctx = getContext("2d")
-                                                            ctx.clearRect(0, 0, width, height)
-                                                            ctx.beginPath()
-                                                            ctx.arc(width/2, height/2, width/2 - 1.5, 0, 1.4 * Math.PI)
-                                                            ctx.lineWidth = 1.5
-                                                            ctx.strokeStyle = "#333"
-                                                            ctx.lineCap = "round"
-                                                            ctx.stroke()
-                                                        }
-                                                        RotationAnimation on rotation {
-                                                            from: 0; to: 360; duration: 1000; loops: Animation.Infinite
-                                                            running: parent.visible
-                                                        }
-                                                        onAvailableChanged: if(available) requestPaint()
-                                                    }
+                                                    lineWidth: 1.5
+                                                    strokeColor: "#333"
+                                                    running: !sheetMgmtCard.parsedArcaeaVer || sheetMgmtCard.parsedArcaeaVer === '?'
                                                 }
                                                 Text {
                                                     text: sheetMgmtCard.parsedArcaeaVer || ''
@@ -982,29 +899,13 @@ Window {
                                     contentItem: RowLayout {
                                         spacing: 8
                                         Item { Layout.fillWidth: true }
-                                        Item {
+                                        SpinnerIndicator {
                                             Layout.preferredWidth: 14
                                             Layout.preferredHeight: 14
-                                            visible: sheetMgmtCard.isSending
-                                            
-                                            Canvas {
-                                                anchors.fill: parent
-                                                onPaint: {
-                                                    var ctx = getContext("2d")
-                                                    ctx.clearRect(0, 0, width, height)
-                                                    ctx.beginPath()
-                                                    ctx.arc(width/2, height/2, width/2 - 1.5, 0, 1.4 * Math.PI)
-                                                    ctx.lineWidth = 2
-                                                    ctx.strokeStyle = "white"
-                                                    ctx.lineCap = "round"
-                                                    ctx.stroke()
-                                                }
-                                                RotationAnimation on rotation {
-                                                    from: 0; to: 360; duration: 1000; loops: Animation.Infinite
-                                                    running: parent.visible
-                                                }
-                                                onAvailableChanged: if(available) requestPaint()
-                                            }
+                                            lineWidth: 2
+                                            strokeColor: "white"
+                                            radiusOffset: 1.5
+                                            running: sheetMgmtCard.isSending
                                         }
                                         Text {
                                             text: sheetMgmtCard.isSending ? "Sending..." : "Send Data"
