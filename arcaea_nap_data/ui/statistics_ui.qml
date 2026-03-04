@@ -581,18 +581,23 @@ Item {
                                                                 height: levelText.height
                                                                 Text {
                                                                     id: levelText
-                                                                    text: modelData.level || ""
+                                                                    text: String(modelData.level || "")
                                                                     font.bold: true
                                                                     font.pixelSize: difficultyRow.isStandaloneMode ? 13 : 11
                                                                     color: isHighlighted ? (modelData.difficultyColor || "#888") : "#BBB"
                                                                 }
                                                                 // Floating badge overlay
                                                                 Row {
+                                                                    property bool isValueAbove: !difficultyRow.isStandaloneMode && itemData.displayValue && itemData.displayValue !== ""
+                                                                    property string lvlStr: String(modelData.level || "")
                                                                     z: 10
                                                                     spacing: 1
                                                                     anchors.horizontalCenter: parent.horizontalCenter
-                                                                    anchors.bottom: parent.top
-                                                                    anchors.bottomMargin: -2
+                                                                    anchors.horizontalCenterOffset: (lvlStr === "10" || lvlStr === "11") ? 1 : 0
+                                                                    anchors.top: isValueAbove ? parent.bottom : undefined
+                                                                    anchors.bottom: isValueAbove ? undefined : parent.top
+                                                                    anchors.topMargin: 0
+                                                                    anchors.bottomMargin: isValueAbove ? 0 : -2
                                                                     visible: (modelData.ignoreChart || false) || (modelData.skillIssues || false)
                                                                     Text {
                                                                         text: "⛔"
@@ -633,22 +638,40 @@ Item {
                                                     
                                                     // Difficulty name + level with floating badge
                                                     Item {
-                                                        width: chartLevelText.width
-                                                        height: chartLevelText.height
-                                                        Text {
-                                                            id: chartLevelText
-                                                            text: (itemData.difficultyName || "") + " " + (itemData.level || "")
-                                                            font.bold: true
-                                                            font.pixelSize: parent.parent.isStandaloneMode ? 13 : 11
-                                                            color: itemData.difficultyColor || "#888"
+                                                        property bool isStandaloneMode: parent.isStandaloneMode
+                                                        width: chartLevelRow.width
+                                                        height: chartLevelRow.height
+                                                        
+                                                        Row {
+                                                            id: chartLevelRow
+                                                            spacing: 0
+                                                            Text {
+                                                                text: (itemData.difficultyName ? itemData.difficultyName + " " : "")
+                                                                font.bold: true
+                                                                font.pixelSize: parent.parent.isStandaloneMode ? 13 : 11
+                                                                color: itemData.difficultyColor || "#888"
+                                                            }
+                                                            Text {
+                                                                id: chartLevelNumText
+                                                                text: String(itemData.level || "")
+                                                                font.bold: true
+                                                                font.pixelSize: parent.parent.isStandaloneMode ? 13 : 11
+                                                                color: itemData.difficultyColor || "#888"
+                                                            }
                                                         }
+
                                                         // Floating badge overlay
                                                         Row {
+                                                            property bool isValueAbove: !(statisticsHandler && (statisticsHandler.sortMode === "title" || statisticsHandler.sortMode === "level")) && itemData.displayValue && itemData.displayValue !== ""
+                                                            property string lvlStr: String(itemData.level || "")
                                                             z: 10
                                                             spacing: 1
-                                                            anchors.right: parent.right
-                                                            anchors.bottom: parent.top
-                                                            anchors.bottomMargin: -2
+                                                            anchors.horizontalCenter: parent.left
+                                                            anchors.horizontalCenterOffset: chartLevelRow.x + chartLevelNumText.x + chartLevelNumText.width / 2 + ((lvlStr === "10" || lvlStr === "11") ? 1 : 0)
+                                                            anchors.top: isValueAbove ? parent.bottom : undefined
+                                                            anchors.bottom: isValueAbove ? undefined : parent.top
+                                                            anchors.topMargin: isValueAbove ? 2 : 0
+                                                            anchors.bottomMargin: isValueAbove ? 0 : -2
                                                             visible: (itemData.ignoreChart || false) || (itemData.skillIssues || false)
                                                             Text {
                                                                 text: "⛔"

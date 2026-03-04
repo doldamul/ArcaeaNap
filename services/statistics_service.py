@@ -48,6 +48,11 @@ class StatisticsService:
         self.available_bps = []
         self.level_boundaries = {}
 
+    @staticmethod
+    def _normalize_level(level) -> str:
+        """Normalize level text for consistent backend->QML contract."""
+        return str(level or "").strip()
+
     def load_data(self, cache_path: str):
         """DB에서 데이터 로딩 + 정규화. 경계 계산 포함."""
         # Load raw data
@@ -61,10 +66,12 @@ class StatisticsService:
         for sid, sdata in raw_songs.items():
             normalized_charts = {}
             for diff, cdata in sdata.get('charts', {}).items():
+                normalized_chart = dict(cdata)
+                normalized_chart['level'] = self._normalize_level(normalized_chart.get('level', ''))
                 try:
-                    normalized_charts[int(diff)] = cdata
+                    normalized_charts[int(diff)] = normalized_chart
                 except:
-                    normalized_charts[diff] = cdata
+                    normalized_charts[diff] = normalized_chart
             sdata['charts'] = normalized_charts
             self.songs_data[sid] = sdata
 
