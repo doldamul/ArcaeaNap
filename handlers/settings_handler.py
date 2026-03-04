@@ -256,6 +256,15 @@ class SettingsHandler(QObject):
             self._sheet_versions = versions
             print(f"[SettingsHandler] Sheet versions fetched: {versions}")
             self.sheetVersionsChanged.emit()
+
+            # If credentials were expired/revoked, the connection has been cleared.
+            # Notify UI so that the Google Sheet connection status updates.
+            # NOTE: Only emit googleSheetConnectionChanged here, NOT sheetBindingChanged,
+            # because sheetBindingChanged triggers fetchSheetVersions() in QML which would
+            # cause an infinite loop.
+            if versions.get('disconnected'):
+                print("[SettingsHandler] Google Sheet connection was lost (token expired/revoked).")
+                self.googleSheetConnectionChanged.emit()
             
         thread = threading.Thread(target=task, daemon=True)
         thread.start()

@@ -611,7 +611,7 @@ def get_sheet_version_info(sheet_id=None, cancellation_context=None):
     - '현재 버전' / 'Current version' / '現在バージョン' -> Returns value in right cell
     - '대응 Arcaea 버전' / 'Arcaea's version' / 'Arcaeaバージョン' -> Returns value in right cell
     
-    Returns: dict { 'sheet_ver': str, 'arcaea_ver': str }
+    Returns: dict { 'sheet_ver': str, 'arcaea_ver': str, 'disconnected': bool (optional) }
     """
     if not sheet_id:
         sheet_id = _get_bound_sheet_id()
@@ -623,7 +623,9 @@ def get_sheet_version_info(sheet_id=None, cancellation_context=None):
         # Request non-interactive credentials (don't open browser automatically)
         creds = get_creds(cancellation_context, interactive=False)
         if not creds:
-            return {'sheet_ver': '?', 'arcaea_ver': '?'}
+            # If creds is None in non-interactive mode, it means the token was
+            # expired/revoked and has been cleared. Signal disconnection.
+            return {'sheet_ver': '?', 'arcaea_ver': '?', 'disconnected': True}
         
         gc = gspread.authorize(creds)
         sheet = gc.open_by_key(sheet_id)
@@ -817,7 +819,10 @@ def get_creds(cancellation_context=None, interactive=True):
             # Save refreshed token
             _save_google_credentials(creds, connections_filepath)
         except Exception as e:
-            print(f"Token refresh failed: {e}. Re-authenticating...")
+            print(f"Token refresh failed: {e}")
+            # Clear the expired/revoked credentials so the app doesn't
+            # keep retrying with a dead token on every startup.
+            _clear_google_credentials(connections_filepath)
             creds = None
     
     if not creds or not creds.valid:
@@ -838,6 +843,42 @@ def get_creds(cancellation_context=None, interactive=True):
             _save_google_credentials(creds, connections_filepath)
     
     return creds
+
+def _clear_google_credentials(connections_filepath):
+    """Clear expired/revoked Google credentials from account_connections.json and keyring.
+    
+    Called when token refresh fails (e.g. invalid_grant) to prevent the app from
+    repeatedly attempting to use a dead token on every startup.
+    Mirrors the behavior of SettingsHandler.disconnectGoogleSheet() by removing
+    the entire google_sheet section and keyring tokens.
+    """
+    print("[GoogleAuth] Clearing expired credentials...")
+    try:
+        # Remove tokens from keyring
+        try:
+            keyring.delete_password('ArcaeaNap', 'google_token')
+        except Exception:
+            pass
+        try:
+            keyring.delete_password('ArcaeaNap', 'google_refresh_token')
+        except Exception:
+            pass
+        
+        # Remove entire google_sheet section from account_connections.json
+        # (same as manual disconnect — clears bound sheet info as well)
+        if os.path.exists(connections_filepath):
+            try:
+                with open(connections_filepath, 'r', encoding='utf-8') as f:
+                    connections = json.load(f)
+                if 'google_sheet' in connections:
+                    del connections['google_sheet']
+                with open(connections_filepath, 'w', encoding='utf-8') as f:
+                    json.dump(connections, f, ensure_ascii=False, indent=2)
+                print("[GoogleAuth] Expired credentials cleared.")
+            except Exception as e:
+                print(f"[GoogleAuth] Error updating connections file: {e}")
+    except Exception as e:
+        print(f"[GoogleAuth] Error clearing credentials: {e}")
 
 def _save_google_credentials(creds, connections_filepath):
     """Save Google credentials to account_connections.json."""

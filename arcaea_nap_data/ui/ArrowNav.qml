@@ -15,6 +15,8 @@ Item {
     default property alias content: container.data
     property SwipeView targetView: null
 
+    anchors.fill: parent
+
     Item { id: container; anchors.fill: parent }
 
     // 왼쪽 화살표 버튼
