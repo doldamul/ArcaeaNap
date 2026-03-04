@@ -1074,12 +1074,24 @@ Item {
                                     id: desktopRow
                                     anchors.fill: parent
                                     visible: !isNarrow && !isDiffCramped
-                                    spacing: 15
+                                    
+                                    property int numCards: Math.max(1, difficultiesToShow.length)
+                                    property real cardMaxWidth: 220
+                                    property real baseSpacing: 15
+                                    property real totalBaseRequired: (numCards * cardMaxWidth) + (Math.max(0, numCards - 1) * baseSpacing)
+                                    
+                                    property real extraWidth: Math.max(0, width - totalBaseRequired)
+                                    property real sExtra: extraWidth / (numCards + 3)
+                                    
+                                    spacing: baseSpacing + sExtra
                                     
                                     Repeater {
                                         model: difficultiesToShow
                                         
                                         DiffCard {
+                                            Layout.leftMargin: index === 0 ? 2 * desktopRow.sExtra : 0
+                                            Layout.rightMargin: index === desktopRow.numCards - 1 ? 2 * desktopRow.sExtra : 0
+                                            Layout.maximumWidth: desktopRow.cardMaxWidth
                                             diffName: modelData.difficultyName || ""
                                             diffLevel: modelData.level || ""
                                             diffColor: modelData.difficultyColor || "#888"
