@@ -253,10 +253,14 @@ class ArcaeaOnline:
             self.log("Initializing browser...")
             self.playwright = sync_playwright().start()
             self.browser = get_browser(self.playwright, headless=False)
+            
             self.context = self.browser.new_context(
                 viewport={'width': 600, 'height': 1000}
             )
             self.page = self.context.new_page()
+            
+            # Cache browser PID via window title marker (browser-agnostic)
+            self._browser_pid = self._detect_browser_pid()
             
             # Response 인터셉트 설정 (썸네일 캐싱용)
             self.setup_browser_listeners()
@@ -400,6 +404,105 @@ class ArcaeaOnline:
         self.browser = None
         self.playwright = None
         self._difficulty_tag = None
+
+    def _detect_browser_pid(self):
+        """Detect browser PID by temporarily setting a unique window title marker.
+        
+        Sets document.title to a unique string, finds the OS window with that title
+        via EnumWindows, extracts the PID, then restores the original title.
+        Works with any browser (Chromium, Firefox, WebKit).
+        """
+        import ctypes
+        import ctypes.wintypes
+        import time as _time
+
+        TITLE_MARKER = "ArcaeaNap_BrowserID"
+
+        try:
+            # 1. Set unique title marker
+            self.page.evaluate(f"document.title = '{TITLE_MARKER}'")
+            _time.sleep(0.3)  # Wait for window title to update
+
+            # 2. Find window with the marker title
+            user32 = ctypes.windll.user32
+            EnumWindows = user32.EnumWindows
+            GetWindowTextW = user32.GetWindowTextW
+            GetWindowTextLengthW = user32.GetWindowTextLengthW
+            GetWindowThreadProcessId = user32.GetWindowThreadProcessId
+            IsWindowVisible = user32.IsWindowVisible
+
+            WNDENUMPROC = ctypes.WINFUNCTYPE(
+                ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM
+            )
+
+            found_pid = None
+
+            def enum_callback(hwnd, lparam):
+                nonlocal found_pid
+                if IsWindowVisible(hwnd):
+                    length = GetWindowTextLengthW(hwnd)
+                    if length > 0:
+                        buf = ctypes.create_unicode_buffer(length + 1)
+                        GetWindowTextW(hwnd, buf, length + 1)
+                        if TITLE_MARKER in buf.value:
+                            proc_id = ctypes.wintypes.DWORD()
+                            GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
+                            found_pid = proc_id.value
+                            return False  # stop enumeration
+                return True  # continue
+
+            EnumWindows(WNDENUMPROC(enum_callback), 0)
+
+            # 3. Restore original title
+            self.page.evaluate("document.title = ''")
+
+            return found_pid
+
+        except Exception as e:
+            print(f"Failed to detect browser PID: {e}")
+            return None
+
+    def bring_to_front(self):
+        """Bring the browser OS window to the foreground using cached PID."""
+        try:
+            import ctypes
+            import ctypes.wintypes
+
+            pid = getattr(self, '_browser_pid', None)
+            if not pid:
+                return
+
+            user32 = ctypes.windll.user32
+            EnumWindows = user32.EnumWindows
+            GetWindowThreadProcessId = user32.GetWindowThreadProcessId
+            IsWindowVisible = user32.IsWindowVisible
+            SetForegroundWindow = user32.SetForegroundWindow
+            ShowWindow = user32.ShowWindow
+            SW_RESTORE = 9
+
+            WNDENUMPROC = ctypes.WINFUNCTYPE(
+                ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM
+            )
+
+            target_hwnd = None
+
+            def enum_callback(hwnd, lparam):
+                nonlocal target_hwnd
+                if IsWindowVisible(hwnd):
+                    proc_id = ctypes.wintypes.DWORD()
+                    GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
+                    if proc_id.value == pid:
+                        target_hwnd = hwnd
+                        return False  # stop enumeration
+                return True  # continue
+
+            EnumWindows(WNDENUMPROC(enum_callback), 0)
+
+            if target_hwnd:
+                ShowWindow(target_hwnd, SW_RESTORE)
+                SetForegroundWindow(target_hwnd)
+        except Exception as e:
+            print(f"Failed to bring browser to front: {e}")
 
     
     def setup_browser_listeners(self):

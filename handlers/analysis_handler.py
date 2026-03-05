@@ -43,7 +43,9 @@ class AnalysisHandler(QObject):
     @pyqtSlot()
     def startAnalysis(self):
         if self.thread and self.thread.is_alive():
-            print("Analysis already running.")
+            print("Analysis already running, bringing browser to front...")
+            if self.analyzer:
+                self.analyzer.bring_to_front()
             return
 
         print("Starting analysis thread...")
