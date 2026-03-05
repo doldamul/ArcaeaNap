@@ -461,8 +461,10 @@ Item {
                             ]
                             
                             delegate: Item {
+                                id: pinRow
                                 Layout.fillWidth: true
                                 height: 48
+
                                 
                                 Rectangle {
                                     anchors.bottom: parent.bottom
@@ -472,11 +474,82 @@ Item {
                                 }
                                 
                                 // Get pin data for this difficulty
-                                property var pinData: lastSavedInfoContent.pinDates[String(modelData.code)] || {}
-                                property bool hasPinInfo: pinData.updated_at && pinData.updated_at > 0
-                                property string arcaeaId: pinData.arcaea_id || ""
-                                property var timePlayed: pinData.time_played || 0
-                                property var updatedAt: pinData.updated_at || 0
+                                property var actualPinData: lastSavedInfoContent.pinDates[String(modelData.code)] || {}
+                                property var displayPinData: lastSavedInfoContent.pinDates[String(modelData.code)] || {}
+                                
+                                property bool hasPinInfo: displayPinData.updated_at && displayPinData.updated_at > 0
+                                property string arcaeaId: displayPinData.arcaea_id || ""
+                                property var timePlayed: displayPinData.time_played || 0
+                                property var updatedAt: actualPinData.updated_at || 0
+                                property bool isPlayCountMode: lastSavedInfoContent.isPlayCountMode
+                                
+                                property var _animationLastUpdatedAt: 0
+                                property string _pendingThumbnailSource: ""
+                                property bool _pendingAnimationStart: false
+
+                                function _resetPinAnimationVisuals() {
+                                    _pendingAnimationStart = false
+                                    _pendingThumbnailSource = ""
+                                    preloadTimeout.stop()
+                                    pinUpdateAnimation.stop()
+                                    crossfadeAnimation.stop()
+                                    checkOverlay.opacity = 0
+                                    checkCircle.scale = 0
+                                    thumbnailContainer.opacity = 1
+                                    progressContainer.opacity = 1
+                                    thumbnailNew.source = ""
+                                    thumbnailNew.opacity = 0
+                                }
+
+                                function _startPinUpdateAnimation() {
+                                    _pendingAnimationStart = false
+                                    _pendingThumbnailSource = ""
+                                    preloadTimeout.stop()
+                                    crossfadeAnimation.stop()
+                                    pinUpdateAnimation.restart()
+                                }
+
+                                Timer {
+                                    id: preloadTimeout
+                                    interval: 2000
+                                    repeat: false
+                                    onTriggered: {
+                                        if (pinRow._pendingAnimationStart)
+                                            pinRow._startPinUpdateAnimation()
+                                    }
+                                }
+
+                                onUpdatedAtChanged: {
+                                    if (isPlayCountMode) {
+                                        _resetPinAnimationVisuals()
+                                        displayPinData = actualPinData
+                                        _animationLastUpdatedAt = updatedAt
+                                        return
+                                    }
+
+                                    if (_animationLastUpdatedAt > 0 && updatedAt > _animationLastUpdatedAt) {
+                                        var newAid = actualPinData.arcaea_id || ""
+                                        var newSrc = (newAid && statsHandler)
+                                            ? statsHandler.getThumbnailPathForDifficulty(newAid, modelData.code) : ""
+
+                                        if (newSrc !== "" && newSrc !== String(thumbnailImg.source)) {
+                                            _pendingThumbnailSource = newSrc
+                                            _pendingAnimationStart = true
+                                            thumbnailNew.opacity = 0
+                                            thumbnailNew.source = ""
+                                            thumbnailNew.source = newSrc
+                                            preloadTimeout.restart()
+                                        } else {
+                                            _startPinUpdateAnimation()
+                                        }
+                                    } else {
+                                        _pendingAnimationStart = false
+                                        _pendingThumbnailSource = ""
+                                        preloadTimeout.stop()
+                                        displayPinData = actualPinData
+                                    }
+                                    _animationLastUpdatedAt = updatedAt
+                                }
                                 
                                 RowLayout {
                                     anchors.fill: parent
@@ -498,6 +571,7 @@ Item {
                                     
                                     // Thumbnail (32x32, or empty space if not available)
                                     Item {
+                                        id: thumbnailContainer
                                         width: 32; height: 32
                                         Layout.leftMargin: 24
                                         Layout.rightMargin: 12
@@ -506,11 +580,32 @@ Item {
                                             id: thumbnailImg
                                             anchors.fill: parent
                                             source: (arcaeaId && statsHandler) ? statsHandler.getThumbnailPathForDifficulty(arcaeaId, modelData.code) : ""
-                                            visible: status === Image.Ready
+                                            visible: true
+                                            opacity: status === Image.Ready ? 1 : 0
                                             fillMode: Image.PreserveAspectCrop
                                             smooth: true
                                             mipmap: true
                                             sourceSize: Qt.size(64, 64)
+                                        }
+
+                                        Image {
+                                            id: thumbnailNew
+                                            anchors.fill: parent
+                                            source: ""
+                                            opacity: 0
+                                            fillMode: Image.PreserveAspectCrop
+                                            smooth: true
+                                            mipmap: true
+                                            sourceSize: Qt.size(64, 64)
+                                            onStatusChanged: {
+                                                if (!pinRow._pendingAnimationStart)
+                                                    return
+                                                if (status === Image.Ready && String(source) === pinRow._pendingThumbnailSource) {
+                                                    pinRow._startPinUpdateAnimation()
+                                                } else if (status === Image.Error) {
+                                                    pinRow._startPinUpdateAnimation()
+                                                }
+                                            }
                                         }
 
                                         MouseArea {
@@ -553,7 +648,7 @@ Item {
                                         Rectangle {
                                             anchors.fill: parent
                                             color: "transparent"
-                                            visible: !thumbnailImg.visible && hasPinInfo
+                                            visible: thumbnailImg.opacity === 0 && hasPinInfo
                                         }
                                     }
                                     
@@ -590,7 +685,7 @@ Item {
                                             
                                             // Last Played Date (yyyy-mm-dd HH:mm)
                                             Text {
-                                                text: pinData.formatted_time_played || "-"
+                                                text: displayPinData.formatted_time_played || "-"
                                                 font.pixelSize: 12
                                                 font.bold: true
                                                 color: "#333"
@@ -602,7 +697,7 @@ Item {
                                             Text { 
                                                 Layout.fillWidth: true
                                                 verticalAlignment: Text.AlignVCenter
-                                                text: pinData.formatted_updated_at || "-"
+                                                text: displayPinData.formatted_updated_at || "-"
                                                 font.pixelSize: 12
                                                 font.bold: true
                                                 color: "#333"
@@ -665,6 +760,94 @@ Item {
                                                 Layout.minimumWidth: 20
                                                 horizontalAlignment: Text.AlignRight
                                             }
+                                        }
+                                    }
+                                }
+                                
+                                // Pin Update Animation Overlay
+                                Item {
+                                    id: checkOverlay
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 36 // width of Colored Pill
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
+                                    opacity: 0
+                                    
+                                    Rectangle {
+                                        id: checkCircle
+                                        anchors.centerIn: parent
+                                        width: 28; height: 28
+                                        radius: 14
+                                        color: modelData.color
+                                        scale: 0
+                                        
+                                        // White check mark
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "✓"
+                                            color: "white"
+                                            font.pixelSize: 18
+                                            font.bold: true
+                                        }
+                                    }
+                                }
+                                
+                                // Phase 1: 페이드아웃 → 체크 오버레이 → 대기
+                                SequentialAnimation {
+                                    id: pinUpdateAnimation
+
+                                    // 1. 기존 요소들 페이드 아웃
+                                    ParallelAnimation {
+                                        NumberAnimation { target: thumbnailContainer; property: "opacity"; from: 1; to: 0; duration: 200 }
+                                        NumberAnimation { target: progressContainer; property: "opacity"; from: 1; to: 0; duration: 200 }
+                                    }
+
+                                    // 1.5. thumbnailNew 안전 레이어 활성화
+                                    PropertyAction { target: thumbnailNew; property: "opacity"; value: 1 }
+
+                                    // 2. 체크 오버레이 표시 및 스프링 애니메이션
+                                    PropertyAction { target: checkOverlay; property: "opacity"; value: 1 }
+                                    PropertyAction { target: checkCircle; property: "scale"; value: 0 }
+                                    NumberAnimation {
+                                        target: checkCircle
+                                        property: "scale"
+                                        from: 0
+                                        to: 1
+                                        duration: 400
+                                        easing.type: Easing.OutElastic
+                                        easing.amplitude: 2.0
+                                        easing.period: 0.5
+                                    }
+
+                                    // 3. 잠시 대기
+                                    PauseAnimation { duration: 500 }
+
+                                    onFinished: crossfadeAnimation.start()
+                                }
+
+                                // Phase 2: 크로스페이드 (독립 타이머로 wall-clock 초과 방지)
+                                SequentialAnimation {
+                                    id: crossfadeAnimation
+
+                                    // 썸네일 페이드인과 동시에 최신 타임스탬프를 반영
+                                    ScriptAction {
+                                        script: {
+                                            displayPinData = actualPinData
+                                        }
+                                    }
+
+                                    ParallelAnimation {
+                                        NumberAnimation { target: checkOverlay; property: "opacity"; from: 1; to: 0; duration: 300 }
+                                        NumberAnimation { target: thumbnailContainer; property: "opacity"; from: 0; to: 1; duration: 300 }
+                                        NumberAnimation { target: progressContainer; property: "opacity"; from: 0; to: 1; duration: 300 }
+                                    }
+
+                                    // 더블 버퍼 정리
+                                    ScriptAction {
+                                        script: {
+                                            thumbnailNew.source = ""
+                                            thumbnailNew.opacity = 0
                                         }
                                     }
                                 }

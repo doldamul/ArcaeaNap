@@ -151,6 +151,7 @@ class ArcaeaOnline:
         # Play Count Analyze Mode 전용 상태
         self.count_mode = CountModeState()
         self._mode_toggle_pending = False
+        self._pin_notify_pending = False
         
         # Initialize pin_updates from database
         self._load_pin_updates_from_db()
@@ -742,6 +743,7 @@ class ArcaeaOnline:
         
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            self._pin_notify_pending = False
             
             try:
                 # 테이블 생성
@@ -775,7 +777,11 @@ class ArcaeaOnline:
                     self.rise_all_saved_flag(difficulty)
                 
                 conn.commit()
-                
+
+                if self._pin_notify_pending:
+                    self._pin_notify_pending = False
+                    self.notify_pin_changed()
+
                 if len(score_inserts) > 0:
                     self.log(f"Saved/Updated {len(score_inserts)} records in '{self.db_path}'")
                     self.notify_data_changed()
@@ -786,6 +792,7 @@ class ArcaeaOnline:
                     self.log(f"No records to save in '{self.db_path}'")
                     
             except Exception as e:
+                self._pin_notify_pending = False
                 self.log(f"Error saving to DB: {e}")
                 import traceback
                 traceback.print_exc()
@@ -1216,13 +1223,11 @@ class ArcaeaOnline:
         try:
             current_time = int(time.time() * 1000)
             self._pin_repo.save_pin(cursor, difficulty, score_id, current_time)
-            
+
             # Update status object
             self.status.pin_updates[difficulty] = current_time
-            
-            # Notify UI to refresh pin dates
-            self.notify_pin_changed()
-            
+            self._pin_notify_pending = True
+
         except Exception as e:
             self.log(f"save_pin_id Error: {e}")
 
