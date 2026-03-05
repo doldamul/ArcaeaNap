@@ -139,6 +139,7 @@ class ArcaeaOnline:
         self.current_pageno = None
         self.current_sort = None
         self.current_search_text = ''
+        self._difficulty_tag: Optional[str] = None
 
         # Session auto-reset detection
         self.scanned_pages: Dict[int, Dict[int, list]] = {}  # difficulty -> {page -> [time_played]}
@@ -194,7 +195,7 @@ class ArcaeaOnline:
         """Play Count Analyze Mode 토글"""
         config['general']['analyze_mode'] = enabled
         self.count_mode.reset_all()
-        self.log(f"Play Count Analyze Mode: {'ON' if enabled else 'OFF'}")
+        self.log(f"Play Count Analyze Mode: {'ON' if enabled else 'OFF'}", with_tag=False)
 
         # 분석 스레드 실행 중일 때만 플래그 설정 (브라우저가 켜져 있어야 리셋 가능)
         # 닫혀있다면 다음 start() 시 자연스럽게 새 세션으로 시작되므로 리셋 불필요
@@ -276,6 +277,7 @@ class ArcaeaOnline:
             self.current_pageno = None
             self.current_sort = None
             self.current_search_text = ''
+            self._difficulty_tag = None
             
             self.notify_progress_changed()
 
@@ -311,7 +313,7 @@ class ArcaeaOnline:
                     
                     self.status.status = 'analyzing'
                     self.notify_status_changed()
-                    self.log('New page detected.')
+                    self.log('New page detected.', with_tag=False)
 
                     self.save_data()
                 except Exception as e:
@@ -333,13 +335,13 @@ class ArcaeaOnline:
 
             # 이벤트 리스너로 종료 감지된 경우 로그 출력
             if self._browser_closed:
-                self.log('Browser closed by user.\n')
+                self.log('Browser closed by user.', with_tag=False)
 
         except Exception as e:
             if self._is_browser_closed_error(e):
-                self.log(f'Browser closed by user.\n')
+                self.log('Browser closed by user.', with_tag=False)
             else:
-                self.log(f'Browser terminated: {type(e).__name__}; {e}')
+                self.log(f'Browser terminated: {type(e).__name__}; {e}', with_tag=False)
         finally:
             self.stop()
     
@@ -396,6 +398,7 @@ class ArcaeaOnline:
         self.context = None
         self.browser = None
         self.playwright = None
+        self._difficulty_tag = None
 
     
     def setup_browser_listeners(self):
@@ -716,6 +719,7 @@ class ArcaeaOnline:
                 return  # 리로드 발생 → start() 루프가 리로드된 페이지를 다시 처리
         
         difficulty = page_data.difficulty
+        self._difficulty_tag = Difficulty(difficulty).name
         
         # 2. 페이지 진행 상태 업데이트 (날짜순 정렬 + 검색 아닐 때만)
         if not page_data.is_search and page_data.is_date_sorted:
@@ -739,7 +743,6 @@ class ArcaeaOnline:
         self.notify_progress_changed()
         
         # 3. DB 저장
-        self.log(f"Found {len(page_data.scores)} play records.")
         
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -772,7 +775,7 @@ class ArcaeaOnline:
                     self.save_pin_id(difficulty, recent_id, cursor)
                     
                     if recent_id != current_pin_id:
-                        self.log(f'Updated pin for {Difficulty(difficulty).name}')
+                        self.log(f'Synchronization status updated')
                     
                     self.rise_all_saved_flag(difficulty)
                 
@@ -783,17 +786,17 @@ class ArcaeaOnline:
                     self.notify_pin_changed()
 
                 if len(score_inserts) > 0:
-                    self.log(f"Saved/Updated {len(score_inserts)} records in '{self.db_path}'")
+                    self.log(f"Saved {len(score_inserts)} records.")
                     self.notify_data_changed()
                 else:
                     if len(count_updates) > 0:
                         self.notify_data_changed()
 
-                    self.log(f"No records to save in '{self.db_path}'")
+                    self.log(f"No new records.")
                     
             except Exception as e:
                 self._pin_notify_pending = False
-                self.log(f"Error saving to DB: {e}")
+                self.log(f"Save failed: {e}")
                 import traceback
                 traceback.print_exc()
             finally:
@@ -852,7 +855,7 @@ class ArcaeaOnline:
         
         user_scores = user_data.get('userScores') if user_data else None
         if not user_scores or len(user_scores) == 0:
-            self.log('Data save canceled: Current page is empty')
+            self.log('Page is empty.')
             self.status.status = 'ready'
             self.notify_status_changed()
             return None
@@ -912,7 +915,7 @@ class ArcaeaOnline:
         # 1) 페이지 재방문 → 스냅샷 비교
         if page in self.scanned_pages[difficulty]:
             if self.scanned_pages[difficulty][page] != current_times:
-                self.log(f"Session reset: Page {page} content changed on revisit.")
+                self.log(f"Session reset: Page {page} content changed on revisit.", with_tag=False)
                 reloaded = self._reset_analysis_session(page)
                 self.scanned_pages[difficulty][page] = current_times
                 return reloaded
@@ -925,7 +928,7 @@ class ArcaeaOnline:
 
         for tp in current_times:
             if tp in all_scanned:
-                self.log(f"Session reset: Already scanned record detected on page {page}.")
+                self.log(f"Session reset: Already scanned record detected on page {page}.", with_tag=False)
                 reloaded = self._reset_analysis_session(page)
                 self.scanned_pages[difficulty][page] = current_times
                 return reloaded
@@ -964,7 +967,7 @@ class ArcaeaOnline:
         self.notify_progress_changed()
 
         if msg:
-            self.log(msg)
+            self.log(msg, with_tag=False)
             if self.session_reset_callback:
                 try:
                     self.session_reset_callback(msg)
@@ -1044,7 +1047,7 @@ class ArcaeaOnline:
             songs_conn = get_connection()
             songs_cursor = songs_conn.cursor()
         except Exception as e:
-            self.log(f"Warning: Could not connect to songs.db. Data linking will be skipped. ({e})")
+            self.log(f"Song data unavailable. Some details may be missing.")
         
         try:
             for item in items:
@@ -1149,6 +1152,7 @@ class ArcaeaOnline:
         if not missing:
             return  # 모든 썸네일이 이미 존재
         
+        self.log(f"Downloading {len(missing)} thumbnails...")
         # 미저장 썸네일이 있으면 이미지 로드 대기
         try:
             self.page.wait_for_selector(ALBUM_JACKET_SELECTOR, timeout=5000)
@@ -1169,11 +1173,10 @@ class ArcaeaOnline:
         try:
             img_elements = self.page.locator(ALBUM_JACKET_SELECTOR).all()
         except Exception as e:
-            self.log(f"Thumbnail: Failed to find image elements: {e}")
+            self.log(f"Thumbnail download failed: {e}")
             return
         
         if not img_elements:
-            self.log(f"Thumbnail: No image elements found")
             return
         
         # 미저장 항목만 처리
@@ -1204,9 +1207,10 @@ class ArcaeaOnline:
             except Exception:
                 continue
         
-        skipped_count = len(user_scores_data) - len(missing)
-        if saved_count > 0 or skipped_count > 0 or not_found_count > 0:
-            self.log(f"Thumbnail: saved={saved_count}, skipped={skipped_count}, not_found={not_found_count}")
+        if saved_count > 0:
+            self.log(f"Saved {saved_count} thumbnails.")
+        if not_found_count > 0:
+            self.log(f"{not_found_count} thumbnails not found.")
 
     def get_pin_id(self, difficulty) -> int | None:
         try:
@@ -1216,7 +1220,7 @@ class ArcaeaOnline:
                 conn.commit()  # get_pin may INSERT if row is None
                 return pin_id
         except Exception as e:
-            self.log(f"get_pin_id Error: {e}")
+            self.log(f"Pin lookup failed: {e}")
             return None
 
     def save_pin_id(self, difficulty, score_id, cursor):
@@ -1229,7 +1233,7 @@ class ArcaeaOnline:
             self._pin_notify_pending = True
 
         except Exception as e:
-            self.log(f"save_pin_id Error: {e}")
+            self.log(f"Pin update failed: {e}")
 
     def all_pages_checked(self, difficulty):
         if not self.total_page[difficulty]:
@@ -1240,9 +1244,10 @@ class ArcaeaOnline:
         self.checked_page[difficulty] = set()
         self.total_page[difficulty] = None
 
-    def log(self, message: str):
+    def log(self, message: str, with_tag: bool = True):
         timestamp = time.strftime("[%H:%M:%S]")
-        formatted_message = f"{timestamp} {message}"
+        diff_tag = f"[{self._difficulty_tag}]" if getattr(self, '_difficulty_tag', None) and with_tag else ""
+        formatted_message = f"{timestamp}{diff_tag} {message}"
         self.status.logs.append(formatted_message)
         print(formatted_message)
         

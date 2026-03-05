@@ -862,10 +862,42 @@ Item {
                         id: logModel
                     }
 
+                    function formatLogHtml(message) {
+                        var regex = /^\[([\d:]+)\](?:\[([A-Z]+)\])?\s+([\s\S]*)$/
+                        var match = message.match(regex)
+                        
+                        var timestampColor = "#AAA"
+                        var messageColor = "#666"
+                        var diffColors = {
+                            "PST": "#00A0E9",
+                            "PRS": "#50C050",
+                            "FTR": "#A060FF",
+                            "BYD": "#E04040",
+                            "ETR": "#808080"
+                        }
+                        
+                        if (match) {
+                            var timestamp = match[1]
+                            var diffTag = match[2]
+                            var content = match[3]
+                            
+                            var html = "<span style='color:" + timestampColor + ";'>[" + timestamp + "]</span> "
+                            if (diffTag) {
+                                var dColor = diffColors[diffTag] || "#888"
+                                html += "<span style='color:" + dColor + "; font-weight:bold;'>[" + diffTag + "]</span> "
+                            }
+                            html += "<span style='color:" + messageColor + ";'>" + content + "</span>"
+                            return html
+                        }
+                        
+                        return "<span style='color:" + messageColor + ";'>" + message + "</span>"
+                    }
+
                     Connections {
                         target: analysisHandler
                         function onLogAdded(message) {
-                            logModel.append({ "logText": message })
+                            var html = lastSavedInfoContent.formatLogHtml(message)
+                            logModel.append({ "logHtml": html })
                             if (logView.count > 0) {
                                 logView.positionViewAtEnd()
                             }
@@ -897,10 +929,10 @@ Item {
 
                             delegate: Text {
                                 width: ListView.view.width
-                                text: logText
+                                textFormat: Text.RichText
+                                text: logHtml
                                 font.family: "Consolas, monospace"
                                 font.pixelSize: 11
-                                color: "#666"
                                 wrapMode: Text.Wrap
                             }
                         }
