@@ -8,7 +8,6 @@ from datetime import datetime
 import keyring
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant
 from web_arcaeaonline import ArcaeaOnline
-from web_consultantsheet import get_sheet_version_info
 from song_db_builder import rebuild_songs_db
 
 
@@ -45,7 +44,7 @@ class SettingsHandler(QObject):
         self._bind_cancellation_context = None
         self._send_cancellation_context = None
         self._arcaea_login_instance = None
-        self._sheet_versions = {'sheet_ver': '?', 'arcaea_ver': '?'}
+        self._sheet_versions = self._load_sheet_versions()
 
     def set_analyzer(self, analyzer):
         """Connect to ArcaeaOnline instance for play count mode control."""
@@ -243,35 +242,50 @@ class SettingsHandler(QObject):
             'sheet_name': bound_name
         }
 
-    @pyqtSlot()
-    def fetchSheetVersions(self):
-        """Fetch sheet version info in a background thread."""
+    def _load_sheet_versions(self):
+        """Load sheet versions from account_connections.json."""
+        connections = self._load_connections()
+        gs_info = connections.get('google_sheet', {})
+        sheet_ver = gs_info.get('sheet_ver', '')
+        arcaea_ver = gs_info.get('arcaea_ver', '')
+        if sheet_ver or arcaea_ver:
+            return {'sheet_ver': sheet_ver, 'arcaea_ver': arcaea_ver}
+        return {'sheet_ver': '?', 'arcaea_ver': '?'}
+
+    def _fetch_and_save_sheet_versions(self):
+        """Fetch sheet version info from API and save to account_connections.json."""
         self._sheet_versions = {'sheet_ver': '?', 'arcaea_ver': '?'}
         self.sheetVersionsChanged.emit()
 
-        def task():
-            print("[SettingsHandler] Fetching sheet versions...")
-            # We don't have a specific cancellation context for this yet, pass None
-            versions = get_sheet_version_info()
-            self._sheet_versions = versions
-            print(f"[SettingsHandler] Sheet versions fetched: {versions}")
-            self.sheetVersionsChanged.emit()
+        print("[SettingsHandler] Fetching sheet versions...")
+        from web_consultantsheet import get_sheet_version_info
+        versions = get_sheet_version_info()
+        print(f"[SettingsHandler] Sheet versions fetched: {versions}")
 
-            # If credentials were expired/revoked, the connection has been cleared.
-            # Notify UI so that the Google Sheet connection status updates.
-            # NOTE: Only emit googleSheetConnectionChanged here, NOT sheetBindingChanged,
-            # because sheetBindingChanged triggers fetchSheetVersions() in QML which would
-            # cause an infinite loop.
-            if versions.get('disconnected'):
-                print("[SettingsHandler] Google Sheet connection was lost (token expired/revoked).")
-                self.googleSheetConnectionChanged.emit()
-            
-        thread = threading.Thread(target=task, daemon=True)
-        thread.start()
+        # If credentials were expired/revoked, notify UI.
+        if versions.get('disconnected'):
+            print("[SettingsHandler] Google Sheet connection was lost (token expired/revoked).")
+            self._sheet_versions = {'sheet_ver': '', 'arcaea_ver': ''}
+            self.sheetVersionsChanged.emit()
+            self.googleSheetConnectionChanged.emit()
+            return
+
+        # Save to account_connections.json
+        sheet_ver = versions.get('sheet_ver', '?')
+        arcaea_ver = versions.get('arcaea_ver', '?')
+        connections = self._load_connections()
+        gs_info = connections.get('google_sheet', {})
+        gs_info['sheet_ver'] = sheet_ver if sheet_ver != '?' else ''
+        gs_info['arcaea_ver'] = arcaea_ver if arcaea_ver != '?' else ''
+        connections['google_sheet'] = gs_info
+        self._save_connections(connections)
+
+        self._sheet_versions = {'sheet_ver': sheet_ver, 'arcaea_ver': arcaea_ver}
+        self.sheetVersionsChanged.emit()
 
     @pyqtSlot(result='QVariant')
     def getSheetVersions(self):
-        """Get cached sheet versions as dict."""
+        """Get sheet versions (from in-memory cache, loaded from account_connections.json)."""
         return self._sheet_versions
 
 
@@ -302,15 +316,26 @@ class SettingsHandler(QObject):
 
                 if result:
                     sheet_id, sheet_name = result
-                    # Save to connections
+                    # Save to connections (clear old version info)
                     connections = self._load_connections()
                     gs_info = connections.get('google_sheet', {})
                     gs_info['bound_sheet_id'] = sheet_id
                     gs_info['bound_sheet_name'] = sheet_name
+                    gs_info.pop('sheet_ver', None)
+                    gs_info.pop('arcaea_ver', None)
                     connections['google_sheet'] = gs_info
                     self._save_connections(connections)
                     
                     print(f"[SettingsHandler] Sheet bound: {sheet_name} ({sheet_id})")
+                    
+                    # First emit binding change so QML shows sheet name + version spinner
+                    self._is_binding_sheet = False
+                    self._bind_cancellation_context = None
+                    self.sheetBindingChanged.emit()
+                    
+                    # Then fetch and save version info (spinner → version text)
+                    self._fetch_and_save_sheet_versions()
+                    return  # Skip finally's emit since we already emitted
                 else:
                     print("[SettingsHandler] Sheet binding cancelled")
             except Exception as e:

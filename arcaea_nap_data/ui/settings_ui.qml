@@ -20,14 +20,8 @@ Window {
     // 메인 윈도우 위에 고정되지 않도록 부모 관계 해제
     transientParent: null
 
-    // Re-fetch sheet versions when window becomes visible
-    // (Component.onCompleted fires before the window is shown,
-    //  so the loading spinner is never seen by the user)
-    onVisibleChanged: {
-        if (visible && settingsHandler && sheetMgmtCard && sheetMgmtCard.hasBoundSheet) {
-            settingsHandler.fetchSheetVersions()
-        }
-    }
+    // No version fetch on visibility change — versions are stored in account_connections.json
+    // and loaded on init via getSheetVersions()
 
     // Cache Migration Loading Modal
     property bool isMigrating: false
@@ -79,7 +73,6 @@ Window {
                 sheetMgmtCard.boundSheetInfo = settingsHandler.getBoundSheetInfo()
                 sheetMgmtCard.isBinding = settingsHandler.isBindingSheet()
                 sheetMgmtCard.lastSynced = settingsHandler.getLastSyncedTime()
-                if (sheetMgmtCard.hasBoundSheet) settingsHandler.fetchSheetVersions()
             }
         }
         function onSheetVersionsChanged() {
@@ -724,10 +717,6 @@ Window {
                             var v = sheetVersions
                             parsedSheetVer = (v && v.sheet_ver) ? String(v.sheet_ver) : '?'
                             parsedArcaeaVer = (v && v.arcaea_ver) ? String(v.arcaea_ver) : '?'
-
-                            if (settingsHandler && hasBoundSheet) {
-                                settingsHandler.fetchSheetVersions()
-                            }
                         }
                         
                         ColumnLayout {
