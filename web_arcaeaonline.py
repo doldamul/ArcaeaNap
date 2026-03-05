@@ -8,6 +8,7 @@ import keyring
 import json
 import time
 import os
+import re
 import base64
 from datetime import datetime, timezone
 from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext, TimeoutError as PlaywrightTimeout
@@ -950,13 +951,15 @@ class ArcaeaOnline:
         # Play Count Analyze Mode: 진행도 리셋 (completed는 보존)
         self.count_mode.reset_progress()
 
-        # 브라우저 새로고침 (1페이지면 스킵)
+        # 1페이지로 이동 (이미 1페이지면 스킵)
         reloaded = False
         if current_page != 1:
             try:
-                self.page.reload()
+                current_url = self.page.url
+                page1_url = re.sub(r'page=\d+', 'page=1', current_url)
+                self.page.goto(page1_url)
                 reloaded = True
-                # has_page_changed()가 리로드된 페이지를 새 페이지로 감지하도록 초기화
+                # has_page_changed()가 이동한 페이지를 새 페이지로 감지하도록 초기화
                 self.current_pageno = None
                 self.current_difficulty = None
                 self.current_sort = None
