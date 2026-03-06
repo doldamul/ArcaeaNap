@@ -13,8 +13,8 @@ ApplicationWindow {
     title: "ArcaeaNap"
     color: "#F3F4F8"
     
-    minimumWidth: 460
-    minimumHeight: 800
+    minimumWidth: 1280
+    minimumHeight: 900
 
     // 현재 선택된 탭 인덱스 (0: Home, 1: Analyze, 2: Statistics)
     // Settings는 별도 윈도우로 분리됨
