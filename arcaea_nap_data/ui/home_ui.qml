@@ -12,6 +12,8 @@ Item {
 
     // Stats data fetched from backend
     property var difficultyStatsData: []
+    property string groupingCriteriaLabel: "Song"
+    property string aggregationScopeLabel: "All time"
     
     // Cache migration state - prevents image load errors during migration
     property bool isMigrating: false
@@ -67,6 +69,8 @@ Item {
             homeRoot.showPotentialInProfile = settingsHandler ? settingsHandler.getShowPotential() : homeRoot.showPotentialInProfile
         }
         function onMostPlayedOrderChanged() {
+            homeRoot.groupingCriteriaLabel = (settingsHandler && settingsHandler.getGroupingCriteria() === 'chart') ? 'Chart' : 'Song'
+            homeRoot.aggregationScopeLabel = (settingsHandler && settingsHandler.getMostPlayedScope() === 'this_year') ? new Date().getFullYear().toString() : 'All time'
             updateTop10()
         }
     }
@@ -90,6 +94,8 @@ Item {
         if (settingsHandler) {
             homeRoot.showFriendCodeInProfile = settingsHandler.getShowFriendCode()
             homeRoot.showPotentialInProfile = settingsHandler.getShowPotential()
+            homeRoot.groupingCriteriaLabel = (settingsHandler.getGroupingCriteria() === 'chart') ? 'Chart' : 'Song'
+            homeRoot.aggregationScopeLabel = (settingsHandler.getMostPlayedScope() === 'this_year') ? new Date().getFullYear().toString() : 'All time'
         }
     }
 
@@ -568,7 +574,7 @@ Item {
                             font.bold: true
                         }
                         Text {
-                            text: "Top 10"
+                            text: "Top 10 - " + homeRoot.groupingCriteriaLabel + " • " + homeRoot.aggregationScopeLabel
                             color: "#999999"
                             font.pixelSize: 14
                             Layout.alignment: Qt.AlignLeft
