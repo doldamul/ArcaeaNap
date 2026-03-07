@@ -18,10 +18,23 @@ Item {
     property bool isDiffCramped: width < 1250
 
     // Data from statisticsHandler
-    property var listData: statisticsHandler ? statisticsHandler.getListModel() : []
     property var currentSong: statisticsHandler ? statisticsHandler.getSelectedItem() : null
     property int currentSongIndex: statisticsHandler ? statisticsHandler.selectedIndex : -1
     property string searchText: ""  // Search text managed at root level
+    property bool suppressResponsivePopAnimation: false
+
+    onIsNarrowChanged: {
+        if (!isNarrow) {
+            // 모바일 -> 데스크탑 반응형 전환 시에는 스택 정리를 즉시 수행해 pop 애니메이션 노출을 막습니다.
+            suppressResponsivePopAnimation = true
+            while (mobileStack.depth > 1) {
+                mobileStack.pop()
+            }
+            Qt.callLater(function() {
+                suppressResponsivePopAnimation = false
+            })
+        }
+    }
     
     // Search debounce timer
     Timer {
@@ -34,7 +47,7 @@ Item {
     Connections {
         target: statisticsHandler
         function onDataChanged() {
-            statsRoot.listData = statisticsHandler.getListModel()
+            statsRoot.currentSong = statisticsHandler.getSelectedItem()
         }
         function onSelectedItemChanged() {
             statsRoot.currentSong = statisticsHandler.getSelectedItem()
@@ -47,18 +60,11 @@ Item {
     StackView {
         id: mobileStack
         anchors.fill: parent
-        visible: isNarrow
         initialItem: mainContentComponent
         pushEnter: Transition { PropertyAnimation { property: "x"; from: mobileStack.width; to: 0; duration: 250; easing.type: Easing.OutQuad } }
         pushExit: Transition { PropertyAnimation { property: "opacity"; from: 1; to: 0; duration: 250 } }
-        popEnter: Transition { PropertyAnimation { property: "opacity"; from: 0; to: 1; duration: 250 } }
-        popExit: Transition { PropertyAnimation { property: "x"; from: 0; to: mobileStack.width; duration: 250; easing.type: Easing.InQuad } }
-    }
-
-    Loader {
-        anchors.fill: parent
-        visible: !isNarrow
-        sourceComponent: mainContentComponent
+        popEnter: Transition { PropertyAnimation { property: "opacity"; from: 0; to: 1; duration: statsRoot.suppressResponsivePopAnimation ? 0 : 250 } }
+        popExit: Transition { PropertyAnimation { property: "x"; from: 0; to: mobileStack.width; duration: statsRoot.suppressResponsivePopAnimation ? 0 : 250; easing.type: Easing.InQuad } }
     }
 
     // =========================================================================
@@ -380,7 +386,7 @@ Item {
                             
                             // Item count label
                             Text {
-                                text: listData.length + " items"
+                                text: songListView.count + " items"
                                 font.pixelSize: 11
                                 color: "#999"
                             }
@@ -395,7 +401,7 @@ Item {
                                     anchors.fill: parent
                                     // lists items expanded to full width (no margin)
                                     clip: true
-                                    model: listData
+                                    model: statisticsHandler ? statisticsHandler.listModel : null
                                     spacing: 8
                                     
                                     delegate: listDelegate
@@ -438,8 +444,7 @@ Item {
                                         radius: 10
                                         border.width: (!isNarrow && index === currentSongIndex) ? 1 : 0
                                         border.color: "#D0A0FF"
-                                        
-                                        property var itemData: modelData
+                                        property var rowModel: model
                                         
                                         RowLayout {
                                             anchors.fill: parent
@@ -462,14 +467,14 @@ Item {
                                             Rectangle { 
                                                 id: thumbRect
                                                 width: 48; height: 48; radius: 6
-                                                color: itemData.difficultyColor || "#E0E0E0"
+                                                color: rowModel.difficultyColor || "#E0E0E0"
                                                 clip: true
                                                 
                                                 Image {
                                                     id: thumbImage
                                                     anchors.fill: parent
                                                     anchors.margins: -1 // Slight negative margin to avoid edge artifacts
-                                                    source: statsHandler ? statsHandler.getThumbnailPathForDifficulty(itemData.arcaeaId || "", itemData.thumbnailDifficulty !== undefined ? itemData.thumbnailDifficulty : itemData.difficulty) : ""
+                                                    source: statsHandler ? statsHandler.getThumbnailPathForDifficulty(rowModel.arcaeaId || "", rowModel.thumbnailDifficulty !== undefined ? rowModel.thumbnailDifficulty : rowModel.difficulty) : ""
                                                     fillMode: Image.PreserveAspectCrop
                                                     smooth: true
                                                     mipmap: true
@@ -481,7 +486,7 @@ Item {
                                                 // Show 3-letter difficulty code ONLY when no thumbnail is loaded
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    text: itemData.difficultyName || ""
+                                                    text: rowModel.difficultyName || ""
                                                     font.pixelSize: 14
                                                     font.bold: true
                                                     color: "white"
@@ -493,14 +498,14 @@ Item {
                                                 Layout.fillWidth: true
                                                 spacing: 2
                                                 Text { 
-                                                    text: itemData.title || ""
+                                                    text: rowModel.title || ""
                                                     font.bold: true
                                                     color: "#333"
                                                     elide: Text.ElideRight
                                                     width: parent.width
                                                 }
                                                 Text { 
-                                                    text: itemData.artist || ""
+                                                    text: rowModel.artist || ""
                                                     font.pixelSize: 11
                                                     color: "#888"
                                                     elide: Text.ElideRight
@@ -522,11 +527,11 @@ Item {
                                                 // Display value (score, play count, etc.) - hidden in standalone modes
                                                 Text {
                                                     anchors.right: parent.right
-                                                    text: itemData.displayValue || ""
+                                                    text: rowModel.displayValue || ""
                                                     font.bold: true
                                                     font.pixelSize: 13
                                                     color: "#7A6090"
-                                                    visible: !parent.isStandaloneMode && itemData.displayValue && itemData.displayValue !== ""
+                                                    visible: !parent.isStandaloneMode && rowModel.displayValue && rowModel.displayValue !== ""
                                                 }
                                                 
                                                 // Song mode: show all difficulty levels with colors
@@ -536,7 +541,7 @@ Item {
                                                     id: difficultyRow
                                                     anchors.right: parent.right
                                                     spacing: 0
-                                                    visible: statisticsHandler && statisticsHandler.displayMode === "song" && itemData.filteredDifficulties
+                                                    visible: statisticsHandler && statisticsHandler.displayMode === "song" && rowModel.filteredDifficulties
                                                     
                                                     // Helper function to get the best difficulty for current sort mode
                                                     // Returns -1 for modes that should highlight all difficulties
@@ -544,12 +549,12 @@ Item {
                                                         if (!statisticsHandler) return -1
                                                         var mode = statisticsHandler.sortMode
                                                         // Check if value is a valid difficulty (>=0), -1 means no data
-                                                        if (mode === "score" && itemData.bestDiffForScore >= 0) return itemData.bestDiffForScore
-                                                        if (mode === "max" && itemData.bestDiffForMax >= 0) return itemData.bestDiffForMax
-                                                        if (mode === "recent_played" && itemData.bestDiffForRecent >= 0) return itemData.bestDiffForRecent
-                                                        if (mode === "level" && itemData.bestDiffForLevel >= 0) return itemData.bestDiffForLevel
-                                                        if (mode === "s_bp" && itemData.bestDiffForSBp >= 0) return itemData.bestDiffForSBp
-                                                        if (mode === "perceived_bp" && itemData.bestDiffForPerceivedBp >= 0) return itemData.bestDiffForPerceivedBp
+                                                        if (mode === "score" && rowModel.bestDiffForScore >= 0) return rowModel.bestDiffForScore
+                                                        if (mode === "max" && rowModel.bestDiffForMax >= 0) return rowModel.bestDiffForMax
+                                                        if (mode === "recent_played" && rowModel.bestDiffForRecent >= 0) return rowModel.bestDiffForRecent
+                                                        if (mode === "level" && rowModel.bestDiffForLevel >= 0) return rowModel.bestDiffForLevel
+                                                        if (mode === "s_bp" && rowModel.bestDiffForSBp >= 0) return rowModel.bestDiffForSBp
+                                                        if (mode === "perceived_bp" && rowModel.bestDiffForPerceivedBp >= 0) return rowModel.bestDiffForPerceivedBp
                                                         return -1  // No highlighting for other modes (title, total_play_count, length)
                                                     }
                                                     
@@ -558,7 +563,7 @@ Item {
                                                     property bool isLevelSort: statisticsHandler && statisticsHandler.sortMode === "level"
                                                     
                                                     Repeater {
-                                                        model: itemData.filteredDifficulties || []
+                                                        model: rowModel.filteredDifficulties || []
                                                         
                                                         Row {
                                                             property bool isHighlighted: {
@@ -588,7 +593,7 @@ Item {
                                                                 }
                                                                 // Floating badge overlay
                                                                 Row {
-                                                                    property bool isValueAbove: !difficultyRow.isStandaloneMode && itemData.displayValue && itemData.displayValue !== ""
+                                                                    property bool isValueAbove: !difficultyRow.isStandaloneMode && rowModel.displayValue && rowModel.displayValue !== ""
                                                                     property string lvlStr: String(modelData.level || "")
                                                                     z: 10
                                                                     spacing: 1
@@ -618,7 +623,7 @@ Item {
                                                     
                                                     // BP value in parentheses for level sort (song mode)
                                                     Text {
-                                                        text: " (" + (itemData.bp ? itemData.bp.toFixed(1) : "0.0") + ")"
+                                                        text: " (" + (rowModel.bp ? rowModel.bp.toFixed(1) : "0.0") + ")"
                                                         font.bold: true
                                                         font.pixelSize: 13
                                                         color: "#7A6090"
@@ -646,24 +651,24 @@ Item {
                                                             id: chartLevelRow
                                                             spacing: 0
                                                             Text {
-                                                                text: (itemData.difficultyName ? itemData.difficultyName + " " : "")
+                                                                text: (rowModel.difficultyName ? rowModel.difficultyName + " " : "")
                                                                 font.bold: true
                                                                 font.pixelSize: parent.parent.isStandaloneMode ? 13 : 11
-                                                                color: itemData.difficultyColor || "#888"
+                                                                color: rowModel.difficultyColor || "#888"
                                                             }
                                                             Text {
                                                                 id: chartLevelNumText
-                                                                text: String(itemData.level || "")
+                                                                text: String(rowModel.level || "")
                                                                 font.bold: true
                                                                 font.pixelSize: parent.parent.isStandaloneMode ? 13 : 11
-                                                                color: itemData.difficultyColor || "#888"
+                                                                color: rowModel.difficultyColor || "#888"
                                                             }
                                                         }
 
                                                         // Floating badge overlay
                                                         Row {
-                                                            property bool isValueAbove: !(statisticsHandler && (statisticsHandler.sortMode === "title" || statisticsHandler.sortMode === "level")) && itemData.displayValue && itemData.displayValue !== ""
-                                                            property string lvlStr: String(itemData.level || "")
+                                                            property bool isValueAbove: !(statisticsHandler && (statisticsHandler.sortMode === "title" || statisticsHandler.sortMode === "level")) && rowModel.displayValue && rowModel.displayValue !== ""
+                                                            property string lvlStr: String(rowModel.level || "")
                                                             z: 10
                                                             spacing: 1
                                                             anchors.horizontalCenter: parent.left
@@ -672,23 +677,23 @@ Item {
                                                             anchors.bottom: isValueAbove ? undefined : parent.top
                                                             anchors.topMargin: isValueAbove ? 2 : 0
                                                             anchors.bottomMargin: isValueAbove ? 0 : -2
-                                                            visible: (itemData.ignoreChart || false) || (itemData.skillIssues || false)
+                                                            visible: (rowModel.ignoreChart || false) || (rowModel.skillIssues || false)
                                                             Text {
                                                                 text: "⛔"
                                                                 font.pixelSize: 7
-                                                                visible: itemData.ignoreChart || false
+                                                                visible: rowModel.ignoreChart || false
                                                             }
                                                             Text {
                                                                 text: "⚠️"
                                                                 font.pixelSize: 7
-                                                                visible: itemData.skillIssues || false
+                                                                visible: rowModel.skillIssues || false
                                                             }
                                                         }
                                                     }
                                                     
                                                     // BP value in parentheses for level sort (chart mode)
                                                     Text {
-                                                        text: " (" + (itemData.bp ? itemData.bp.toFixed(1) : "0.0") + ")"
+                                                        text: " (" + (rowModel.bp ? rowModel.bp.toFixed(1) : "0.0") + ")"
                                                         font.bold: true
                                                         font.pixelSize: 13
                                                         color: "#7A6090"
@@ -720,7 +725,7 @@ Item {
                                     text: "No songs found"
                                     color: "#999"
                                     font.pixelSize: 14
-                                    visible: listData.length === 0
+                                    visible: songListView.count === 0
                                 }
                             }
                         }
@@ -730,6 +735,7 @@ Item {
                     Loader {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
+                        active: !isNarrow
                         visible: !isNarrow
                         sourceComponent: detailPageComponent
                     }

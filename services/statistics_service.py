@@ -40,9 +40,17 @@ class StatisticsService:
     def __init__(self):
         # 데이터 캐시
         self.songs_data = {}
+        self.songs_by_arcaea_id = {}
         self.scores_data = {}
         self.play_counts = {}
         self.this_year_play_counts = {}
+
+        # 중간 결과 캐시
+        self._full_items_cache = None
+        self._full_items_cache_key = None
+        self._filtered_items_cache = None
+        self._filtered_cache_key = None
+
         # Level/BP 경계
         self.available_levels = []
         self.available_bps = []
@@ -63,6 +71,7 @@ class StatisticsService:
 
         # Normalize songs data (ensure diff keys are int)
         self.songs_data = {}
+        self.songs_by_arcaea_id = {}
         for sid, sdata in raw_songs.items():
             normalized_charts = {}
             for diff, cdata in sdata.get('charts', {}).items():
@@ -74,6 +83,9 @@ class StatisticsService:
                     normalized_charts[diff] = normalized_chart
             sdata['charts'] = normalized_charts
             self.songs_data[sid] = sdata
+            arcaea_id = sdata.get('arcaea_id')
+            if arcaea_id:
+                self.songs_by_arcaea_id[arcaea_id] = sdata
 
         # Normalize scores data
         self.scores_data = {}
@@ -102,26 +114,162 @@ class StatisticsService:
         # Calculate Level/BP boundaries
         self._calculate_level_bp_boundaries()
 
+        # 데이터 원본이 바뀌었으므로 중간 캐시는 전부 무효화
+        self.invalidate_caches()
+
+    def invalidate_caches(self):
+        """중간 결과 캐시를 모두 무효화한다."""
+        self._full_items_cache = None
+        self._full_items_cache_key = None
+        self._filtered_items_cache = None
+        self._filtered_cache_key = None
+
     def build_filtered_sorted_list(
         self, display_mode, sort_mode, sort_ascending,
         search_text, filters: FilterParams
     ) -> list:
-        """필터링 → 정렬 → 아이템 빌드 → 표시값 설정. 완성된 리스트 반환."""
-        items = []
+        """호환용 API: 분리된 경로를 순차 실행해 완성 리스트를 반환."""
+        full = self.build_full_items(display_mode, filters)
+        filtered = self.filter_items(full, display_mode, search_text, filters)
+        sorted_items = self.sort_items(filtered, sort_mode, sort_ascending)
+        self.apply_display_values(sorted_items, sort_mode, display_mode)
+        return sorted_items
 
-        for song_id, song_data in self.songs_data.items():
-            # Search filter
-            if search_text:
-                search_lower = search_text.lower()
-                if (search_lower not in song_data['title'].lower() and
-                    search_lower not in song_data['artist'].lower()):
+    def build_full_items(self, display_mode: str, filters: FilterParams = None) -> list:
+        """필터 전(Chart) 또는 필터 반영 집계(Song) 기준의 전체 아이템을 빌드한다."""
+        cache_key = self._make_full_items_cache_key(display_mode, filters)
+        if self._full_items_cache_key == cache_key and self._full_items_cache is not None:
+            return self._full_items_cache
+
+        if display_mode == "chart":
+            items = self._build_all_chart_items()
+        else:
+            items = self._build_all_song_items(filters)
+
+        self._full_items_cache = items
+        self._full_items_cache_key = cache_key
+
+        # full 캐시가 바뀌면 filtered 캐시도 무효화
+        self._filtered_items_cache = None
+        self._filtered_cache_key = None
+        return items
+
+    def filter_items(
+        self,
+        items: list,
+        display_mode: str,
+        search_text: str,
+        filters: FilterParams,
+    ) -> list:
+        """빌드된 아이템에서 검색/필터 조건에 맞는 항목만 추출한다."""
+        search_lower = (search_text or "").lower().strip()
+        filter_hash = self._make_filter_hash(filters) if filters else None
+        cache_key = (id(items), display_mode, search_lower, filter_hash)
+
+        if self._filtered_cache_key == cache_key and self._filtered_items_cache is not None:
+            return self._filtered_items_cache
+
+        result = []
+        for item in items:
+            if search_lower:
+                if (
+                    search_lower not in item.get('title', '').lower()
+                    and search_lower not in item.get('artist', '').lower()
+                ):
                     continue
 
-            arcaea_id = song_data.get('arcaea_id')
+            if (
+                display_mode == "chart"
+                and filters is not None
+                and not self._item_matches_chart_filter(item, filters)
+            ):
+                continue
 
-            # Get filtered difficulties for this song
+            result.append(item)
+
+        self._filtered_items_cache = result
+        self._filtered_cache_key = cache_key
+        return result
+
+    def sort_items(self, items: list, sort_mode: str, sort_ascending: bool) -> list:
+        """정렬된 새 리스트를 반환한다. 원본 리스트는 변경하지 않는다."""
+        return sorted(
+            items,
+            key=lambda item: self._get_sort_key(item, sort_mode),
+            reverse=not sort_ascending,
+        )
+
+    def apply_display_values(self, items: list, sort_mode: str, display_mode: str):
+        """정렬된 리스트의 displayValue를 in-place로 갱신한다."""
+        for item in items:
+            item['displayValue'] = self._format_display_value(
+                item, sort_mode, display_mode
+            )
+
+    def _make_full_items_cache_key(self, display_mode: str, filters: FilterParams):
+        """Song 모드는 필터에 따라 집계가 달라지므로 필터 해시를 캐시 키에 포함한다."""
+        if display_mode == "song":
+            return (display_mode, self._make_filter_hash(filters))
+        return (display_mode,)
+
+    def _make_filter_hash(self, filters: FilterParams):
+        if filters is None:
+            return None
+        return (
+            tuple(sorted(int(v) for v in (filters.difficulties or []))),
+            str(filters.level_min_str),
+            str(filters.level_max_str),
+            bool(filters.bp_mode),
+            round(float(filters.bp_min), 4),
+            round(float(filters.bp_max), 4),
+            str(filters.ignore_chart),
+            str(filters.skill_issues),
+            int(filters.score_min_rank),
+            int(filters.score_max_rank),
+            tuple(sorted(int(v) for v in (filters.clear_types or []))),
+        )
+
+    def _build_all_chart_items(self) -> list:
+        """Chart 모드용 전체 차트 아이템을 빌드한다 (필터 비의존)."""
+        items = []
+        for _, song_data in self.songs_data.items():
+            arcaea_id = song_data.get('arcaea_id')
+            if not arcaea_id:
+                continue
+
+            song_total_play_count = self._get_filtered_song_play_count(
+                arcaea_id, song_data, None
+            )
+            for diff in DIFFICULTY_ORDER:
+                chart_data = song_data.get('charts', {}).get(diff)
+                if not chart_data:
+                    continue
+                items.append(
+                    self._build_chart_item(
+                        arcaea_id,
+                        song_data,
+                        diff,
+                        chart_data,
+                        None,
+                        song_total_play_count=song_total_play_count,
+                    )
+                )
+        return items
+
+    def _build_all_song_items(self, filters: FilterParams = None) -> list:
+        """Song 모드용 집계 아이템을 빌드한다."""
+        items = []
+        for _, song_data in self.songs_data.items():
+            arcaea_id = song_data.get('arcaea_id')
+            if not arcaea_id:
+                continue
+
             filtered_diffs = []
             for diff, chart_data in song_data.get('charts', {}).items():
+                if filters is None:
+                    filtered_diffs.append(diff)
+                    continue
+
                 score_data = self.scores_data.get((arcaea_id, diff), {})
                 if self._matches_filter(chart_data, score_data, diff, filters):
                     filtered_diffs.append(diff)
@@ -129,42 +277,72 @@ class StatisticsService:
             if not filtered_diffs:
                 continue
 
-            if display_mode == "chart":
-                # Add each chart as separate item
-                for diff in DIFFICULTY_ORDER:
-                    if diff not in filtered_diffs:
-                        continue
-                    chart_data = song_data['charts'].get(diff, {})
-                    if chart_data:
-                        item = self._build_chart_item(
-                            arcaea_id, song_data, diff, chart_data, filters
-                        )
-                        # Add allDifficulties for detailed view
-                        item['allDifficulties'] = self._build_all_difficulty_details(
-                            arcaea_id, song_data, filters
-                        )
-                        items.append(item)
-            else:
-                # Add song with aggregated data
-                item = self._build_song_item(
-                    arcaea_id, song_data, filtered_diffs, filters
-                )
-                items.append(item)
-
-        # Sort
-        reverse = not sort_ascending
-        items.sort(
-            key=lambda item: self._get_sort_key(item, sort_mode),
-            reverse=reverse
-        )
-
-        # Set display values
-        for item in items:
-            item['displayValue'] = self._format_display_value(
-                item, sort_mode, display_mode
+            items.append(
+                self._build_song_item(arcaea_id, song_data, filtered_diffs, filters)
             )
 
         return items
+
+    def _item_matches_chart_filter(self, item: dict, filters: FilterParams) -> bool:
+        """Chart 아이템(dict) 기준 필터링."""
+        difficulty = item.get('difficulty')
+        if difficulty not in filters.difficulties:
+            return False
+
+        if filters.bp_mode:
+            bp = item.get('bp', 0)
+            if bp < filters.bp_min or bp > filters.bp_max:
+                return False
+        else:
+            level_str = item.get('level', '0')
+            if level_str in self.available_levels:
+                level_idx = self.available_levels.index(level_str)
+                min_idx = (
+                    self.available_levels.index(filters.level_min_str)
+                    if filters.level_min_str in self.available_levels
+                    else 0
+                )
+                max_idx = (
+                    self.available_levels.index(filters.level_max_str)
+                    if filters.level_max_str in self.available_levels
+                    else len(self.available_levels) - 1
+                )
+                if level_idx < min_idx or level_idx > max_idx:
+                    return False
+
+        for flag_name, flag_value in [
+            ('ignoreChart', filters.ignore_chart),
+            ('skillIssues', filters.skill_issues),
+        ]:
+            item_flag = item.get(flag_name, False)
+            if flag_value == "only" and not item_flag:
+                return False
+            if flag_value == "off" and item_flag:
+                return False
+
+        if item.get('hasScore', False):
+            clear_type = item.get('bestClearType', 0)
+            if clear_type not in filters.clear_types:
+                return False
+
+        rank_idx = self.get_score_rank_index(
+            item.get('bestScore', 0),
+            item.get('hasScore', False),
+            item.get('scoreBelowMax', None),
+        )
+        if rank_idx < filters.score_min_rank or rank_idx > filters.score_max_rank:
+            return False
+
+        return True
+
+    def build_selected_item_details(self, arcaea_id: str, filters: FilterParams) -> list:
+        """Build detail payload for one selected song only."""
+        if not arcaea_id:
+            return []
+        song_data = self.songs_by_arcaea_id.get(arcaea_id)
+        if not song_data:
+            return []
+        return self._build_all_difficulty_details(arcaea_id, song_data, filters)
 
     # === 내부 헬퍼 메서드 ===
 
@@ -255,7 +433,7 @@ class StatisticsService:
         else:
             return 10  # 'PM'
 
-    def _get_filtered_song_play_count(self, arcaea_id, song_data, filters: FilterParams) -> int:
+    def _get_filtered_song_play_count(self, arcaea_id, song_data, filters: FilterParams = None) -> int:
         """Calculate total play count for FILTERED difficulties of a song.
 
         This sums play counts only for difficulties that pass the current filter,
@@ -264,16 +442,26 @@ class StatisticsService:
         """
         total = 0
         for diff, chart_data in song_data.get('charts', {}).items():
+            if filters is None:
+                total += self.play_counts.get((arcaea_id, diff), 0)
+                continue
             score_data = self.scores_data.get((arcaea_id, diff), {})
             if self._matches_filter(chart_data, score_data, diff, filters):
                 total += self.play_counts.get((arcaea_id, diff), 0)
         return total
 
-    def _build_chart_item(self, arcaea_id, song_data, difficulty, chart_data, filters: FilterParams) -> dict:
+    def _build_chart_item(
+        self, arcaea_id, song_data, difficulty, chart_data, filters: FilterParams = None,
+        song_total_play_count=None
+    ) -> dict:
         """Build a chart item for the list model."""
         score_data = self.scores_data.get((arcaea_id, difficulty), {})
         play_count = self.play_counts.get((arcaea_id, difficulty), 0)
         this_year_play_count = self.this_year_play_counts.get((arcaea_id, difficulty), 0)
+        if song_total_play_count is None:
+            song_total_play_count = self._get_filtered_song_play_count(
+                arcaea_id, song_data, filters
+            )
 
         score = score_data.get('score', 0)
         time_played = score_data.get('time_played', 0)
@@ -314,11 +502,21 @@ class StatisticsService:
             'skillIssues': chart_data.get('skill_issues', False),
             'totalPlayCount': play_count,
             'thisYearPlayCount': this_year_play_count,
-            'songTotalPlayCount': self._get_filtered_song_play_count(arcaea_id, song_data, filters),
+            'songTotalPlayCount': song_total_play_count,
             'displayValue': '',  # Will be set based on sort mode
         }
 
-    def _build_song_item(self, arcaea_id, song_data, filtered_difficulties, filters: FilterParams) -> dict:
+    def _build_difficulty_summary(self, difficulty, chart_data) -> dict:
+        """Build lightweight difficulty summary for song list delegate."""
+        return {
+            'difficulty': difficulty,
+            'level': chart_data.get('level', ''),
+            'difficultyColor': DIFFICULTY_COLORS.get(difficulty, '#888'),
+            'ignoreChart': chart_data.get('ignore_chart', False),
+            'skillIssues': chart_data.get('skill_issues', False),
+        }
+
+    def _build_song_item(self, arcaea_id, song_data, filtered_difficulties, filters: FilterParams = None) -> dict:
         """Build a song item aggregating filtered difficulties."""
         # Find best values among filtered difficulties
         best_level = ""
@@ -358,8 +556,20 @@ class StatisticsService:
             if not chart_data:
                 continue
 
-            chart_item = self._build_chart_item(arcaea_id, song_data, diff, chart_data, filters)
-            diff_details.append(chart_item)
+            score_data = self.scores_data.get((arcaea_id, diff), {})
+            score = score_data.get('score', 0)
+            time_played = score_data.get('time_played', 0)
+            has_score = time_played > 0
+            rank = calculate_rank(score) if has_score else ""
+            score_below_max = score_data.get('score_below_max', 0)
+            pure = score_data.get('perfect', 0)
+            shiny_pure = score_data.get('shiny_perfect', 0)
+            far = score_data.get('near', 0)
+            lost = score_data.get('miss', 0)
+            play_count = self.play_counts.get((arcaea_id, diff), 0)
+            this_year_play_count = self.this_year_play_counts.get((arcaea_id, diff), 0)
+
+            diff_details.append(self._build_difficulty_summary(diff, chart_data))
 
             # Track highest difficulty for thumbnail
             if thumbnail_difficulty == -1 or THUMBNAIL_PRIORITY.get(diff, 99) < THUMBNAIL_PRIORITY.get(thumbnail_difficulty, 99):
@@ -377,31 +587,31 @@ class StatisticsService:
                 best_perceived_bp = chart_data.get('perceived_bp', 0)
                 best_diff_for_perceived_bp = diff
 
-            if chart_item['bestScore'] > best_score:
-                best_score = chart_item['bestScore']
-                best_rank = chart_item['rank']
+            if score > best_score:
+                best_score = score
+                best_rank = rank
                 best_diff_for_score = diff
 
-            total_play_count += chart_item['totalPlayCount']
-            total_this_year_play_count += chart_item['thisYearPlayCount']
+            total_play_count += play_count
+            total_this_year_play_count += this_year_play_count
 
-            if chart_item['timePlayed'] > recent_time_played:
-                recent_time_played = chart_item['timePlayed']
+            if time_played > recent_time_played:
+                recent_time_played = time_played
                 best_diff_for_recent = diff
 
             # MAX sort: find chart with smallest (perfect + near + miss - shiny_perfect) value
             # Only consider charts that have been played (hasScore is True)
-            if chart_item['hasScore']:
-                chart_max_val = chart_item['pure'] + chart_item['far'] + chart_item['lost'] - chart_item['shinyPure']
+            if has_score:
+                chart_max_val = pure + far + lost - shiny_pure
                 current_best_max_val = best_max_pure + best_max_far + best_max_lost - best_max_shiny
                 # Use smallest value, or if first played chart
-                if best_diff_for_max == -1 or chart_max_val < current_best_max_val or (chart_max_val == current_best_max_val and chart_item['scoreBelowMax'] < best_score_below_max):
-                    best_score_below_max = chart_item['scoreBelowMax']
+                if best_diff_for_max == -1 or chart_max_val < current_best_max_val or (chart_max_val == current_best_max_val and score_below_max < best_score_below_max):
+                    best_score_below_max = score_below_max
                     best_diff_for_max = diff
-                    best_max_pure = chart_item['pure']
-                    best_max_shiny = chart_item['shinyPure']
-                    best_max_far = chart_item['far']
-                    best_max_lost = chart_item['lost']
+                    best_max_pure = pure
+                    best_max_shiny = shiny_pure
+                    best_max_far = far
+                    best_max_lost = lost
 
         # hasScore for song: True if any chart has been played
         has_score = recent_time_played > 0
@@ -429,7 +639,6 @@ class StatisticsService:
             'far': best_max_far,
             'lost': best_max_lost,
             'filteredDifficulties': diff_details,
-            'allDifficulties': self._build_all_difficulty_details(arcaea_id, song_data, filters),
             'displayValue': '',
             # Thumbnail: highest difficulty among filtered
             'thumbnailDifficulty': thumbnail_difficulty,
@@ -448,6 +657,9 @@ class StatisticsService:
         Used for detailed view to show all difficulties regardless of filter.
         """
         all_details = []
+        song_total_play_count = self._get_filtered_song_play_count(
+            arcaea_id, song_data, filters
+        )
 
         for diff in DIFFICULTY_ORDER:
             chart_data = song_data.get('charts', {}).get(diff)
@@ -460,7 +672,10 @@ class StatisticsService:
             is_filtered = not self._matches_filter(chart_data, score_data, diff, filters)
 
             # Build the chart item
-            chart_item = self._build_chart_item(arcaea_id, song_data, diff, chart_data, filters)
+            chart_item = self._build_chart_item(
+                arcaea_id, song_data, diff, chart_data, filters,
+                song_total_play_count=song_total_play_count
+            )
             chart_item['isFiltered'] = is_filtered
 
             all_details.append(chart_item)
