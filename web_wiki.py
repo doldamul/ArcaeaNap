@@ -95,7 +95,12 @@ def save_data(data):
     
     try:
         updated_count = 0
-        from repositories.song_repository import resolve_song_id_with_artist, update_song_metadata, fill_missing_arcaea_ids_from_scores
+        from repositories.song_repository import (
+            resolve_song_id_with_artist,
+            update_song_metadata,
+            fill_missing_arcaea_ids_from_scores,
+            fill_song_titles_from_scores,
+        )
         
         for title, artist, length_str, bpm in data:
             # Convert length "m:ss" to seconds (int)
@@ -120,6 +125,7 @@ def save_data(data):
         
         # Try to fill arcaea_id from user_scores.db
         fill_missing_arcaea_ids_from_scores()
+        fill_song_titles_from_scores()
         
     except Exception as e:
         print(f"save data to songs.db error: {e}")

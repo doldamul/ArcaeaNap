@@ -1,6 +1,11 @@
 from configuration import config
 from disrupt import block_pointer_events, restore_pointer_events
-from repositories.song_repository import get_connection, resolve_song_id_for_ao, init_songs_db
+from repositories.song_repository import (
+    get_connection,
+    resolve_song_id_for_ao,
+    init_songs_db,
+    update_song_titles_from_ao,
+)
 from repositories.score_repository import ScoreRepository, PlayCountRepository, PinRepository
 import sqlite3
 import pandas as pd
@@ -1164,14 +1169,25 @@ class ArcaeaOnline:
                 # 타이틀 추출
                 title_obj = item.get('title')
                 if isinstance(title_obj, dict):
-                    title_str = title_obj.get('en', '')
+                    title_en = title_obj.get('en', '')
+                    title_jp = title_obj.get('ja', '')
                 else:
-                    title_str = str(title_obj) if title_obj else ''
+                    title_en = str(title_obj) if title_obj else ''
+                    title_jp = ''
+
+                ao_artist = item.get('artist') or ''
                 
                 # 해당 채보의 곡을 songs.db에서 찾아 ao_song_id 정보 삽입 (실패해도 계속 진행)
                 if songs_cursor:
                     try:
-                        resolve_song_id_for_ao(songs_cursor, ao_song_id, title_str)
+                        db_song_id = resolve_song_id_for_ao(songs_cursor, ao_song_id, title_en)
+                        update_song_titles_from_ao(
+                            songs_cursor,
+                            db_song_id,
+                            title_en,
+                            title_jp,
+                            ao_artist,
+                        )
                     except Exception:
                         pass
                 
@@ -1219,8 +1235,9 @@ class ArcaeaOnline:
                     time_played,
                     item.get('clear_type'),
                     item.get('best_clear_type'),
-                    title_str,
-                    item.get('artist'),
+                    title_en,
+                    title_jp,
+                    ao_artist,
                     item.get('user_id'),
                     yearly_play_index,
                     item.get('score_below_max')
@@ -1381,7 +1398,9 @@ def check_db_data():
 
         if 'time_played' in df.columns:
             df['play_date'] = pd.to_datetime(df['time_played'], unit='ms')
-            cols = ['play_date', 'title', 'difficulty', 'score'] + [c for c in df.columns if c not in ['play_date', 'title', 'difficulty', 'score']]
+            cols = ['play_date', 'title_en', 'difficulty', 'score'] + [
+                c for c in df.columns if c not in ['play_date', 'title_en', 'difficulty', 'score']
+            ]
             df = df[cols]
 
         print(f"=== Total records: {len(df)} ===")
@@ -1397,7 +1416,7 @@ def check_db_data():
         
         sample_song_id = df['arcaea_id'].iloc[0]
         print(f"\n4. History for song ({sample_song_id}):")
-        print(df[df['arcaea_id'] == sample_song_id][['play_date', 'title', 'score', 'perfect_count']])
+        print(df[df['arcaea_id'] == sample_song_id][['play_date', 'title_en', 'score', 'perfect_count']])
 
     except Exception as e:
         print(f"Error checking DB: {e}")

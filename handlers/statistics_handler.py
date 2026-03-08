@@ -40,7 +40,7 @@ class StatisticsHandler(QObject):
         self._selected_item = None
 
         # Selection state for mode sync
-        self._selected_song_id = None  # arcaea_id of selected song
+        self._selected_song_db_id = None  # songs.id of selected song
         self._selected_difficulty = 2  # Default to FTR (0=PST,1=PRS,2=FTR,3=BYD,4=ETR)
 
         self._service.load_data(config['general']['cache_path'])
@@ -66,11 +66,11 @@ class StatisticsHandler(QObject):
         """선택 보정/상세 표시에 필요한 allDifficulties를 on-demand로 조회."""
         if not item:
             return []
-        arcaea_id = item.get('arcaeaId')
-        if not arcaea_id:
+        song_db_id = item.get('songDbId')
+        if song_db_id is None:
             return []
         return self._service.build_selected_item_details(
-            arcaea_id,
+            song_db_id,
             self._get_filter_params()
         )
 
@@ -105,7 +105,7 @@ class StatisticsHandler(QObject):
             if list_items:
                 self._selected_index = 0
                 self._selected_item = self._list_model.get_item(0)
-                self._selected_song_id = self._selected_item.get('arcaeaId')
+                self._selected_song_db_id = self._selected_item.get('songDbId')
 
                 if self._display_mode == "chart":
                     self._selected_difficulty = self._selected_item.get('difficulty', 2)
@@ -131,13 +131,13 @@ class StatisticsHandler(QObject):
                             break
 
         elif selection_mode == 'adjacent_fallback':
-            if self._selected_song_id:
+            if self._selected_song_db_id is not None:
                 found = False
                 fallback_item = None
                 fallback_index = -1
 
                 for i, item in enumerate(list_items):
-                    if item.get('arcaeaId') != self._selected_song_id:
+                    if item.get('songDbId') != self._selected_song_db_id:
                         continue
 
                     if self._display_mode == "chart":
@@ -180,9 +180,9 @@ class StatisticsHandler(QObject):
                     self._selected_difficulty = fallback_item.get('difficulty', 2)
 
         else:
-            if self._selected_song_id:
+            if self._selected_song_db_id is not None:
                 for i, item in enumerate(list_items):
-                    if item.get('arcaeaId') != self._selected_song_id:
+                    if item.get('songDbId') != self._selected_song_db_id:
                         continue
 
                     if self._display_mode == "chart":
@@ -307,7 +307,10 @@ class StatisticsHandler(QObject):
 
     @pyqtProperty(str, notify=selectedItemChanged)
     def selectedSongId(self):
-        return self._selected_song_id or ""
+        # QML에서는 썸네일/색상 조회 키로 arcaeaId를 사용한다.
+        if self._selected_item:
+            return self._selected_item.get('arcaeaId', '')
+        return ""
 
     @pyqtProperty(int, notify=selectedItemChanged)
     def selectedIndex(self):
@@ -383,7 +386,7 @@ class StatisticsHandler(QObject):
         selected_details = None
 
         # Track selection for mode sync
-        self._selected_song_id = self._selected_item.get('arcaeaId')
+        self._selected_song_db_id = self._selected_item.get('songDbId')
 
         # In chart mode, also track the difficulty
         if self._display_mode == "chart":
@@ -430,10 +433,10 @@ class StatisticsHandler(QObject):
 
         self._selected_difficulty = diff
 
-        if self._display_mode == "chart" and self._selected_song_id:
+        if self._display_mode == "chart" and self._selected_song_db_id is not None:
             for i, item in enumerate(self._list_model.get_items()):
                 if (
-                    item.get('arcaeaId') == self._selected_song_id
+                    item.get('songDbId') == self._selected_song_db_id
                     and item.get('difficulty') == diff
                 ):
                     self._selected_index = i

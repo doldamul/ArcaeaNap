@@ -688,7 +688,13 @@ Item {
                                     Image {
                                         id: thumbnailImage
                                         anchors.fill: parent
-                                        source: (statsHandler && !homeRoot.isMigrating) ? (model.difficultyName ? statsHandler.getThumbnailPathForDifficulty(model.arcaeaId, model.difficulty) : statsHandler.getThumbnailPath(model.arcaeaId)) : ""
+                                        source: (statsHandler && !homeRoot.isMigrating)
+                                            ? ((model.thumbnailDifficulty !== undefined)
+                                                ? statsHandler.getThumbnailPathForDifficulty(model.arcaeaId, model.thumbnailDifficulty)
+                                                : (model.difficultyName
+                                                ? statsHandler.getThumbnailPathForDifficulty(model.arcaeaId, model.difficulty)
+                                                : statsHandler.getThumbnailPath(model.arcaeaId)))
+                                            : ""
                                         fillMode: Image.PreserveAspectCrop
                                         mipmap: true
                                         antialiasing: true

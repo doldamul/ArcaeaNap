@@ -59,14 +59,16 @@ def get_connection():
 # === 스키마 관리 ===
 
 def init_songs_db():
-    """songs/charts 테이블을 생성하고 필요 시 마이그레이션을 수행한다."""
+    """songs/charts 테이블을 생성하고 필요 컬럼을 보완한다."""
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS songs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT UNIQUE,
+            canonical_title TEXT UNIQUE,
+            title_en TEXT,
+            title_jp TEXT,
             artist TEXT,
             length INTEGER,
             bpm TEXT,
@@ -97,6 +99,10 @@ def init_songs_db():
     columns = [info[1] for info in cursor.fetchall()]
     if 'bpm' not in columns:
         cursor.execute("ALTER TABLE songs ADD COLUMN bpm TEXT")
+    if 'title_en' not in columns:
+        cursor.execute("ALTER TABLE songs ADD COLUMN title_en TEXT")
+    if 'title_jp' not in columns:
+        cursor.execute("ALTER TABLE songs ADD COLUMN title_jp TEXT")
 
     cursor.execute("PRAGMA table_info(charts)")
     columns = [info[1] for info in cursor.fetchall()]
@@ -133,18 +139,18 @@ def resolve_song_id_with_artist(cursor, title, artist=None):
         if mapped_title:
             title = mapped_title
 
-    cursor.execute('SELECT id FROM songs WHERE title = ?', (title,))
+    cursor.execute('SELECT id FROM songs WHERE canonical_title = ?', (title,))
     result = cursor.fetchone()
     if result:
         return result[0]
 
-    cursor.execute('SELECT id, title FROM songs WHERE lower(title) = lower(?)', (title,))
+    cursor.execute('SELECT id FROM songs WHERE lower(canonical_title) = lower(?)', (title,))
     result = cursor.fetchone()
 
     if result:
         return result[0]
     else:
-        cursor.execute('INSERT INTO songs (title) VALUES (?)', (title,))
+        cursor.execute('INSERT INTO songs (canonical_title) VALUES (?)', (title,))
         return cursor.lastrowid
 
 
@@ -165,7 +171,7 @@ def resolve_song_id_for_ao(cursor, ao_id, ao_title):
     arcaea_id가 비어있는 기존 레코드는 자동으로 갱신한다.
     """
     target_title = AO_ID_MAP.get(ao_id, ao_title)
-    cursor.execute('SELECT id, arcaea_id FROM songs WHERE title = ?', (target_title,))
+    cursor.execute('SELECT id, arcaea_id FROM songs WHERE canonical_title = ?', (target_title,))
     result = cursor.fetchone()
 
     if result:
@@ -174,8 +180,39 @@ def resolve_song_id_for_ao(cursor, ao_id, ao_title):
             cursor.execute('UPDATE songs SET arcaea_id = ? WHERE id = ?', (ao_id, db_id))
         return db_id
     else:
-        cursor.execute('INSERT INTO songs (title, arcaea_id) VALUES (?, ?)', (target_title, ao_id))
+        cursor.execute('INSERT INTO songs (canonical_title, arcaea_id) VALUES (?, ?)', (target_title, ao_id))
         return cursor.lastrowid
+
+
+def update_song_titles_from_ao(cursor, song_id, title_en, title_jp, artist):
+    """AO 데이터를 이용해 songs.db의 title_en/title_jp/artist 공란 필드를 채운다."""
+    cursor.execute(
+        'SELECT title_en, title_jp, artist FROM songs WHERE id = ?',
+        (song_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        return
+
+    existing_title_en, existing_title_jp, existing_artist = row
+    updates = []
+    values = []
+
+    if (not existing_title_en) and title_en:
+        updates.append('title_en = ?')
+        values.append(title_en)
+    if (not existing_title_jp) and title_jp:
+        updates.append('title_jp = ?')
+        values.append(title_jp)
+    if (not existing_artist) and artist:
+        updates.append('artist = ?')
+        values.append(artist)
+
+    if not updates:
+        return
+
+    values.append(song_id)
+    cursor.execute(f"UPDATE songs SET {', '.join(updates)} WHERE id = ?", values)
 
 
 # === 데이터 보완 ===
@@ -191,7 +228,7 @@ def fill_missing_arcaea_ids_from_scores():
     songs_conn = get_connection()
     songs_cursor = songs_conn.cursor()
 
-    songs_cursor.execute("SELECT id, title FROM songs WHERE arcaea_id IS NULL OR arcaea_id = ''")
+    songs_cursor.execute("SELECT id, canonical_title FROM songs WHERE arcaea_id IS NULL OR arcaea_id = ''")
     missing_songs = songs_cursor.fetchall()
 
     if not missing_songs:
@@ -203,8 +240,8 @@ def fill_missing_arcaea_ids_from_scores():
         with sqlite3.connect(scores_db_path) as scores_conn:
             scores_cursor = scores_conn.cursor()
 
-            for song_id, title in missing_songs:
-                scores_cursor.execute("SELECT arcaea_id FROM scores WHERE title = ? LIMIT 1", (title,))
+            for song_id, canonical_title in missing_songs:
+                scores_cursor.execute("SELECT arcaea_id FROM scores WHERE title_en = ? LIMIT 1", (canonical_title,))
                 row = scores_cursor.fetchone()
 
                 arcaea_id = None
@@ -212,7 +249,7 @@ def fill_missing_arcaea_ids_from_scores():
                     arcaea_id = row[0]
                 else:
                     for map_id, map_title in AO_ID_MAP.items():
-                        if map_title == title:
+                        if map_title == canonical_title:
                             scores_cursor.execute("SELECT arcaea_id FROM scores WHERE arcaea_id = ? LIMIT 1", (map_id,))
                             if scores_cursor.fetchone():
                                 arcaea_id = map_id
@@ -232,6 +269,66 @@ def fill_missing_arcaea_ids_from_scores():
         songs_conn.close()
 
 
+def fill_song_titles_from_scores():
+    """
+    user_scores.db의 title_en/title_jp 데이터를 songs.db에 역으로 채운다.
+    songs.db 재생성 후 호출하여 인게임 제목 데이터를 복원한다.
+    """
+    scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
+    if not os.path.exists(scores_db_path):
+        return
+
+    songs_conn = get_connection()
+    songs_cursor = songs_conn.cursor()
+    attached = False
+
+    try:
+        songs_cursor.execute("ATTACH DATABASE ? AS user_db", (scores_db_path,))
+        attached = True
+
+        songs_cursor.execute("""
+            UPDATE songs
+            SET title_en = COALESCE(
+                    NULLIF(songs.title_en, ''),
+                    (SELECT us.title_en
+                     FROM user_db.scores us
+                     JOIN charts c ON c.song_id = songs.id
+                     WHERE us.arcaea_id = songs.arcaea_id
+                       AND us.difficulty = c.difficulty
+                       AND us.title_en IS NOT NULL AND us.title_en != ''
+                     LIMIT 1)
+                ),
+                title_jp = COALESCE(
+                    NULLIF(songs.title_jp, ''),
+                    (SELECT us.title_jp
+                     FROM user_db.scores us
+                     JOIN charts c ON c.song_id = songs.id
+                     WHERE us.arcaea_id = songs.arcaea_id
+                       AND us.difficulty = c.difficulty
+                       AND us.title_jp IS NOT NULL AND us.title_jp != ''
+                     LIMIT 1)
+                )
+            WHERE songs.arcaea_id IS NOT NULL AND songs.arcaea_id != ''
+        """)
+
+        songs_conn.commit()
+
+        restored_count = songs_cursor.execute(
+            "SELECT COUNT(*) FROM songs WHERE (title_en IS NOT NULL AND title_en != '') OR (title_jp IS NOT NULL AND title_jp != '')"
+        ).fetchone()[0]
+        print(f"[fill_song_titles_from_scores] Restored title_en/title_jp for {restored_count} songs")
+
+    except Exception as e:
+        print(f"Error filling song titles from scores: {e}")
+    finally:
+        if attached:
+            try:
+                songs_cursor.execute("DETACH DATABASE user_db")
+            except Exception:
+                pass
+        songs_conn.close()
+
+
 # === 조회 ===
 
 def get_all_songs_with_charts():
@@ -239,7 +336,8 @@ def get_all_songs_with_charts():
     Fetches all songs and their charts from songs.db.
     Returns:
         dict: {song_db_id: {
-            'arcaea_id': str, 'title': str, 'artist': str, 'length': int, 'bpm': str,
+            'arcaea_id': str, 'canonical_title': str, 'title_en': str, 'title_jp': str,
+            'artist': str, 'length': int, 'bpm': str,
             'charts': {difficulty: {level, bp, s_bp, perceived_bp, note_count, ignore_chart, skill_issues}}
         }}
     """
@@ -251,7 +349,7 @@ def get_all_songs_with_charts():
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT s.arcaea_id, s.title, s.artist, s.length, s.bpm,
+            SELECT s.arcaea_id, s.canonical_title, s.title_en, s.title_jp, s.artist, s.length, s.bpm,
                    c.difficulty, c.level, c.bp, c.s_bp, c.perceived_bp, c.note_count,
                    c.ignore_chart, c.skill_issues, s.id
             FROM songs s
@@ -262,27 +360,29 @@ def get_all_songs_with_charts():
         result = {}
         for row in cursor.fetchall():
             arcaea_id = row[0]
-            song_id = row[13]
+            song_id = row[15]
 
             if song_id not in result:
                 result[song_id] = {
                     'arcaea_id': arcaea_id,
-                    'title': row[1] or 'Unknown',
-                    'artist': row[2] or 'Unknown',
-                    'length': row[3] or 0,
-                    'bpm': row[4] or '',
+                    'canonical_title': row[1] or 'Unknown',
+                    'title_en': row[2] or '',
+                    'title_jp': row[3] or '',
+                    'artist': row[4] or 'Unknown',
+                    'length': row[5] or 0,
+                    'bpm': row[6] or '',
                     'charts': {}
                 }
 
-            if row[5] is not None:
-                result[song_id]['charts'][row[5]] = {
-                    'level': row[6] or '',
-                    'bp': row[7] or 0.0,
-                    's_bp': row[8] or 0.0,
-                    'perceived_bp': row[9] or 0.0,
-                    'note_count': row[10] or 0,
-                    'ignore_chart': bool(row[11]),
-                    'skill_issues': bool(row[12]),
+            if row[7] is not None:
+                result[song_id]['charts'][row[7]] = {
+                    'level': row[8] or '',
+                    'bp': row[9] or 0.0,
+                    's_bp': row[10] or 0.0,
+                    'perceived_bp': row[11] or 0.0,
+                    'note_count': row[12] or 0,
+                    'ignore_chart': bool(row[13]),
+                    'skill_issues': bool(row[14]),
                 }
 
         return result
@@ -293,9 +393,10 @@ def get_all_songs_with_charts():
         conn.close()
 
 
-def get_song_title(arcaea_id):
+def get_song_title(arcaea_id, difficulty=None):
     """
-    Fetches the song title given an arcaea_id.
+    Fetches display title for an arcaea_id. If difficulty is provided,
+    resolves the exact song row via (arcaea_id, difficulty).
     """
     songs_db_path = get_db_path()
     if not os.path.exists(songs_db_path):
@@ -304,9 +405,27 @@ def get_song_title(arcaea_id):
     conn = sqlite3.connect(songs_db_path)
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT title FROM songs WHERE arcaea_id = ?", (arcaea_id,))
+        if difficulty is not None:
+            cursor.execute(
+                "SELECT s.title_en, s.canonical_title "
+                "FROM songs s "
+                "JOIN charts c ON c.song_id = s.id "
+                "WHERE s.arcaea_id = ? AND c.difficulty = ? "
+                "LIMIT 1",
+                (arcaea_id, int(difficulty)),
+            )
+        else:
+            cursor.execute(
+                "SELECT title_en, canonical_title FROM songs "
+                "WHERE arcaea_id = ? "
+                "ORDER BY CASE WHEN title_en IS NOT NULL AND title_en != '' THEN 0 ELSE 1 END "
+                "LIMIT 1",
+                (arcaea_id,),
+            )
         row = cursor.fetchone()
-        return row[0] if row else None
+        if not row:
+            return None
+        return row[0] or row[1]
     except Exception as e:
         print(f"Error fetching song title: {e}")
         return None

@@ -40,7 +40,7 @@ class StatisticsService:
     def __init__(self):
         # 데이터 캐시
         self.songs_data = {}
-        self.songs_by_arcaea_id = {}
+        self.songs_by_db_id = {}
         self.scores_data = {}
         self.play_counts = {}
         self.this_year_play_counts = {}
@@ -71,8 +71,9 @@ class StatisticsService:
 
         # Normalize songs data (ensure diff keys are int)
         self.songs_data = {}
-        self.songs_by_arcaea_id = {}
+        self.songs_by_db_id = {}
         for sid, sdata in raw_songs.items():
+            normalized_song = dict(sdata)
             normalized_charts = {}
             for diff, cdata in sdata.get('charts', {}).items():
                 normalized_chart = dict(cdata)
@@ -81,11 +82,21 @@ class StatisticsService:
                     normalized_charts[int(diff)] = normalized_chart
                 except:
                     normalized_charts[diff] = normalized_chart
-            sdata['charts'] = normalized_charts
-            self.songs_data[sid] = sdata
-            arcaea_id = sdata.get('arcaea_id')
+            normalized_song['charts'] = normalized_charts
+
+            canonical_title = str(normalized_song.get('canonical_title') or '').strip()
+            title_en = str(normalized_song.get('title_en') or '').strip()
+            title_jp = str(normalized_song.get('title_jp') or '').strip()
+            normalized_song['canonical_title'] = canonical_title
+            normalized_song['title_en'] = title_en
+            normalized_song['title_jp'] = title_jp
+            normalized_song['title'] = title_en or canonical_title or 'Unknown'
+            normalized_song['song_db_id'] = sid
+
+            self.songs_data[sid] = normalized_song
+            arcaea_id = normalized_song.get('arcaea_id')
             if arcaea_id:
-                self.songs_by_arcaea_id[arcaea_id] = sdata
+                self.songs_by_db_id[sid] = normalized_song
 
         # Normalize scores data
         self.scores_data = {}
@@ -173,7 +184,9 @@ class StatisticsService:
         for item in items:
             if search_lower:
                 if (
-                    search_lower not in item.get('title', '').lower()
+                    search_lower not in item.get('canonical_title', '').lower()
+                    and search_lower not in item.get('title_en', '').lower()
+                    and search_lower not in item.get('title_jp', '').lower()
                     and search_lower not in item.get('artist', '').lower()
                 ):
                     continue
@@ -232,7 +245,7 @@ class StatisticsService:
     def _build_all_chart_items(self) -> list:
         """Chart 모드용 전체 차트 아이템을 빌드한다 (필터 비의존)."""
         items = []
-        for _, song_data in self.songs_data.items():
+        for song_db_id, song_data in self.songs_data.items():
             arcaea_id = song_data.get('arcaea_id')
             if not arcaea_id:
                 continue
@@ -246,6 +259,7 @@ class StatisticsService:
                     continue
                 items.append(
                     self._build_chart_item(
+                        song_db_id,
                         arcaea_id,
                         song_data,
                         diff,
@@ -259,7 +273,7 @@ class StatisticsService:
     def _build_all_song_items(self, filters: FilterParams = None) -> list:
         """Song 모드용 집계 아이템을 빌드한다."""
         items = []
-        for _, song_data in self.songs_data.items():
+        for song_db_id, song_data in self.songs_data.items():
             arcaea_id = song_data.get('arcaea_id')
             if not arcaea_id:
                 continue
@@ -278,7 +292,7 @@ class StatisticsService:
                 continue
 
             items.append(
-                self._build_song_item(arcaea_id, song_data, filtered_diffs, filters)
+                self._build_song_item(song_db_id, arcaea_id, song_data, filtered_diffs, filters)
             )
 
         return items
@@ -335,12 +349,15 @@ class StatisticsService:
 
         return True
 
-    def build_selected_item_details(self, arcaea_id: str, filters: FilterParams) -> list:
+    def build_selected_item_details(self, song_db_id: int, filters: FilterParams) -> list:
         """Build detail payload for one selected song only."""
-        if not arcaea_id:
+        if song_db_id is None:
             return []
-        song_data = self.songs_by_arcaea_id.get(arcaea_id)
+        song_data = self.songs_by_db_id.get(song_db_id)
         if not song_data:
+            return []
+        arcaea_id = song_data.get('arcaea_id')
+        if not arcaea_id:
             return []
         return self._build_all_difficulty_details(arcaea_id, song_data, filters)
 
@@ -451,7 +468,7 @@ class StatisticsService:
         return total
 
     def _build_chart_item(
-        self, arcaea_id, song_data, difficulty, chart_data, filters: FilterParams = None,
+        self, song_db_id, arcaea_id, song_data, difficulty, chart_data, filters: FilterParams = None,
         song_total_play_count=None
     ) -> dict:
         """Build a chart item for the list model."""
@@ -471,8 +488,12 @@ class StatisticsService:
         best_clear_type = score_data.get('best_clear_type', 0)
 
         return {
+            'songDbId': song_db_id,
             'arcaeaId': arcaea_id,
             'title': song_data['title'],
+            'canonical_title': song_data.get('canonical_title', ''),
+            'title_en': song_data.get('title_en', ''),
+            'title_jp': song_data.get('title_jp', ''),
             'artist': song_data['artist'],
             'length': song_data['length'],
             'bpm': song_data['bpm'],
@@ -516,7 +537,7 @@ class StatisticsService:
             'skillIssues': chart_data.get('skill_issues', False),
         }
 
-    def _build_song_item(self, arcaea_id, song_data, filtered_difficulties, filters: FilterParams = None) -> dict:
+    def _build_song_item(self, song_db_id, arcaea_id, song_data, filtered_difficulties, filters: FilterParams = None) -> dict:
         """Build a song item aggregating filtered difficulties."""
         # Find best values among filtered difficulties
         best_level = ""
@@ -617,8 +638,12 @@ class StatisticsService:
         has_score = recent_time_played > 0
 
         return {
+            'songDbId': song_db_id,
             'arcaeaId': arcaea_id,
             'title': song_data['title'],
+            'canonical_title': song_data.get('canonical_title', ''),
+            'title_en': song_data.get('title_en', ''),
+            'title_jp': song_data.get('title_jp', ''),
             'artist': song_data['artist'],
             'length': song_data['length'],
             'bpm': song_data['bpm'],
@@ -673,7 +698,7 @@ class StatisticsService:
 
             # Build the chart item
             chart_item = self._build_chart_item(
-                arcaea_id, song_data, diff, chart_data, filters,
+                song_data.get('song_db_id'), arcaea_id, song_data, diff, chart_data, filters,
                 song_total_play_count=song_total_play_count
             )
             chart_item['isFiltered'] = is_filtered

@@ -59,6 +59,16 @@ class StatsHandler(QObject):
         return title if title else ""
 
     @pyqtSlot(str, int, result=str)
+    def getSongTitleForDifficulty(self, arcaea_id: str, difficulty: int) -> str:
+        from repositories.song_repository import get_song_title
+        title = get_song_title(arcaea_id, difficulty)
+        if title:
+            return title
+        # Fallback keeps legacy behavior when chart metadata is missing.
+        legacy_title = get_song_title(arcaea_id)
+        return legacy_title if legacy_title else ""
+
+    @pyqtSlot(str, int, result=str)
     def getThumbnailPathForDifficulty(self, arcaea_id: str, difficulty: int) -> str:
         self._thumbnail_service.thumbnails_dir = self._thumbnails_dir
         return self._thumbnail_service.get_path_for_difficulty(arcaea_id, difficulty)

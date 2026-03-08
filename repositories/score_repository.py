@@ -41,7 +41,8 @@ class ScoreRepository:
             time_played INTEGER,
             clear_type INTEGER,
             best_clear_type INTEGER,
-            title TEXT,
+            title_en TEXT,
+            title_jp TEXT,
             artist TEXT,
             user_id INTEGER,
             yearly_play_index INTEGER,
@@ -80,8 +81,8 @@ class ScoreRepository:
             INSERT OR IGNORE INTO scores 
             (arcaea_id, difficulty, score, shiny_perfect_count, perfect_count, near_count, 
                 miss_count, health, modifier, time_played, clear_type, best_clear_type, 
-                title, artist, user_id, yearly_play_index, score_below_max)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                title_en, title_jp, artist, user_id, yearly_play_index, score_below_max)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', scores)
     
     def get_score_by_id(self, cursor: sqlite3.Cursor, score_id: int) -> Optional[ScoreRecord]:

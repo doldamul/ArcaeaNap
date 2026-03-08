@@ -288,64 +288,91 @@ def get_top_10_most_played(
     if not filtered:
         return []
 
-    if grouping_criteria == 'chart':
-        sorted_charts = sorted(filtered.items(), key=lambda x: -x[1])[:10]
-        conn = sqlite3.connect(songs_db_path)
-        try:
-            cursor = conn.cursor()
+    conn = sqlite3.connect(songs_db_path)
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT s.id, s.arcaea_id, c.difficulty, s.title_en, s.canonical_title, s.artist "
+            "FROM songs s "
+            "JOIN charts c ON c.song_id = s.id"
+        )
+        chart_meta = {}
+        for sid, aid, diff, title_en, canonical_title, artist in cursor.fetchall():
+            chart_meta[(aid, int(diff))] = {
+                'song_id': sid,
+                'arcaea_id': aid,
+                'title': (title_en or canonical_title or 'Unknown Title'),
+                'artist': artist or 'Unknown Artist',
+            }
+
+        if grouping_criteria == 'chart':
+            sorted_charts = sorted(filtered.items(), key=lambda x: -x[1])[:10]
             results = []
             for (arcaea_id, difficulty), play_count in sorted_charts:
-                cursor.execute("SELECT title, artist FROM songs WHERE arcaea_id = ?", (arcaea_id,))
-                row = cursor.fetchone()
-                title = row[0] if row and row[0] else 'Unknown Title'
-                artist = row[1] if row and row[1] else 'Unknown Artist'
+                meta = chart_meta.get((arcaea_id, difficulty))
+                if not meta:
+                    continue
                 results.append({
-                    'title': title,
-                    'artist': artist,
+                    'title': meta['title'],
+                    'artist': meta['artist'],
                     'playCount': play_count,
-                    'arcaeaId': arcaea_id or '',
+                    'songDbId': meta['song_id'],
+                    'arcaeaId': meta['arcaea_id'] or '',
                     'colorCode': '#FFFFFF',
                     'difficulty': difficulty,
+                    'thumbnailDifficulty': difficulty,
                     'difficultyName': DIFFICULTY_NAMES.get(difficulty, ''),
                     'difficultyColor': DIFFICULTY_COLORS.get(difficulty, '#888'),
                 })
             return results
-        except Exception as e:
-            print(f"Error fetching top 10 (chart): {e}")
+
+        # grouping == 'song': aggregate by unique song row (song_id), not arcaea_id
+        by_song = {}
+        for (aid, diff), count in filtered.items():
+            meta = chart_meta.get((aid, diff))
+            if not meta:
+                continue
+            sid = meta['song_id']
+            if sid not in by_song:
+                by_song[sid] = {
+                    'title': meta['title'],
+                    'artist': meta['artist'],
+                    'arcaeaId': meta['arcaea_id'] or '',
+                    'playCount': 0,
+                    'thumbnailDifficulty': diff,
+                    'thumbnailCount': 0,
+                }
+            by_song[sid]['playCount'] += count
+            # Pick a representative thumbnail from the most-played chart of this song.
+            if count >= by_song[sid]['thumbnailCount']:
+                by_song[sid]['thumbnailCount'] = count
+                by_song[sid]['thumbnailDifficulty'] = diff
+
+        if not by_song:
             return []
-        finally:
-            conn.close()
 
-    # grouping == 'song': aggregate by arcaea_id
-    by_song = {}
-    for (aid, _), count in filtered.items():
-        by_song[aid] = by_song.get(aid, 0) + count
-    sorted_songs = sorted(by_song.items(), key=lambda x: -x[1])[:10]
-    if not sorted_songs:
-        return []
+        sorted_songs = sorted(
+            by_song.items(),
+            key=lambda x: -x[1]['playCount']
+        )[:10]
 
-    conn = sqlite3.connect(songs_db_path)
-    try:
-        cursor = conn.cursor()
         results = []
-        for arcaea_id, play_count in sorted_songs:
-            cursor.execute("SELECT title, artist FROM songs WHERE arcaea_id = ?", (arcaea_id,))
-            row = cursor.fetchone()
-            title = row[0] if row and row[0] else 'Unknown Title'
-            artist = row[1] if row and row[1] else 'Unknown Artist'
+        for sid, info in sorted_songs:
             results.append({
-                'title': title,
-                'artist': artist,
-                'playCount': play_count,
-                'arcaeaId': arcaea_id or '',
+                'title': info['title'],
+                'artist': info['artist'],
+                'playCount': info['playCount'],
+                'songDbId': sid,
+                'arcaeaId': info['arcaeaId'],
                 'colorCode': '#FFFFFF',
                 'difficulty': -1,
+                'thumbnailDifficulty': info['thumbnailDifficulty'],
                 'difficultyName': '',
                 'difficultyColor': '#888',
             })
         return results
     except Exception as e:
-        print(f"Error fetching top 10 (song): {e}")
+        print(f"Error fetching top 10: {e}")
         return []
     finally:
         conn.close()

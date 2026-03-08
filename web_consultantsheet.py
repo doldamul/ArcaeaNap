@@ -428,14 +428,20 @@ def send_scores_to_sheet(sheet_id=None, log_callback=None, cancellation_context=
     songs_data = get_all_songs_with_charts()
     best_scores = get_best_scores_per_chart(config['general']['cache_path'])
     
-    # Build title -> arcaea_id lookup (case-insensitive)
-    # DB titles are the "official" titles after TITLE_ALIAS_MAP resolution
-    title_to_arcaea_id = {}  # lower(title) -> arcaea_id
+    # Build title -> arcaea_id lookup (case-insensitive) using canonical_title only.
+    title_to_arcaea_id = {}  # lower(canonical_title) -> arcaea_id
     for song_data in songs_data.values():
-        title = song_data.get('title', '')
         arcaea_id = song_data.get('arcaea_id', '')
-        if title and arcaea_id:
-            title_to_arcaea_id[title.lower()] = arcaea_id
+        if not arcaea_id:
+            continue
+
+        canonical_title = str(song_data.get('canonical_title', '')).strip()
+        if not canonical_title:
+            msg = "songs.db appears corrupted: missing canonical_title. Rebuild songs.db and try again."
+            log(msg)
+            raise Exception(msg)
+
+        title_to_arcaea_id[canonical_title.lower()] = arcaea_id
     
     # Difficulty string -> int mapping
     diff_str_to_int = {
@@ -760,8 +766,12 @@ def save_to_db(data):
         print(f"Saved/Updated {updated_count} charts to database.")
         
         # Try to fill arcaea_id from user_scores.db
-        from repositories.song_repository import fill_missing_arcaea_ids_from_scores
+        from repositories.song_repository import (
+            fill_missing_arcaea_ids_from_scores,
+            fill_song_titles_from_scores,
+        )
         fill_missing_arcaea_ids_from_scores()
+        fill_song_titles_from_scores()
     
     except Exception as e:
         print(f"Error saving to DB: {e}")

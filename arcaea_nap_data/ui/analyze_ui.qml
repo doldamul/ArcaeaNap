@@ -619,7 +619,7 @@ Item {
                                             visible: thumbMouseArea.containsMouse && text !== ""
                                             delay: 100
                                             
-                                            text: (arcaeaId && statsHandler) ? statsHandler.getSongTitle(arcaeaId) : ""
+                                            text: (pinRow.arcaeaId && statsHandler) ? statsHandler.getSongTitleForDifficulty(pinRow.arcaeaId, modelData.code) : ""
                                             
                                             contentItem: Text {
                                                 text: titleTip.text
