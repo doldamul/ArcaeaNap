@@ -73,6 +73,9 @@ Item {
             homeRoot.aggregationScopeLabel = (settingsHandler && settingsHandler.getMostPlayedScope() === 'this_year') ? new Date().getFullYear().toString() : 'All time'
             updateTop10()
         }
+        function onSongTitleLanguageChanged() {
+            updateTop10()
+        }
     }
     
     function updateTop10() {

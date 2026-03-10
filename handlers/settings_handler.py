@@ -15,6 +15,7 @@ class SettingsHandler(QObject):
     settingsChanged = pyqtSignal()
     profileDisplayChanged = pyqtSignal()  # Profile image, show friend code, show potential
     mostPlayedOrderChanged = pyqtSignal()  # Grouping criteria, difficulty filter, most played scope
+    songTitleLanguageChanged = pyqtSignal()
     cachePathChanged = pyqtSignal()
     analyzeModeChanged = pyqtSignal(bool, arguments=['enabled'])
     # Migration signals
@@ -54,6 +55,21 @@ class SettingsHandler(QObject):
     @pyqtSlot(result=str)
     def getCachePath(self):
         return config['general']['cache_path']
+
+    @pyqtSlot(result=str)
+    def getSongTitleLanguage(self):
+        return config['general']['song_title_language']
+
+    @pyqtSlot(str)
+    def setSongTitleLanguage(self, lang):
+        normalized = str(lang or '').strip().lower()
+        if normalized not in ('en', 'jp'):
+            return
+        if normalized == config['general']['song_title_language']:
+            return
+        config['general']['song_title_language'] = normalized
+        self.songTitleLanguageChanged.emit()
+        self.settingsChanged.emit()
 
     def _get_absolute_cache_path(self, path: str) -> str:
         """Convert cache path to absolute path, resolving relative paths from script directory."""

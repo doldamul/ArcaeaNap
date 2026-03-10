@@ -45,6 +45,7 @@ class StatsHandler(QObject):
             difficulty_filter=config['profile']['difficulty_filter'],
             grouping_criteria=config['profile']['grouping_criteria'],
             most_played_scope=config['profile']['most_played_scope'],
+            song_title_language=config['general']['song_title_language'],
         )
 
     @pyqtSlot(str, result=str)
@@ -55,17 +56,27 @@ class StatsHandler(QObject):
     @pyqtSlot(str, result=str)
     def getSongTitle(self, arcaea_id: str) -> str:
         from repositories.song_repository import get_song_title
-        title = get_song_title(arcaea_id)
+        title = get_song_title(
+            arcaea_id,
+            song_title_language=config['general']['song_title_language'],
+        )
         return title if title else ""
 
     @pyqtSlot(str, int, result=str)
     def getSongTitleForDifficulty(self, arcaea_id: str, difficulty: int) -> str:
         from repositories.song_repository import get_song_title
-        title = get_song_title(arcaea_id, difficulty)
+        title = get_song_title(
+            arcaea_id,
+            difficulty,
+            song_title_language=config['general']['song_title_language'],
+        )
         if title:
             return title
         # Fallback keeps legacy behavior when chart metadata is missing.
-        legacy_title = get_song_title(arcaea_id)
+        legacy_title = get_song_title(
+            arcaea_id,
+            song_title_language=config['general']['song_title_language'],
+        )
         return legacy_title if legacy_title else ""
 
     @pyqtSlot(str, int, result=str)

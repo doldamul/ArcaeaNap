@@ -251,7 +251,8 @@ def get_top_10_most_played(
     cache_path: str,
     difficulty_filter: str,
     grouping_criteria: str,
-    most_played_scope: str
+    most_played_scope: str,
+    song_title_language: str = 'en'
 ):
     """
     Returns the top 10 most played songs or charts.
@@ -261,6 +262,7 @@ def get_top_10_most_played(
         difficulty_filter: 'all' or comma-separated codes (e.g. 'pst,prs,ftr')
         grouping_criteria: 'song' (aggregate by song) or 'chart' (per difficulty)
         most_played_scope: 'total' (all years) or 'this_year'
+        song_title_language: 'en' or 'jp'
 
     Returns:
         list of dict: by song: [{'title', 'artist', 'playCount', 'arcaeaId', 'colorCode'}, ...]
@@ -292,16 +294,21 @@ def get_top_10_most_played(
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT s.id, s.arcaea_id, c.difficulty, s.title_en, s.canonical_title, s.artist "
+            "SELECT s.id, s.arcaea_id, c.difficulty, s.title_en, s.title_jp, s.canonical_title, s.artist "
             "FROM songs s "
             "JOIN charts c ON c.song_id = s.id"
         )
         chart_meta = {}
-        for sid, aid, diff, title_en, canonical_title, artist in cursor.fetchall():
+        lang = str(song_title_language or 'en').lower()
+        for sid, aid, diff, title_en, title_jp, canonical_title, artist in cursor.fetchall():
+            if lang == 'jp':
+                display_title = title_jp or title_en or canonical_title or 'Unknown Title'
+            else:
+                display_title = title_en or title_jp or canonical_title or 'Unknown Title'
             chart_meta[(aid, int(diff))] = {
                 'song_id': sid,
                 'arcaea_id': aid,
-                'title': (title_en or canonical_title or 'Unknown Title'),
+                'title': display_title,
                 'artist': artist or 'Unknown Artist',
             }
 

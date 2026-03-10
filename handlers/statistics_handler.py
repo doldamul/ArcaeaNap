@@ -43,7 +43,10 @@ class StatisticsHandler(QObject):
         self._selected_song_db_id = None  # songs.id of selected song
         self._selected_difficulty = 2  # Default to FTR (0=PST,1=PRS,2=FTR,3=BYD,4=ETR)
 
-        self._service.load_data(config['general']['cache_path'])
+        self._service.load_data(
+            config['general']['cache_path'],
+            config['general']['song_title_language'],
+        )
         self._full_rebuild('first')
 
     def _get_filter_params(self) -> FilterParams:
@@ -452,5 +455,8 @@ class StatisticsHandler(QObject):
 
     @pyqtSlot()
     def refreshData(self):
-        self._service.load_data(config['general']['cache_path'])
+        self._service.load_data(
+            config['general']['cache_path'],
+            config['general']['song_title_language'],
+        )
         self._on_data_refreshed()

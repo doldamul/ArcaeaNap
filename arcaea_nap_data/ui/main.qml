@@ -289,6 +289,11 @@ ApplicationWindow {
                 songDbErrorPopup.open()
             }
         }
+        function onSongTitleLanguageChanged() {
+            if (statisticsHandler) {
+                statisticsHandler.refreshData()
+            }
+        }
     }
 
     // --- Song Database Update Modal (ApplicationModal blocks all windows) ---

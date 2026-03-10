@@ -393,10 +393,11 @@ def get_all_songs_with_charts():
         conn.close()
 
 
-def get_song_title(arcaea_id, difficulty=None):
+def get_song_title(arcaea_id, difficulty=None, song_title_language='en'):
     """
     Fetches display title for an arcaea_id. If difficulty is provided,
     resolves the exact song row via (arcaea_id, difficulty).
+    song_title_language: 'en' or 'jp'
     """
     songs_db_path = get_db_path()
     if not os.path.exists(songs_db_path):
@@ -405,9 +406,10 @@ def get_song_title(arcaea_id, difficulty=None):
     conn = sqlite3.connect(songs_db_path)
     try:
         cursor = conn.cursor()
+        lang = str(song_title_language or 'en').lower()
         if difficulty is not None:
             cursor.execute(
-                "SELECT s.title_en, s.canonical_title "
+                "SELECT s.title_en, s.title_jp, s.canonical_title "
                 "FROM songs s "
                 "JOIN charts c ON c.song_id = s.id "
                 "WHERE s.arcaea_id = ? AND c.difficulty = ? "
@@ -416,7 +418,7 @@ def get_song_title(arcaea_id, difficulty=None):
             )
         else:
             cursor.execute(
-                "SELECT title_en, canonical_title FROM songs "
+                "SELECT title_en, title_jp, canonical_title FROM songs "
                 "WHERE arcaea_id = ? "
                 "ORDER BY CASE WHEN title_en IS NOT NULL AND title_en != '' THEN 0 ELSE 1 END "
                 "LIMIT 1",
@@ -425,7 +427,10 @@ def get_song_title(arcaea_id, difficulty=None):
         row = cursor.fetchone()
         if not row:
             return None
-        return row[0] or row[1]
+        title_en, title_jp, canonical_title = row
+        if lang == 'jp':
+            return title_jp or title_en or canonical_title
+        return title_en or title_jp or canonical_title
     except Exception as e:
         print(f"Error fetching song title: {e}")
         return None

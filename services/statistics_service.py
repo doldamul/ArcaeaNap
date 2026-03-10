@@ -61,8 +61,8 @@ class StatisticsService:
         """Normalize level text for consistent backend->QML contract."""
         return str(level or "").strip()
 
-    def load_data(self, cache_path: str):
-        """DB에서 데이터 로딩 + 정규화. 경계 계산 포함."""
+    def load_data(self, cache_path: str, song_title_language: str = 'en'):
+        """DB에서 데이터 로딩 + 정규화. 경계 계산 포함. song_title_language는 'en'/'jp'."""
         # Load raw data
         raw_songs = get_all_songs_with_charts()
         raw_scores = get_best_scores_per_chart(cache_path)
@@ -70,6 +70,7 @@ class StatisticsService:
         raw_this_year_play_counts = get_this_year_play_counts(cache_path)
 
         # Normalize songs data (ensure diff keys are int)
+        lang = str(song_title_language or 'en').lower()
         self.songs_data = {}
         self.songs_by_db_id = {}
         for sid, sdata in raw_songs.items():
@@ -90,7 +91,10 @@ class StatisticsService:
             normalized_song['canonical_title'] = canonical_title
             normalized_song['title_en'] = title_en
             normalized_song['title_jp'] = title_jp
-            normalized_song['title'] = title_en or canonical_title or 'Unknown'
+            if lang == 'jp':
+                normalized_song['title'] = title_jp or title_en or canonical_title or 'Unknown'
+            else:
+                normalized_song['title'] = title_en or title_jp or canonical_title or 'Unknown'
             normalized_song['song_db_id'] = sid
 
             self.songs_data[sid] = normalized_song

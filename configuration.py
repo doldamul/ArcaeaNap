@@ -13,6 +13,7 @@ config = None
 _config_default = {
     'general': {
         'cache_path': './arcaea_nap_data/',
+        'song_title_language': 'en',  # 'en' or 'jp'
     },
     'profile': {
         'show_friend_code': True,
@@ -51,9 +52,17 @@ def _validate_cache_path(v: str) -> str:
     # Return the original value (preserving relative path format in config)
     return v
 
+
+def _validate_song_title_language(v: str) -> str:
+    value = str(v).strip().lower()
+    if value not in ('en', 'jp'):
+        raise ValueError("song_title_language must be 'en' or 'jp'")
+    return value
+
 _converters = {
     'general': {
         'cache_path': _validate_cache_path,
+        'song_title_language': _validate_song_title_language,
     },
     'profile': {
         'show_friend_code': lambda v: v.lower() == 'true',

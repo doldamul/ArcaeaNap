@@ -267,6 +267,28 @@ Window {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
 
+                    // Language
+                    ColumnLayout {
+                        spacing: 8
+                        Text { text: "Language"; font.bold: true; color: "#333333" }
+                        RowLayout {
+                            spacing: 10
+                            Text { text: "Song Title:" }
+                            RadioButton {
+                                text: "en"
+                                checked: settingsHandler ? settingsHandler.getSongTitleLanguage() === 'en' : true
+                                onToggled: if (checked && settingsHandler) settingsHandler.setSongTitleLanguage('en')
+                            }
+                            RadioButton {
+                                text: "jp"
+                                checked: settingsHandler ? settingsHandler.getSongTitleLanguage() === 'jp' : false
+                                onToggled: if (checked && settingsHandler) settingsHandler.setSongTitleLanguage('jp')
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+
                     // Analyze Mode Toggle
                     RowLayout {
                         Layout.fillWidth: true
