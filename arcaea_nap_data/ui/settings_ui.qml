@@ -212,177 +212,6 @@ Window {
                     // Header
                     Text { text: "General"; font.bold: true; font.pixelSize: 18; color: "#333" }
 
-                    // Cache Path
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-                        Text { text: "Cache Path"; font.bold: true; color: "#333" }
-                        Text { text: "Location where scores and images are stored"; font.pixelSize: 12; color: "#888" }
-                        
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 10
-                            
-                            Basic.TextField {
-                                id: cachePathField
-                                Layout.fillWidth: true
-                                text: settingsHandler ? settingsHandler.getCachePath() : ""
-                                readOnly: true
-                                background: Rectangle {
-                                    color: "#F5F5F5"; radius: 8; border.width: 0
-                                }
-                                
-                                // Update when cache path changes
-                                Connections {
-                                    target: settingsHandler
-                                    function onCachePathChanged() {
-                                        cachePathField.text = settingsHandler.getCachePath()
-                                    }
-                                }
-                            }
-                            
-                            // Open folder button
-                            Basic.Button {
-                                text: "📂"
-                                background: Rectangle { color: "#F0F0F0"; radius: 8 }
-                                onClicked: if (settingsHandler) settingsHandler.openCacheFolder()
-                                Basic.ToolTip { text: "Open folder"; visible: parent.hovered }
-                            }
-                            
-                            // Change folder button
-                            Basic.Button {
-                                text: "📁"
-                                background: Rectangle { color: "#F0F0F0"; radius: 8 }
-                                onClicked: folderDialog.open()
-                                Basic.ToolTip { text: "Change folder"; visible: parent.hovered }
-                            }
-                        }
-                    }
-
-                    FolderDialog {
-                        id: folderDialog
-                        title: "Select Cache Directory"
-                        onAccepted: if (settingsHandler) settingsHandler.prepareCacheMigration(folderDialog.selectedFolder)
-                    }
-
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
-
-                    // Language
-                    ColumnLayout {
-                        spacing: 8
-                        Text { text: "Language"; font.bold: true; color: "#333333" }
-                        RowLayout {
-                            spacing: 10
-                            Text { text: "Song Title:" }
-                            RadioButton {
-                                text: "en"
-                                checked: settingsHandler ? settingsHandler.getSongTitleLanguage() === 'en' : true
-                                onToggled: if (checked && settingsHandler) settingsHandler.setSongTitleLanguage('en')
-                            }
-                            RadioButton {
-                                text: "jp"
-                                checked: settingsHandler ? settingsHandler.getSongTitleLanguage() === 'jp' : false
-                                onToggled: if (checked && settingsHandler) settingsHandler.setSongTitleLanguage('jp')
-                            }
-                        }
-                    }
-
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
-
-                    // Analyze Mode Toggle
-                    RowLayout {
-                        Layout.fillWidth: true
-                        
-                        ColumnLayout {
-                            spacing: 4
-                            
-                            RowLayout {
-                                spacing: 6
-                                Text { 
-                                    text: "Play Count Analyze Mode"
-                                    font.bold: true
-                                    color: "#333" 
-                                }
-                                
-                                Text {
-                                    text: "🛈"
-                                    font.pixelSize: 14
-                                    color: helpMouse.containsMouse ? "#6A0DAD" : "#999"
-                                    
-                                    MouseArea {
-                                        id: helpMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                    }
-                                    
-                                    Basic.ToolTip {
-                                        visible: helpMouse.containsMouse
-                                        delay: 100
-                                        timeout: -1 // 무기한 표시 (마우스가 떠나면 visible에 의해 사라짐)
-                                        x: parent.width + 10
-                                        y: -10
-                                        
-                                        contentItem: Text {
-                                            text: "Arcaea Online resets 'Yearly Play Count' data annually on Jan 1st (00:00 GMT).\n\n" +
-                                                  "Normally, the analyzer updates play count of a record only when a new score is found, for ensuring record consistency and preventing server strain. Enable this mode to temporarily bypass limits and update play counts for ALL songs.\n" +
-                                                  "This is useful for archiving your complete yearly statistics before the reset."
-                                            font.pixelSize: 12
-                                            color: "#FFFFFF"
-                                            wrapMode: Text.WordWrap
-                                        }
-                                        
-                                        background: Rectangle {
-                                            color: "#333333"
-                                            radius: 6
-                                            opacity: 0.95
-                                        }
-                                        
-                                        width: 350
-                                    }
-                                }
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
-                        
-                        Item {
-                            id: analyzeToggle
-                            width: 48; height: 26
-                            Layout.alignment: Qt.AlignRight
-                            property bool checked: settingsHandler ? settingsHandler.getAnalyzeModeEnabled() : false
-
-                            Rectangle {
-                                id: toggleTrack
-                                anchors.fill: parent
-                                radius: 13
-                                color: analyzeToggle.checked ? "#6A0DAD" : "#E0E0E0"
-                                border.color: analyzeToggle.checked ? "#6A0DAD" : "#CCCCCC"
-                                Behavior on color { ColorAnimation { duration: 200 } }
-                                Behavior on border.color { ColorAnimation { duration: 200 } }
-
-                                Rectangle {
-                                    width: 22; height: 22; radius: 11
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    x: analyzeToggle.checked ? parent.width - width - 2 : 2
-                                    color: "white"
-                                    
-                                    Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutCubic } }
-                                }
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    analyzeToggle.checked = !analyzeToggle.checked
-                                    if (settingsHandler) settingsHandler.setAnalyzeModeEnabled(analyzeToggle.checked)
-                                }
-                            }
-                        }
-                    }
-
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
-
                     // Account Connections
                     Text { text: "Account Connections"; font.bold: true; color: "#333" }
                     RowLayout {
@@ -1011,6 +840,177 @@ Window {
                             }
                         }
                     }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+
+                    // Analyze Mode Toggle
+                    RowLayout {
+                        Layout.fillWidth: true
+                        
+                        ColumnLayout {
+                            spacing: 4
+                            
+                            RowLayout {
+                                spacing: 6
+                                Text { 
+                                    text: "Play Count Analyze Mode"
+                                    font.bold: true
+                                    color: "#333" 
+                                }
+                                
+                                Text {
+                                    text: "🛈"
+                                    font.pixelSize: 14
+                                    color: helpMouse.containsMouse ? "#6A0DAD" : "#999"
+                                    
+                                    MouseArea {
+                                        id: helpMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                    }
+                                    
+                                    Basic.ToolTip {
+                                        visible: helpMouse.containsMouse
+                                        delay: 100
+                                        timeout: -1 // 무기한 표시 (마우스가 떠나면 visible에 의해 사라짐)
+                                        x: parent.width + 10
+                                        y: -10
+                                        
+                                        contentItem: Text {
+                                            text: "Arcaea Online resets 'Yearly Play Count' data annually on Jan 1st (00:00 GMT).\n\n" +
+                                                  "Normally, the analyzer updates play count of a record only when a new score is found, for ensuring record consistency and preventing server strain. Enable this mode to temporarily bypass limits and update play counts for ALL songs.\n" +
+                                                  "This is useful for archiving your complete yearly statistics before the reset."
+                                            font.pixelSize: 12
+                                            color: "#FFFFFF"
+                                            wrapMode: Text.WordWrap
+                                        }
+                                        
+                                        background: Rectangle {
+                                            color: "#333333"
+                                            radius: 6
+                                            opacity: 0.95
+                                        }
+                                        
+                                        width: 350
+                                    }
+                                }
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                        
+                        Item {
+                            id: analyzeToggle
+                            width: 48; height: 26
+                            Layout.alignment: Qt.AlignRight
+                            property bool checked: settingsHandler ? settingsHandler.getAnalyzeModeEnabled() : false
+
+                            Rectangle {
+                                id: toggleTrack
+                                anchors.fill: parent
+                                radius: 13
+                                color: analyzeToggle.checked ? "#6A0DAD" : "#E0E0E0"
+                                border.color: analyzeToggle.checked ? "#6A0DAD" : "#CCCCCC"
+                                Behavior on color { ColorAnimation { duration: 200 } }
+                                Behavior on border.color { ColorAnimation { duration: 200 } }
+
+                                Rectangle {
+                                    width: 22; height: 22; radius: 11
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    x: analyzeToggle.checked ? parent.width - width - 2 : 2
+                                    color: "white"
+                                    
+                                    Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutCubic } }
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    analyzeToggle.checked = !analyzeToggle.checked
+                                    if (settingsHandler) settingsHandler.setAnalyzeModeEnabled(analyzeToggle.checked)
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+
+                    // Language
+                    ColumnLayout {
+                        spacing: 8
+                        Text { text: "Language"; font.bold: true; color: "#333333" }
+                        RowLayout {
+                            spacing: 10
+                            Text { text: "Song Title:" }
+                            RadioButton {
+                                text: "en"
+                                checked: settingsHandler ? settingsHandler.getSongTitleLanguage() === 'en' : true
+                                onToggled: if (checked && settingsHandler) settingsHandler.setSongTitleLanguage('en')
+                            }
+                            RadioButton {
+                                text: "jp"
+                                checked: settingsHandler ? settingsHandler.getSongTitleLanguage() === 'jp' : false
+                                onToggled: if (checked && settingsHandler) settingsHandler.setSongTitleLanguage('jp')
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+
+                    // Cache Path
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Text { text: "Cache Path"; font.bold: true; color: "#333" }
+                        Text { text: "Location where scores and images are stored"; font.pixelSize: 12; color: "#888" }
+                        
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+                            
+                            Basic.TextField {
+                                id: cachePathField
+                                Layout.fillWidth: true
+                                text: settingsHandler ? settingsHandler.getCachePath() : ""
+                                readOnly: true
+                                background: Rectangle {
+                                    color: "#F5F5F5"; radius: 8; border.width: 0
+                                }
+                                
+                                // Update when cache path changes
+                                Connections {
+                                    target: settingsHandler
+                                    function onCachePathChanged() {
+                                        cachePathField.text = settingsHandler.getCachePath()
+                                    }
+                                }
+                            }
+                            
+                            // Open folder button
+                            Basic.Button {
+                                text: "📂"
+                                background: Rectangle { color: "#F0F0F0"; radius: 8 }
+                                onClicked: if (settingsHandler) settingsHandler.openCacheFolder()
+                                Basic.ToolTip { text: "Open folder"; visible: parent.hovered }
+                            }
+                            
+                            // Change folder button
+                            Basic.Button {
+                                text: "📁"
+                                background: Rectangle { color: "#F0F0F0"; radius: 8 }
+                                onClicked: folderDialog.open()
+                                Basic.ToolTip { text: "Change folder"; visible: parent.hovered }
+                            }
+                        }
+                    }
+
+                    FolderDialog {
+                        id: folderDialog
+                        title: "Select Cache Directory"
+                        onAccepted: if (settingsHandler) settingsHandler.prepareCacheMigration(folderDialog.selectedFolder)
+                    }
                 }
             }
 
@@ -1374,15 +1374,8 @@ Window {
                             }
                         }
                     }
-
-
                 }
             }
-
-
-            
-            // Bottom Spacer
-            Item { height: 40 }
         }
     }
 }
