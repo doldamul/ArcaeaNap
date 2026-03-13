@@ -27,6 +27,10 @@ Item {
     // Profile privacy options
     property bool showFriendCodeInProfile: settingsHandler ? settingsHandler.getShowFriendCode() : true
     property bool showPotentialInProfile: settingsHandler ? settingsHandler.getShowPotential() : false
+    readonly property var appWindow: ApplicationWindow.window
+    readonly property string titleFontFamily: (appWindow && appWindow.titleFontFamily)
+        ? appWindow.titleFontFamily
+        : (appWindow ? appWindow.font.family : "")
 
     function loadProfile() {
         if (profileHandler) {
@@ -733,6 +737,7 @@ Item {
                                         id: titleLabel
                                         width: Math.min(implicitWidth, parent.width - (diffLabel.visible ? diffLabel.implicitWidth + 8 : 0))
                                         text: model.title
+                                        font.family: homeRoot.titleFontFamily
                                         font.bold: true
                                         font.pixelSize: titleFontSize
                                         color: titleColor
@@ -751,6 +756,7 @@ Item {
                                 }
                                 Text {
                                     text: model.artist
+                                    font.family: homeRoot.titleFontFamily
                                     color: artistColor
                                     font.pixelSize: 12
                                     elide: Text.ElideRight

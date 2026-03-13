@@ -6,6 +6,7 @@ from PyQt6.QtGui import QGuiApplication, QSurfaceFormat
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtCore import QUrl
 
+from app_fonts import register_embedded_fonts
 from configuration import config
 from handlers.startup_handler import StartupHandler
 from handlers.analysis_handler import AnalysisHandler
@@ -22,11 +23,14 @@ def main():
     QSurfaceFormat.setDefaultFormat(fmt)
 
     app = QGuiApplication(sys.argv)
+    qml_font_context = register_embedded_fonts(config['general']['cache_path'])
 
     print("Arcaea Nap v0.1")
 
     print("UI loading...")
     engine = QQmlApplicationEngine()
+    for key, value in qml_font_context.items():
+        engine.rootContext().setContextProperty(key, value)
 
     # Register handlers
     analysis_handler = AnalysisHandler()

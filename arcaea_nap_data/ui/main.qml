@@ -20,7 +20,20 @@ ApplicationWindow {
     // Settings는 별도 윈도우로 분리됨
     property int currentTab: 0
 
-    font.family: "Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+    readonly property string baseUiFontFamily: {
+        if (typeof embeddedBaseUiFontFamily === "string" && embeddedBaseUiFontFamily.length > 0) {
+            return embeddedBaseUiFontFamily
+        }
+        return "Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+    }
+    readonly property string titleFontFamily: {
+        if (typeof embeddedTitleFontFamily === "string" && embeddedTitleFontFamily.length > 0) {
+            return embeddedTitleFontFamily
+        }
+        return baseUiFontFamily
+    }
+
+    font.family: baseUiFontFamily
 
     // --- 통합 상단 네비게이션 바 ---
     Rectangle {

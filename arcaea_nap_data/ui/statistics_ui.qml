@@ -22,6 +22,10 @@ Item {
     property int currentSongIndex: statisticsHandler ? statisticsHandler.selectedIndex : -1
     property string searchText: ""  // Search text managed at root level
     property bool suppressResponsivePopAnimation: false
+    readonly property var appWindow: ApplicationWindow.window
+    readonly property string titleFontFamily: (appWindow && appWindow.titleFontFamily)
+        ? appWindow.titleFontFamily
+        : (appWindow ? appWindow.font.family : "")
 
     onIsNarrowChanged: {
         if (!isNarrow) {
@@ -499,6 +503,7 @@ Item {
                                                 spacing: 2
                                                 Text { 
                                                     text: rowModel.title || ""
+                                                    font.family: statsRoot.titleFontFamily
                                                     font.bold: true
                                                     color: "#333"
                                                     elide: Text.ElideRight
@@ -506,6 +511,7 @@ Item {
                                                 }
                                                 Text { 
                                                     text: rowModel.artist || ""
+                                                    font.family: statsRoot.titleFontFamily
                                                     font.pixelSize: 11
                                                     color: "#888"
                                                     elide: Text.ElideRight
@@ -973,6 +979,7 @@ Item {
                                     
                                     Text { 
                                         text: currentSong ? currentSong.title : "Select a song"
+                                        font.family: statsRoot.titleFontFamily
                                         color: "white"; font.bold: true
                                         font.pixelSize: isNarrow ? 24 : 36
                                         elide: Text.ElideRight
@@ -980,6 +987,7 @@ Item {
                                     }
                                     Text { 
                                         text: currentSong ? currentSong.artist : ""
+                                        font.family: statsRoot.titleFontFamily
                                         color: "#CCC"; font.pixelSize: 16 
                                     }
                                 }

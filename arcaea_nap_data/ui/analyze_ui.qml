@@ -6,6 +6,10 @@ import QtQuick.Window
 Item {
     id: analyzeRoot
     anchors.fill: parent
+    readonly property var appWindow: ApplicationWindow.window
+    readonly property string titleFontFamily: (appWindow && appWindow.titleFontFamily)
+        ? appWindow.titleFontFamily
+        : (appWindow ? appWindow.font.family : "")
 
     // --- 메인 컨텐츠 영역 ---
     ScrollView {
@@ -623,6 +627,7 @@ Item {
                                             
                                             contentItem: Text {
                                                 text: titleTip.text
+                                                font.family: analyzeRoot.titleFontFamily
                                                 font.pixelSize: 12
                                                 color: "#FFFFFF"
                                                 horizontalAlignment: Text.AlignHCenter
