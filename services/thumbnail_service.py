@@ -44,18 +44,28 @@ class ThumbnailService:
             return ""
         return self.find_by_priority(arcaea_id)
 
-    def get_path_for_difficulty(self, arcaea_id: str, difficulty: int) -> str:
-        """특정 난이도 썸네일 → 해당 난이도가 없으면 우선순위 폴백."""
+    def get_exact_path_for_difficulty(self, arcaea_id: str, difficulty: int) -> str:
+        """특정 난이도 썸네일만 반환. 없으면 빈 문자열(폴백 없음)."""
         if not arcaea_id:
             return ""
 
-        if difficulty >= 0 and difficulty in DIFF_CODE_MAP:
-            diff_code = DIFF_CODE_MAP[difficulty]
-            filename = f"{arcaea_id}_{diff_code}.jpg"
-            filepath = os.path.join(self._thumbnails_dir, filename)
-            if os.path.exists(filepath):
-                return QUrl.fromLocalFile(filepath).toString()
+        diff_code = DIFF_CODE_MAP.get(difficulty)
+        if diff_code is None:
+            return ""
 
+        filename = f"{arcaea_id}_{diff_code}.jpg"
+        filepath = os.path.join(self._thumbnails_dir, filename)
+        if os.path.exists(filepath):
+            return QUrl.fromLocalFile(filepath).toString()
+        return ""
+
+    def get_path_for_difficulty(self, arcaea_id: str, difficulty: int) -> str:
+        """특정 난이도 썸네일 → 해당 난이도가 없으면 우선순위 폴백."""
+        exact = self.get_exact_path_for_difficulty(arcaea_id, difficulty)
+        if exact:
+            return exact
+        if not arcaea_id:
+            return ""
         return self.find_by_priority(arcaea_id)
 
     def get_representative_color(self, arcaea_id: str, difficulty: int) -> str:

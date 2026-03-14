@@ -85,6 +85,11 @@ class StatsHandler(QObject):
         return self._thumbnail_service.get_path_for_difficulty(arcaea_id, difficulty)
 
     @pyqtSlot(str, int, result=str)
+    def getExactThumbnailPathForDifficulty(self, arcaea_id: str, difficulty: int) -> str:
+        self._thumbnail_service.thumbnails_dir = self._thumbnails_dir
+        return self._thumbnail_service.get_exact_path_for_difficulty(arcaea_id, difficulty)
+
+    @pyqtSlot(str, int, result=str)
     def getThumbnailColor(self, arcaea_id: str, difficulty: int) -> str:
         self._thumbnail_service.thumbnails_dir = self._thumbnails_dir
         return self._thumbnail_service.get_representative_color(arcaea_id, difficulty)

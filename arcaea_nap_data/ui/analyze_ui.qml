@@ -384,6 +384,7 @@ Item {
                     property var progressData: ({})
                     property var countModeData: ({})
                     property bool isPlayCountMode: false
+                    property int thumbnailDataVersion: 0
 
                     Component.onCompleted: {
                         updatePinDates()
@@ -397,6 +398,9 @@ Item {
                         }
                         function onProgressChanged() {
                             Qt.callLater(lastSavedInfoContent.updateProgressData)
+                        }
+                        function onDataUpdated() {
+                            lastSavedInfoContent.thumbnailDataVersion += 1
                         }
                     }
 
@@ -479,22 +483,111 @@ Item {
                                 
                                 // Get pin data for this difficulty
                                 property var actualPinData: lastSavedInfoContent.pinDates[String(modelData.code)] || {}
-                                property var displayPinData: lastSavedInfoContent.pinDates[String(modelData.code)] || {}
+                                property var displayPinData: ({})
                                 
                                 property bool hasPinInfo: displayPinData.updated_at && displayPinData.updated_at > 0
                                 property string arcaeaId: displayPinData.arcaea_id || ""
+                                property string chartIdentity: (displayPinData.arcaea_id || "") + ":" + String(modelData.code)
                                 property var timePlayed: displayPinData.time_played || 0
                                 property var updatedAt: actualPinData.updated_at || 0
                                 property bool isPlayCountMode: lastSavedInfoContent.isPlayCountMode
                                 
                                 property var _animationLastUpdatedAt: 0
+                                property string _pendingArcaeaId: ""
                                 property string _pendingThumbnailSource: ""
-                                property bool _pendingAnimationStart: false
+                                property bool _isPinTransitionActive: false
+                                property bool _isCheckPhaseCompleted: false
+                                property bool _isWaitingForThumbnail: false
+                                property bool _exactThumbnailReady: false
+                                property bool _timedOutWaiting: false
+
+                                function _clonePinData(data) {
+                                    var cloned = {}
+                                    if (!data)
+                                        return cloned
+                                    for (var key in data)
+                                        cloned[key] = data[key]
+                                    return cloned
+                                }
+
+                                function _applyDisplayPinData(data) {
+                                    displayPinData = _clonePinData(data)
+                                }
+
+                                function _resolveExactThumbnailSource(arcaeaIdValue) {
+                                    if (!arcaeaIdValue || !statsHandler || !statsHandler.getExactThumbnailPathForDifficulty)
+                                        return ""
+                                    return statsHandler.getExactThumbnailPathForDifficulty(arcaeaIdValue, modelData.code)
+                                }
+
+                                function _refreshPendingThumbnailCandidate() {
+                                    if (!_isPinTransitionActive || !_isWaitingForThumbnail || !_isCheckPhaseCompleted)
+                                        return
+
+                                    var exactSrc = _resolveExactThumbnailSource(_pendingArcaeaId)
+                                    if (exactSrc === "")
+                                        return
+
+                                    _pendingThumbnailSource = exactSrc
+
+                                    if (String(thumbnailNew.source) !== exactSrc) {
+                                        _exactThumbnailReady = false
+                                        thumbnailNew.opacity = 0
+                                        thumbnailNew.source = ""
+                                        thumbnailNew.source = exactSrc
+                                        return
+                                    }
+
+                                    if (thumbnailNew.status === Image.Error) {
+                                        _exactThumbnailReady = false
+                                        thumbnailNew.opacity = 0
+                                        thumbnailNew.source = ""
+                                        return
+                                    }
+
+                                    if (thumbnailNew.status === Image.Ready) {
+                                        _exactThumbnailReady = true
+                                        thumbnailNew.opacity = 1
+                                        _tryStartCrossfade()
+                                    }
+                                }
+
+                                function _tryStartCrossfade() {
+                                    if (!_isPinTransitionActive || !_isCheckPhaseCompleted)
+                                        return
+
+                                    if (!_exactThumbnailReady) {
+                                        if (_isWaitingForThumbnail && !_timedOutWaiting)
+                                            return
+                                        _pendingThumbnailSource = ""
+                                        thumbnailNew.source = ""
+                                        thumbnailNew.opacity = 0
+                                    } else {
+                                        thumbnailNew.opacity = 1
+                                    }
+
+                                    _isPinTransitionActive = false
+                                    _isWaitingForThumbnail = false
+                                    thumbnailWaitPoll.stop()
+                                    thumbnailWaitTimeout.stop()
+                                    crossfadeAnimation.start()
+                                }
+
+                                Component.onCompleted: {
+                                    _applyDisplayPinData(actualPinData)
+                                    _animationLastUpdatedAt = updatedAt
+                                }
 
                                 function _resetPinAnimationVisuals() {
-                                    _pendingAnimationStart = false
+                                    _pendingArcaeaId = ""
                                     _pendingThumbnailSource = ""
-                                    preloadTimeout.stop()
+                                    _isPinTransitionActive = false
+                                    _isCheckPhaseCompleted = false
+                                    _isWaitingForThumbnail = false
+                                    _exactThumbnailReady = false
+                                    _timedOutWaiting = false
+                                    thumbnailWaitPoll.stop()
+                                    thumbnailWaitTimeout.stop()
                                     pinUpdateAnimation.stop()
                                     crossfadeAnimation.stop()
                                     checkOverlay.opacity = 0
@@ -505,52 +598,57 @@ Item {
                                     thumbnailNew.opacity = 0
                                 }
 
-                                function _startPinUpdateAnimation() {
-                                    _pendingAnimationStart = false
+                                function _beginPinUpdateTransition() {
+                                    _pendingArcaeaId = actualPinData.arcaea_id || ""
                                     _pendingThumbnailSource = ""
-                                    preloadTimeout.stop()
+                                    _isPinTransitionActive = true
+                                    _isCheckPhaseCompleted = false
+                                    _isWaitingForThumbnail = _pendingArcaeaId !== ""
+                                    _exactThumbnailReady = false
+                                    _timedOutWaiting = false
+                                    thumbnailWaitTimeout.stop()
+                                    thumbnailWaitPoll.stop()
+                                    thumbnailNew.opacity = 0
+                                    thumbnailNew.source = ""
+
                                     crossfadeAnimation.stop()
                                     pinUpdateAnimation.restart()
                                 }
 
                                 Timer {
-                                    id: preloadTimeout
-                                    interval: 2000
+                                    id: thumbnailWaitPoll
+                                    interval: 250
+                                    repeat: true
+                                    onTriggered: pinRow._refreshPendingThumbnailCandidate()
+                                }
+
+                                Timer {
+                                    id: thumbnailWaitTimeout
+                                    interval: 10000
                                     repeat: false
                                     onTriggered: {
-                                        if (pinRow._pendingAnimationStart)
-                                            pinRow._startPinUpdateAnimation()
+                                        if (!pinRow._isPinTransitionActive || !pinRow._isWaitingForThumbnail)
+                                            return
+                                        pinRow._timedOutWaiting = true
+                                        pinRow._isWaitingForThumbnail = false
+                                        pinRow.thumbnailWaitPoll.stop()
+                                        pinRow._tryStartCrossfade()
                                     }
                                 }
 
                                 onUpdatedAtChanged: {
                                     if (isPlayCountMode) {
                                         _resetPinAnimationVisuals()
-                                        displayPinData = actualPinData
+                                        _applyDisplayPinData(actualPinData)
                                         _animationLastUpdatedAt = updatedAt
                                         return
                                     }
 
                                     if (_animationLastUpdatedAt > 0 && updatedAt > _animationLastUpdatedAt) {
-                                        var newAid = actualPinData.arcaea_id || ""
-                                        var newSrc = (newAid && statsHandler)
-                                            ? statsHandler.getThumbnailPathForDifficulty(newAid, modelData.code) : ""
-
-                                        if (newSrc !== "" && newSrc !== String(thumbnailImg.source)) {
-                                            _pendingThumbnailSource = newSrc
-                                            _pendingAnimationStart = true
-                                            thumbnailNew.opacity = 0
-                                            thumbnailNew.source = ""
-                                            thumbnailNew.source = newSrc
-                                            preloadTimeout.restart()
-                                        } else {
-                                            _startPinUpdateAnimation()
-                                        }
+                                        _beginPinUpdateTransition()
                                     } else {
-                                        _pendingAnimationStart = false
-                                        _pendingThumbnailSource = ""
-                                        preloadTimeout.stop()
-                                        displayPinData = actualPinData
+                                        if (!_isPinTransitionActive)
+                                            _applyDisplayPinData(actualPinData)
                                     }
                                     _animationLastUpdatedAt = updatedAt
                                 }
@@ -583,7 +681,16 @@ Item {
                                         Image {
                                             id: thumbnailImg
                                             anchors.fill: parent
-                                            source: (arcaeaId && statsHandler) ? statsHandler.getThumbnailPathForDifficulty(arcaeaId, modelData.code) : ""
+                                            source: {
+                                                // 바인딩 재평가용 의존성 키:
+                                                // - dataVersion: dataUpdated 시 파일 갱신 신호
+                                                // - chartIdentity: (arcaea_id, difficulty) 차트 단위 식별
+                                                var dataVersion = lastSavedInfoContent.thumbnailDataVersion
+                                                var chartIdentity = pinRow.chartIdentity
+                                                return (pinRow.arcaeaId && statsHandler)
+                                                    ? statsHandler.getThumbnailPathForDifficulty(pinRow.arcaeaId, modelData.code)
+                                                    : ""
+                                            }
                                             visible: true
                                             opacity: status === Image.Ready ? 1 : 0
                                             fillMode: Image.PreserveAspectCrop
@@ -602,12 +709,14 @@ Item {
                                             mipmap: true
                                             sourceSize: Qt.size(64, 64)
                                             onStatusChanged: {
-                                                if (!pinRow._pendingAnimationStart)
+                                                if (!pinRow._isPinTransitionActive || !pinRow._isWaitingForThumbnail)
                                                     return
                                                 if (status === Image.Ready && String(source) === pinRow._pendingThumbnailSource) {
-                                                    pinRow._startPinUpdateAnimation()
-                                                } else if (status === Image.Error) {
-                                                    pinRow._startPinUpdateAnimation()
+                                                    pinRow._exactThumbnailReady = true
+                                                    thumbnailNew.opacity = 1
+                                                    pinRow._tryStartCrossfade()
+                                                } else if (status === Image.Error && String(source) === pinRow._pendingThumbnailSource) {
+                                                    pinRow._exactThumbnailReady = false
                                                 }
                                             }
                                         }
@@ -828,7 +937,17 @@ Item {
                                     // 3. 잠시 대기
                                     PauseAnimation { duration: 500 }
 
-                                    onFinished: crossfadeAnimation.start()
+                                    onFinished: {
+                                        pinRow._isCheckPhaseCompleted = true
+                                        if (pinRow._isWaitingForThumbnail && !pinRow._exactThumbnailReady) {
+                                            if (!thumbnailWaitTimeout.running)
+                                                thumbnailWaitTimeout.restart()
+                                            if (!thumbnailWaitPoll.running)
+                                                thumbnailWaitPoll.start()
+                                            pinRow._refreshPendingThumbnailCandidate()
+                                        }
+                                        pinRow._tryStartCrossfade()
+                                    }
                                 }
 
                                 // Phase 2: 크로스페이드 (독립 타이머로 wall-clock 초과 방지)
@@ -838,7 +957,7 @@ Item {
                                     // 썸네일 페이드인과 동시에 최신 타임스탬프를 반영
                                     ScriptAction {
                                         script: {
-                                            displayPinData = actualPinData
+                                            pinRow._applyDisplayPinData(pinRow.actualPinData)
                                         }
                                     }
 
