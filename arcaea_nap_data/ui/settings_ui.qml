@@ -86,6 +86,10 @@ Window {
                 sheetMgmtCard.lastSynced = settingsHandler.getLastSyncedTime()
             }
         }
+        function onSongDatabaseWriteConflictDetected(message) {
+            songDbWriteConflictText.text = message
+            songDbWriteConflictPopup.open()
+        }
     }
     
     Timer {
@@ -179,6 +183,71 @@ Window {
                 anchors.right: parent.right
                 onClicked: errorPopup.close()
                 background: Rectangle { color: "#F0F0F0"; radius: 6 }
+            }
+        }
+    }
+
+    Popup {
+        id: songDbWriteConflictPopup
+        anchors.centerIn: parent
+        width: 420
+        height: conflictContent.implicitHeight + 40
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            color: "#FFFFFF"
+            radius: 12
+            border.color: "#FB8C00"
+            border.width: 2
+        }
+
+        Column {
+            id: conflictContent
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 12
+
+            Text {
+                text: "⚠ Concurrent Write Risk Detected"
+                font.bold: true
+                font.pixelSize: 16
+                color: "#E65100"
+            }
+
+            Text {
+                id: songDbWriteConflictText
+                width: parent.width
+                wrapMode: Text.WordWrap
+                color: "#333"
+            }
+
+            Row {
+                anchors.right: parent.right
+                spacing: 8
+
+                Basic.Button {
+                    text: "Cancel"
+                    onClicked: songDbWriteConflictPopup.close()
+                    background: Rectangle { color: "#F0F0F0"; radius: 6 }
+                }
+
+                Basic.Button {
+                    text: "Force Update"
+                    onClicked: {
+                        songDbWriteConflictPopup.close()
+                        if (settingsHandler) settingsHandler.forceUpdateSongDatabase()
+                    }
+                    background: Rectangle { color: "#FB8C00"; radius: 6 }
+                    contentItem: Text {
+                        text: "Force Update"
+                        color: "white"
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
             }
         }
     }

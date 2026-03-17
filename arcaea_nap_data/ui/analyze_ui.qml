@@ -6,10 +6,75 @@ import QtQuick.Window
 Item {
     id: analyzeRoot
     anchors.fill: parent
+    property string writeConflictMessage: ""
     readonly property var appWindow: ApplicationWindow.window
     readonly property string titleFontFamily: (appWindow && appWindow.titleFontFamily)
         ? appWindow.titleFontFamily
         : (appWindow ? appWindow.font.family : "")
+
+    Connections {
+        target: analysisHandler
+        function onWriteConflictDetected(message) {
+            analyzeRoot.writeConflictMessage = message
+            writeConflictPopup.open()
+        }
+    }
+
+    Popup {
+        id: writeConflictPopup
+        anchors.centerIn: parent
+        width: 420
+        height: writeConflictContent.implicitHeight + 40
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            color: "#FFFFFF"
+            radius: 12
+            border.color: "#FB8C00"
+            border.width: 2
+        }
+
+        Column {
+            id: writeConflictContent
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 12
+
+            Text {
+                text: "⚠ Concurrent Write Risk Detected"
+                font.bold: true
+                font.pixelSize: 16
+                color: "#E65100"
+            }
+
+            Text {
+                text: analyzeRoot.writeConflictMessage
+                width: parent.width
+                wrapMode: Text.WordWrap
+                color: "#333333"
+            }
+
+            Row {
+                anchors.right: parent.right
+                spacing: 8
+
+                Button {
+                    text: "Cancel"
+                    onClicked: writeConflictPopup.close()
+                }
+
+                Button {
+                    text: "Force Start"
+                    onClicked: {
+                        writeConflictPopup.close()
+                        analysisHandler.startAnalysisForce()
+                    }
+                }
+            }
+        }
+    }
 
     // --- 메인 컨텐츠 영역 ---
     ScrollView {

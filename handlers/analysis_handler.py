@@ -8,6 +8,7 @@ from configuration import config
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant, QUrl
 from web_arcaeaonline import ArcaeaOnline
 from repositories.score_repository import PinRepository
+from services.write_conflict_guard import detect_recent_external_activity
 
 
 def _format_timestamp(ts) -> str:
@@ -28,6 +29,7 @@ class AnalysisHandler(QObject):
     statusChanged = pyqtSignal(str, arguments=['status'])  # Emitted when analysis status changes
     progressChanged = pyqtSignal()  # Emitted when progress data (checked_page/total_page) changes
     sessionReset = pyqtSignal(str, arguments=['message'])  # Emitted when session is auto-reset
+    writeConflictDetected = pyqtSignal(str, arguments=['message'])
 
     def __init__(self):
         super().__init__()
@@ -35,6 +37,7 @@ class AnalysisHandler(QObject):
         self.thread = None
         self._settings_handler = None  # Reference to SettingsHandler
         self._pin_repo = PinRepository()
+        self._force_start_once = False
 
     def set_settings_handler(self, settings_handler):
         """Set reference to SettingsHandler for connection status updates."""
@@ -47,6 +50,19 @@ class AnalysisHandler(QObject):
             if self.analyzer:
                 self.analyzer.bring_to_front()
             return
+
+        if not self._force_start_once:
+            conflict = detect_recent_external_activity("user_scores_db")
+            if conflict:
+                message = (
+                    "Recent write activity to user_scores.db was detected from another client.\n"
+                    f"- host: {conflict.hostname}\n"
+                    f"- operation: {conflict.operation or 'unknown'}\n"
+                    "Force Start may cause data conflicts."
+                )
+                self.writeConflictDetected.emit(message)
+                return
+        self._force_start_once = False
 
         print("Starting analysis thread...")
         # Reuse existing analyzer or create new one
@@ -62,6 +78,11 @@ class AnalysisHandler(QObject):
 
         self.thread = threading.Thread(target=self.analyzer.start, daemon=True)
         self.thread.start()
+
+    @pyqtSlot()
+    def startAnalysisForce(self):
+        self._force_start_once = True
+        self.startAnalysis()
 
     @pyqtSlot()
     def stopAnalysis(self):

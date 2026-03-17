@@ -3,12 +3,19 @@ from configuration import config
 import os
 import threading
 import time
-import json
 from datetime import datetime
-import keyring
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant
 from web_arcaeaonline import ArcaeaOnline
 from song_db_builder import rebuild_songs_db
+from services.connection_store import (
+    STORE_FILENAME as CONNECTION_STORE_FILENAME,
+    load_client_connections,
+    save_client_connections,
+)
+from services.keyring_store import delete_secret
+from services.write_conflict_guard import (
+    detect_recent_external_activity,
+)
 
 
 class SettingsHandler(QObject):
@@ -31,12 +38,12 @@ class SettingsHandler(QObject):
     # Song database update signals
     songDatabaseUpdateStarting = pyqtSignal()
     songDatabaseUpdateFinished = pyqtSignal(bool, str, arguments=['success', 'message'])
+    songDatabaseWriteConflictDetected = pyqtSignal(str, arguments=['message'])
 
     def __init__(self):
         super().__init__()
         self._pending_migration_path = None  # Stores the new path during migration
         self._analyzer = None
-        self._connections_file = os.path.join(config['general']['cache_path'], 'account_connections.json')
         self._is_arcaea_connecting = False
         self._is_binding_sheet = False
         self._is_sending_data = False
@@ -122,7 +129,15 @@ class SettingsHandler(QObject):
         new_abs = os.path.abspath(new_path)
         
         # Data files/folders to migrate
-        data_items = ['ui', 'thumbnails', 'user_scores.db', 'login.dat', 'songs.db', 'token.json', 'client_secret.json']
+        data_items = [
+            'ui',
+            'thumbnails',
+            'user_scores.db',
+            'login.dat',
+            'songs.db',
+            CONNECTION_STORE_FILENAME,
+            'client_secret.json',
+        ]
         
         copied_items = []
         try:
@@ -223,8 +238,27 @@ class SettingsHandler(QObject):
 
     @pyqtSlot()
     def updateSongDatabase(self):
+        self._start_song_database_update(force=False)
+
+    @pyqtSlot()
+    def forceUpdateSongDatabase(self):
+        self._start_song_database_update(force=True)
+
+    def _start_song_database_update(self, force: bool):
         if self._is_updating_song_db:
             return
+
+        if not force:
+            conflict = detect_recent_external_activity("songs_db")
+            if conflict:
+                message = (
+                    "Recent write activity to songs.db was detected from another client.\n"
+                    f"- host: {conflict.hostname}\n"
+                    f"- operation: {conflict.operation or 'unknown'}\n"
+                    "Force Update may cause data conflicts."
+                )
+                self.songDatabaseWriteConflictDetected.emit(message)
+                return
 
         self._is_updating_song_db = True
         self.songDatabaseUpdateStarting.emit()
@@ -514,21 +548,17 @@ class SettingsHandler(QObject):
 
     # --- Account Connections ---
     def _load_connections(self):
-        """Load account connections from JSON file."""
-        if not os.path.exists(self._connections_file):
-            return {}
+        """Load current client account connections."""
         try:
-            with open(self._connections_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            return load_client_connections()
         except Exception as e:
             print(f"[SettingsHandler] Error loading connections: {e}")
             return {}
     
     def _save_connections(self, connections):
-        """Save account connections to JSON file."""
+        """Save current client account connections."""
         try:
-            with open(self._connections_file, 'w', encoding='utf-8') as f:
-                json.dump(connections, f, ensure_ascii=False, indent=2)
+            save_client_connections(connections)
         except Exception as e:
             print(f"[SettingsHandler] Error saving connections: {e}")
     
@@ -673,15 +703,15 @@ class SettingsHandler(QObject):
             
             # Remove sensitive cookies from keyring
             try:
-                keyring.delete_password('ArcaeaNap', 'sid')
+                delete_secret('sid')
             except:
                 pass
             try:
-                keyring.delete_password('ArcaeaNap', '__stripe_sid')
+                delete_secret('__stripe_sid')
             except:
                 pass
             try:
-                keyring.delete_password('ArcaeaNap', '__stripe_mid')
+                delete_secret('__stripe_mid')
             except:
                 pass
             
@@ -751,11 +781,11 @@ class SettingsHandler(QObject):
             
             # Remove sensitive tokens from keyring
             try:
-                keyring.delete_password('ArcaeaNap', 'google_token')
+                delete_secret('google_token')
             except:
                 pass
             try:
-                keyring.delete_password('ArcaeaNap', 'google_refresh_token')
+                delete_secret('google_refresh_token')
             except:
                 pass
             

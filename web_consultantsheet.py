@@ -1,6 +1,5 @@
 import os
 import json
-import keyring
 import threading
 import socket
 import wsgiref.simple_server
@@ -16,6 +15,8 @@ import gspread
 import re
 from repositories.song_repository import init_songs_db, get_connection, resolve_song_id
 from models.types import Difficulty
+from services.connection_store import get_provider, set_provider, remove_provider
+from services.keyring_store import get_secret, set_secret, delete_secret
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -38,17 +39,13 @@ REVERSE_ALIAS_MAP = {
 
 def _get_bound_sheet_id():
     """Get bound sheet ID from account_connections.json, or None if not bound."""
-    connections_filepath = os.path.join(config['general']['cache_path'], 'account_connections.json')
-    if os.path.exists(connections_filepath):
-        try:
-            with open(connections_filepath, 'r', encoding='utf-8') as f:
-                connections = json.load(f)
-                gs_info = connections.get('google_sheet', {})
-                bound_id = gs_info.get('bound_sheet_id', '')
-                if bound_id:
-                    return bound_id
-        except Exception:
-            pass
+    try:
+        gs_info = get_provider('google_sheet')
+        bound_id = gs_info.get('bound_sheet_id', '')
+        if bound_id:
+            return bound_id
+    except Exception:
+        pass
     return None
 
 
@@ -785,7 +782,6 @@ def title_for_wiki(name):
     return match.group(1), match.group(2)
 
 def get_creds(cancellation_context=None, interactive=True):
-    connections_filepath = os.path.join(config['general']['cache_path'], 'account_connections.json')
     secret_filename = 'client_secret.json'
     secret_filepath = os.path.join(config['general']['cache_path'], secret_filename)
     
@@ -793,46 +789,43 @@ def get_creds(cancellation_context=None, interactive=True):
     token_data = None
     
     # Load token from account_connections.json
-    if os.path.exists(connections_filepath):
-        try:
-            with open(connections_filepath, 'r', encoding='utf-8') as f:
-                connections = json.load(f)
-                gs_info = connections.get('google_sheet', {})
-                if gs_info.get('connected', False) and 'token' in gs_info:
-                    token_data = gs_info['token'].copy()
-                    
-                    # Restore sensitive data from keyring
-                    token_data['token'] = keyring.get_password('ArcaeaNap', 'google_token') or ''
-                    token_data['refresh_token'] = keyring.get_password('ArcaeaNap', 'google_refresh_token') or ''
-                    
-                    # Read client_secret from client_secret.json (canonical source)
-                    try:
-                        with open(secret_filepath, 'r') as f:
-                            secret_data = json.load(f)
-                        installed = secret_data.get('installed', secret_data.get('web', {}))
-                        token_data['client_secret'] = installed.get('client_secret', '')
-                    except Exception:
-                        token_data['client_secret'] = ''
-                    
-                    # Create Credentials object
-                    try:
-                        creds = Credentials.from_authorized_user_info(token_data, SCOPES)
-                    except Exception as e:
-                        print(f"Error creating credentials from saved token: {e}")
-                        creds = None
-        except Exception as e:
-            print(f"Error loading connections: {e}")
+    try:
+        gs_info = get_provider('google_sheet')
+        if gs_info.get('connected', False) and 'token' in gs_info:
+            token_data = gs_info['token'].copy()
+            
+            # Restore sensitive data from keyring
+            token_data['token'] = get_secret('google_token') or ''
+            token_data['refresh_token'] = get_secret('google_refresh_token') or ''
+            
+            # Read client_secret from client_secret.json (canonical source)
+            try:
+                with open(secret_filepath, 'r') as f:
+                    secret_data = json.load(f)
+                installed = secret_data.get('installed', secret_data.get('web', {}))
+                token_data['client_secret'] = installed.get('client_secret', '')
+            except Exception:
+                token_data['client_secret'] = ''
+            
+            # Create Credentials object
+            try:
+                creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+            except Exception as e:
+                print(f"Error creating credentials from saved token: {e}")
+                creds = None
+    except Exception as e:
+        print(f"Error loading connections: {e}")
     
     if creds and creds.expired and creds.refresh_token:
         try:
             creds.refresh(Request())
             # Save refreshed token
-            _save_google_credentials(creds, connections_filepath)
+            _save_google_credentials(creds)
         except Exception as e:
             print(f"Token refresh failed: {e}")
             # Clear the expired/revoked credentials so the app doesn't
             # keep retrying with a dead token on every startup.
-            _clear_google_credentials(connections_filepath)
+            _clear_google_credentials()
             creds = None
     
     if not creds or not creds.valid:
@@ -850,11 +843,11 @@ def get_creds(cancellation_context=None, interactive=True):
         
         if creds:
             # Save credentials
-            _save_google_credentials(creds, connections_filepath)
+            _save_google_credentials(creds)
     
     return creds
 
-def _clear_google_credentials(connections_filepath):
+def _clear_google_credentials():
     """Clear expired/revoked Google credentials from account_connections.json and keyring.
     
     Called when token refresh fails (e.g. invalid_grant) to prevent the app from
@@ -866,31 +859,20 @@ def _clear_google_credentials(connections_filepath):
     try:
         # Remove tokens from keyring
         try:
-            keyring.delete_password('ArcaeaNap', 'google_token')
+            delete_secret('google_token')
         except Exception:
             pass
         try:
-            keyring.delete_password('ArcaeaNap', 'google_refresh_token')
+            delete_secret('google_refresh_token')
         except Exception:
             pass
         
-        # Remove entire google_sheet section from account_connections.json
-        # (same as manual disconnect — clears bound sheet info as well)
-        if os.path.exists(connections_filepath):
-            try:
-                with open(connections_filepath, 'r', encoding='utf-8') as f:
-                    connections = json.load(f)
-                if 'google_sheet' in connections:
-                    del connections['google_sheet']
-                with open(connections_filepath, 'w', encoding='utf-8') as f:
-                    json.dump(connections, f, ensure_ascii=False, indent=2)
-                print("[GoogleAuth] Expired credentials cleared.")
-            except Exception as e:
-                print(f"[GoogleAuth] Error updating connections file: {e}")
+        remove_provider('google_sheet')
+        print("[GoogleAuth] Expired credentials cleared.")
     except Exception as e:
         print(f"[GoogleAuth] Error clearing credentials: {e}")
 
-def _save_google_credentials(creds, connections_filepath):
+def _save_google_credentials(creds):
     """Save Google credentials to account_connections.json."""
     print("[GoogleAuth] Saving credentials...")
     try:
@@ -915,40 +897,27 @@ def _save_google_credentials(creds, connections_filepath):
         # Save sensitive data to keyring
         print("[GoogleAuth] Saving to keyring...")
         if 'token' in token_info:
-            try: keyring.set_password('ArcaeaNap', 'google_token', token_info['token'])
+            try: set_secret('google_token', token_info['token'])
             except Exception as e: print(f"[GoogleAuth] Keyring error (token): {e}")
             token_info['token'] = ''
         if 'refresh_token' in token_info:
-            try: keyring.set_password('ArcaeaNap', 'google_refresh_token', token_info['refresh_token'])
+            try: set_secret('google_refresh_token', token_info['refresh_token'])
             except Exception as e: print(f"[GoogleAuth] Keyring error (refresh_token): {e}")
             token_info['refresh_token'] = ''
         # client_secret is available in client_secret.json; just blank it from token_info
         if 'client_secret' in token_info:
             token_info['client_secret'] = ''
         
-        # Load existing connections or create new
-        connections = {}
-        if os.path.exists(connections_filepath):
-            try:
-                with open(connections_filepath, 'r', encoding='utf-8') as f:
-                    connections = json.load(f)
-            except Exception:
-                pass
-        
         # Update google_sheet section (merge to preserve bound_sheet_id/name)
         import time
-        gs_info = connections.get('google_sheet', {})
+        gs_info = get_provider('google_sheet')
         gs_info.update({
             'connected': True,
             'connected_at': int(time.time()),
             'user_email': user_email,
             'token': token_info
         })
-        connections['google_sheet'] = gs_info
-        
-        print(f"[GoogleAuth] Writing to {connections_filepath}...")
-        with open(connections_filepath, 'w', encoding='utf-8') as f:
-            json.dump(connections, f, ensure_ascii=False, indent=2)
+        set_provider('google_sheet', gs_info)
         print("[GoogleAuth] Credentials saved successfully.")
         
     except Exception as e:

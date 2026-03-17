@@ -1,9 +1,7 @@
 """Profile 핸들러: account_connections.json에서 프로필 데이터 로드."""
-import os
-import json
-from configuration import config
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant
 from models.constants import POTENTIAL_GRADES, DEFAULT_POTENTIAL_COLOR
+from services.connection_store import load_client_connections
 
 
 class ProfileHandler(QObject):
@@ -12,17 +10,12 @@ class ProfileHandler(QObject):
 
     def __init__(self):
         super().__init__()
-        self._connections_file = os.path.join(
-            config['general']['cache_path'], 'account_connections.json'
-        )
 
     def _load_connections(self):
-        if not os.path.exists(self._connections_file):
-            return {}
         try:
-            with open(self._connections_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
+            return load_client_connections()
+        except Exception as e:
+            print(f"[ProfileHandler] Error loading connections: {e}")
             return {}
 
     @staticmethod

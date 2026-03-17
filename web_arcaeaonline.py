@@ -9,8 +9,6 @@ from repositories.song_repository import (
 from repositories.score_repository import ScoreRepository, PlayCountRepository, PinRepository
 import sqlite3
 import pandas as pd
-import keyring
-import json
 import time
 import os
 import re
@@ -23,6 +21,9 @@ from dataclasses import dataclass, field
 from collections import deque
 from typing import Dict, Optional, Set
 from models.types import Difficulty
+from services.connection_store import get_provider, set_provider
+from services.keyring_store import get_secret, set_secret
+from services.write_conflict_guard import mark_write_activity, clear_write_activity
 
 VUE_COMPONENT_SELECTOR = "#app > section > div:nth-child(3)"
 LOGIN_COMPONENT_SELECTOR = ".button.login-button"
@@ -124,7 +125,6 @@ class ArcaeaOnline:
         self.thumbnail_collector = ThumbnailCollector()
         
         # Repository instances
-        self.db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
         self._score_repo = ScoreRepository()
         self._play_count_repo = PlayCountRepository()
         self._pin_repo = PinRepository()
@@ -163,13 +163,17 @@ class ArcaeaOnline:
         # Initialize pin_updates from database
         self._load_pin_updates_from_db()
 
+    @property
+    def db_path(self):
+        return os.path.join(config['general']['cache_path'], 'user_scores.db')
+
     def _load_pin_updates_from_db(self):
         """Load pin update timestamps from database on startup."""
         try:
             if not os.path.exists(self.db_path):
                 return
             
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(self.db_path, timeout=10) as conn:
                 cursor = conn.cursor()
                 pin_updates = self._pin_repo.get_all_pin_updates(cursor)
                 self.status.pin_updates.update(pin_updates)
@@ -250,6 +254,7 @@ class ArcaeaOnline:
         self.status.is_running = True
         self.status.status = 'login'
         self.notify_status_changed()
+        mark_write_activity("user_scores_db", "analysis_session")
         
         lang = 'ko'
         url = f'https://arcaea.lowiro.com/{lang}/profile/scores?page=1'
@@ -374,11 +379,13 @@ class ArcaeaOnline:
         self.status.is_running = False
         self.status.status = 'closed'
         self.notify_status_changed()
+        clear_write_activity("user_scores_db")
 
     def stop(self):
         self.status.is_running = False
         self.status.status = 'closed'
         self.notify_status_changed()
+        clear_write_activity("user_scores_db")
         
         try:
             if self.page:
@@ -528,21 +535,16 @@ class ArcaeaOnline:
         if not hasattr(self, '_browser_closed'):
             self._browser_closed = False
 
-        # check login session from account_connections.json
-        connections_filepath = os.path.join(config['general']['cache_path'], 'account_connections.json')
         login_exists = False
         login_cookies = []
         
-        if os.path.exists(connections_filepath):
-            try:
-                with open(connections_filepath, 'r', encoding='utf-8') as f:
-                    connections = json.load(f)
-                    ao_info = connections.get('arcaea_online', {})
-                    if ao_info.get('connected', False) and 'cookies' in ao_info:
-                        login_exists = True
-                        login_cookies = ao_info['cookies']
-            except Exception as e:
-                self.log(f'Error loading connections: {e}')
+        try:
+            ao_info = get_provider('arcaea_online')
+            if ao_info.get('connected', False) and isinstance(ao_info.get('cookies'), list):
+                login_exists = True
+                login_cookies = ao_info['cookies']
+        except Exception as e:
+            self.log(f'Error loading connections: {e}')
         
         if login_exists: # session load
             self.log("Loading saved login session...")
@@ -570,11 +572,11 @@ class ArcaeaOnline:
                     # 민감한 쿠키는 keyring에서 가져오기
                     match cookie['name']:
                         case 'sid':
-                            pw_cookie['value'] = keyring.get_password('ArcaeaNap', 'sid') or ''
+                            pw_cookie['value'] = get_secret('sid') or ''
                         case '__stripe_sid':
-                            pw_cookie['value'] = keyring.get_password('ArcaeaNap', '__stripe_sid') or ''
+                            pw_cookie['value'] = get_secret('__stripe_sid') or ''
                         case '__stripe_mid':
-                            pw_cookie['value'] = keyring.get_password('ArcaeaNap', '__stripe_mid') or ''
+                            pw_cookie['value'] = get_secret('__stripe_mid') or ''
                     
                     playwright_cookies.append(pw_cookie)
                 except Exception as e:
@@ -616,7 +618,7 @@ class ArcaeaOnline:
                 if result == "verified":
                     self.log("Login session verified.")
                     # Update profile from Vue even on session load
-                    self._update_profile_from_vue(connections_filepath)
+                    self._update_profile_from_vue()
                 else:
                     self.log("Login session expired.")
                     login_exists = False
@@ -672,24 +674,15 @@ class ArcaeaOnline:
                     continue
                     
                 if cookie['name'] in LOGIN_COOKIE:
-                    keyring.set_password('ArcaeaNap', cookie['name'], cookie['value'])
+                    set_secret(cookie['name'], cookie['value'])
                     cookie['value'] = ''
                 elif not any(name in cookie['name'] for name in SUB_COOKIE):
                     continue
                 
                 cookies.append({k: v for k, v in cookie.items() if k in COOKIE_ESSENTIAL_FIELDS})
             
-            # Load existing connections or create new
-            connections = {}
-            if os.path.exists(connections_filepath):
-                try:
-                    with open(connections_filepath, 'r', encoding='utf-8') as f:
-                        connections = json.load(f)
-                except Exception:
-                    pass
-            
             # Update arcaea_online section
-            connections['arcaea_online'] = {
+            ao_payload = {
                 'connected': True,
                 'connected_at': int(time.time()),
                 'name': auth_user.get('name', ''),
@@ -699,11 +692,11 @@ class ArcaeaOnline:
                 'user_code': auth_user.get('user_code', ''),
                 'cookies': cookies
             }
-            
-            with open(connections_filepath, 'w', encoding='utf-8') as f:
-                json.dump(connections, f, ensure_ascii=False, indent=2)
-
-            self.log("Login session saved.")
+            try:
+                set_provider('arcaea_online', ao_payload)
+                self.log("Login session saved.")
+            except Exception as e:
+                self.log(f"Failed to save login session: {e}")
             
             # Notify that login is completed (for updating settings/profile UI)
             if self.login_completed_callback:
@@ -734,7 +727,7 @@ class ArcaeaOnline:
             self.log(f'Could not extract authUser: {e}')
         return auth_user
 
-    def _update_profile_from_vue(self, connections_filepath: str):
+    def _update_profile_from_vue(self):
         """Vue에서 최신 프로필 데이터를 추출하여 account_connections.json의 프로필 필드만 갱신합니다.
         
         cookies 등 기존 세션 데이터는 유지하고, name/user_id/rating/join_date/user_code만 업데이트합니다.
@@ -744,12 +737,7 @@ class ArcaeaOnline:
             return
         
         try:
-            connections = {}
-            if os.path.exists(connections_filepath):
-                with open(connections_filepath, 'r', encoding='utf-8') as f:
-                    connections = json.load(f)
-            
-            ao_info = connections.get('arcaea_online', {})
+            ao_info = get_provider('arcaea_online')
             
             # 프로필 필드만 업데이트 (cookies, connected, connected_at 등은 유지)
             ao_info['name'] = auth_user.get('name', '')
@@ -758,10 +746,7 @@ class ArcaeaOnline:
             ao_info['join_date'] = auth_user.get('join_date')
             ao_info['user_code'] = auth_user.get('user_code', '')
             
-            connections['arcaea_online'] = ao_info
-            
-            with open(connections_filepath, 'w', encoding='utf-8') as f:
-                json.dump(connections, f, ensure_ascii=False, indent=2)
+            set_provider('arcaea_online', ao_info)
             
             self.log("Profile data updated.")
             
@@ -836,7 +821,7 @@ class ArcaeaOnline:
             
             pin_id = self.get_pin_id(difficulty)
             if pin_id:
-                with sqlite3.connect(self.db_path) as conn:
+                with sqlite3.connect(self.db_path, timeout=10) as conn:
                     cursor = conn.cursor()
                     self._check_pin_in_page(cursor, pin_id, page_data)
             else:
@@ -853,7 +838,8 @@ class ArcaeaOnline:
         
         # 3. DB 저장
         
-        with sqlite3.connect(self.db_path) as conn:
+        mark_write_activity("user_scores_db", "analysis_save")
+        with sqlite3.connect(self.db_path, timeout=10) as conn:
             cursor = conn.cursor()
             self._pin_notify_pending = False
             
@@ -1337,7 +1323,7 @@ class ArcaeaOnline:
 
     def get_pin_id(self, difficulty) -> int | None:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(self.db_path, timeout=10) as conn:
                 cursor = conn.cursor()
                 pin_id = self._pin_repo.get_pin(cursor, difficulty)
                 conn.commit()  # get_pin may INSERT if row is None
