@@ -5,7 +5,7 @@ songs/charts 테이블의 스키마 관리, 레코드 CRUD, 타이틀 해석 기
 """
 import sqlite3
 import os
-from configuration import config
+from utils.configuration import config
 
 # === 상수 ===
 

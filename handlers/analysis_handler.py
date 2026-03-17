@@ -4,9 +4,9 @@ import random
 import sqlite3
 import threading
 from datetime import datetime
-from configuration import config
+from utils.configuration import config
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant, QUrl
-from web_arcaeaonline import ArcaeaOnline
+from utils.web_arcaeaonline import ArcaeaOnline
 from repositories.score_repository import PinRepository
 from services.write_conflict_guard import detect_recent_external_activity
 

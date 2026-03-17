@@ -3,7 +3,7 @@ import os
 
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant
 
-from configuration import config
+from utils.configuration import config
 from models.constants import DIFFICULTY_ORDER, DIFFICULTY_NAMES, DIFFICULTY_COLORS
 from services.score_query_service import play_stats_total, play_stats_difficulty, get_top_10_most_played
 from services.thumbnail_service import ThumbnailService

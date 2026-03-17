@@ -1,12 +1,12 @@
 """Settings 탭 핸들러: 설정 관리, 계정 연동, 시트 관리, Song DB 업데이트, 프로필."""
-from configuration import config
+from utils.configuration import config
 import os
 import threading
 import time
 from datetime import datetime
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant
-from web_arcaeaonline import ArcaeaOnline
-from song_db_builder import rebuild_songs_db
+from utils.web_arcaeaonline import ArcaeaOnline
+from utils.song_db_builder import rebuild_songs_db
 from services.connection_store import (
     STORE_FILENAME as CONNECTION_STORE_FILENAME,
     load_client_connections,
@@ -308,7 +308,7 @@ class SettingsHandler(QObject):
         self.sheetVersionsChanged.emit()
 
         print("[SettingsHandler] Fetching sheet versions...")
-        from web_consultantsheet import get_sheet_version_info
+        from utils.web_consultantsheet import get_sheet_version_info
         versions = get_sheet_version_info()
         print(f"[SettingsHandler] Sheet versions fetched: {versions}")
 
@@ -358,7 +358,7 @@ class SettingsHandler(QObject):
 
         def _bind():
             try:
-                from web_consultantsheet import run_google_picker, CancellationContext
+                from utils.web_consultantsheet import run_google_picker, CancellationContext
                 self._bind_cancellation_context = CancellationContext()
                 
                 result = run_google_picker(self._bind_cancellation_context)
@@ -434,7 +434,7 @@ class SettingsHandler(QObject):
 
         def _send():
             try:
-                from web_consultantsheet import send_scores_to_sheet, CancellationContext
+                from utils.web_consultantsheet import send_scores_to_sheet, CancellationContext
                 self._send_cancellation_context = CancellationContext()
                 
                 connections = self._load_connections()
@@ -644,7 +644,7 @@ class SettingsHandler(QObject):
                 
                 # Initialize browser and login
                 from playwright.sync_api import sync_playwright
-                from browser_utils import get_browser
+                from utils.browser_utils import get_browser
                 
                 temp_analyzer.playwright = sync_playwright().start()
                 temp_analyzer.browser = get_browser(temp_analyzer.playwright, headless=False)
@@ -734,7 +734,7 @@ class SettingsHandler(QObject):
 
         def _connect():
             try:
-                from web_consultantsheet import get_creds, CancellationContext
+                from utils.web_consultantsheet import get_creds, CancellationContext
                 
                 ctx = CancellationContext()
                 self._google_cancellation_context = ctx

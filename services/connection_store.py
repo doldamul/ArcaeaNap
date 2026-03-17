@@ -7,7 +7,7 @@ import os
 import uuid
 from typing import Any
 
-from configuration import config
+from utils.configuration import config
 from services.client_identity import get_client_key
 
 STORE_FILENAME = "account_connections.json"

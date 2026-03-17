@@ -6,8 +6,8 @@ from PyQt6.QtGui import QGuiApplication, QSurfaceFormat
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtCore import QUrl
 
-from app_fonts import register_embedded_fonts
-from configuration import config
+from utils.app_fonts import register_embedded_fonts
+from utils.configuration import config
 from handlers.startup_handler import StartupHandler
 from handlers.analysis_handler import AnalysisHandler
 from handlers.stats_handler import StatsHandler

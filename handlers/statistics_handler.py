@@ -1,7 +1,7 @@
 """Statistics 탭 핸들러: QML 브릿지, UI 상태 관리."""
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, pyqtProperty, QVariant
 
-from configuration import config
+from utils.configuration import config
 from models.constants import SCORE_RANKS
 from services.statistics_service import StatisticsService, FilterParams
 from handlers.statistics_list_model import StatisticsListModel

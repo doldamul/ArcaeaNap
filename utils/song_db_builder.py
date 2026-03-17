@@ -2,8 +2,8 @@
 import os
 
 from repositories.song_repository import get_db_path
-from web_consultantsheet import open_sheet
-from web_wiki import open_wiki
+from utils.web_consultantsheet import open_sheet
+from utils.web_wiki import open_wiki
 from services.write_conflict_guard import mark_write_activity, clear_write_activity
 
 

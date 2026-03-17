@@ -3,7 +3,7 @@ import os
 import threading
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal
 from repositories.song_repository import get_db_path
-from song_db_builder import rebuild_songs_db
+from utils.song_db_builder import rebuild_songs_db
 
 
 class StartupHandler(QObject):

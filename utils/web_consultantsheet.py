@@ -10,7 +10,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-from configuration import config
+from utils.configuration import config
 import gspread
 import re
 from repositories.song_repository import init_songs_db, get_connection, resolve_song_id

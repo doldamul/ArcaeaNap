@@ -1,5 +1,5 @@
-from configuration import config
-from disrupt import block_pointer_events, restore_pointer_events
+from utils.configuration import config
+from utils.disrupt import block_pointer_events, restore_pointer_events
 from repositories.song_repository import (
     get_connection,
     resolve_song_id_for_ao,
@@ -15,7 +15,7 @@ import re
 import base64
 from datetime import datetime, timezone
 from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext, TimeoutError as PlaywrightTimeout
-from browser_utils import get_browser
+from utils.browser_utils import get_browser
 from enum import IntEnum
 from dataclasses import dataclass, field
 from collections import deque

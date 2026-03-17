@@ -8,7 +8,7 @@ import time
 import uuid
 from dataclasses import dataclass
 
-from configuration import config
+from utils.configuration import config
 from services.client_identity import get_client_key
 
 SESSION_ID = uuid.uuid4().hex
