@@ -27,6 +27,10 @@ build_options = {
         "googleapiclient",
         "gspread",
         "keyring",
+        "win32ctypes",
+    ],
+    "includes": [
+        "win32timezone",
     ],
     "excludes": [
         "pytest",

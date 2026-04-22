@@ -28,6 +28,19 @@ def _get_driver_command() -> tuple[list[str], dict]:
     return cmd, env
 
 
+def _init_playwright_env():
+    """애플리케이션 전역에서 Playwright가 로컬 브라우저 경로를 사용하도록 환경 변수를 설정한다."""
+    try:
+        _, env = _get_driver_command()
+        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = env["PLAYWRIGHT_BROWSERS_PATH"]
+    except Exception:
+        pass
+
+
+# 모듈 로드 시 즉시 환경 변수 설정
+_init_playwright_env()
+
+
 def is_browser_installed(browser: str = "chromium") -> bool:
     """지정된 브라우저 바이너리가 설치되어 있는지 확인한다.
 
