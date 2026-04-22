@@ -912,6 +912,86 @@ Window {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
 
+                    // Browser Setup
+                    Text { text: "Browser"; font.bold: true; color: "#333" }
+
+                    Rectangle {
+                        id: browserSetupCard
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: browserSetupLayout.implicitHeight + 30
+                        radius: 10
+                        color: browserSetupCard.installed ? "#E8F5E9" : "#FFF3E0"
+                        border.color: browserSetupCard.installed ? "#A5D6A7" : "#FFCC80"
+                        border.width: 1
+
+                        property bool installed: settingsHandler ? settingsHandler.isBrowserInstalled() : false
+                        property bool installing: settingsHandler ? settingsHandler.isInstallingBrowser() : false
+
+                        Connections {
+                            target: settingsHandler
+                            function onBrowserInstallStatusChanged() {
+                                browserSetupCard.installed = settingsHandler.isBrowserInstalled()
+                                browserSetupCard.installing = settingsHandler.isInstallingBrowser()
+                            }
+                        }
+
+                        ColumnLayout {
+                            id: browserSetupLayout
+                            anchors.fill: parent
+                            anchors.margins: 15
+                            spacing: 10
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 10
+
+                                Column {
+                                    spacing: 2
+                                    Text {
+                                        text: browserSetupCard.installed ? "Chromium Installed" : "Chromium Not Installed"
+                                        font.bold: true
+                                        color: browserSetupCard.installed ? "#2E7D32" : "#E65100"
+                                    }
+                                    Text {
+                                        text: browserSetupCard.installed
+                                            ? "Browser is ready for analysis"
+                                            : "Required for Arcaea Online analysis"
+                                        font.pixelSize: 11
+                                        color: browserSetupCard.installed ? "#4CAF50" : "#FF9800"
+                                    }
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                Basic.Button {
+                                    id: installBrowserBtn
+                                    text: {
+                                        if (browserSetupCard.installing) return "Installing..."
+                                        return browserSetupCard.installed ? "Reinstall" : "Install"
+                                    }
+                                    enabled: !browserSetupCard.installing
+                                    onClicked: if (settingsHandler) settingsHandler.installBrowser()
+                                    background: Rectangle {
+                                        color: {
+                                            if (!installBrowserBtn.enabled) return "#B0BEC5"
+                                            return installBrowserBtn.down ? "#E65100" : "#FF9800"
+                                        }
+                                        radius: 6
+                                    }
+                                    contentItem: Text {
+                                        text: installBrowserBtn.text
+                                        color: "white"
+                                        font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+
                     // Analyze Mode Toggle
                     RowLayout {
                         Layout.fillWidth: true
