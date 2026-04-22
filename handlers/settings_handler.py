@@ -39,6 +39,10 @@ class SettingsHandler(QObject):
     songDatabaseUpdateStarting = pyqtSignal()
     songDatabaseUpdateFinished = pyqtSignal(bool, str, arguments=['success', 'message'])
     songDatabaseWriteConflictDetected = pyqtSignal(str, arguments=['message'])
+    
+    # Browser setup signals
+    browserInstallStatusChanged = pyqtSignal()
+    browserInstallLogAdded = pyqtSignal(str, arguments=['message'])
 
     def __init__(self):
         super().__init__()
@@ -53,6 +57,8 @@ class SettingsHandler(QObject):
         self._send_cancellation_context = None
         self._arcaea_login_instance = None
         self._sheet_versions = self._load_sheet_versions()
+        self._is_installing_browser = False
+        self._browser_installed = None
 
     def set_analyzer(self, analyzer):
         """Connect to ArcaeaOnline instance for play count mode control."""
@@ -792,3 +798,50 @@ class SettingsHandler(QObject):
             self.sheetBindingChanged.emit()
         except Exception as e:
             print(f"[SettingsHandler] Error disconnecting Google Sheet: {e}")
+
+    # --- Browser Setup ---
+    @pyqtSlot(result=bool)
+    def isBrowserInstalled(self):
+        """Check if Playwright browser is installed."""
+        if self._browser_installed is None:
+            from services.browser_bootstrap import is_browser_installed
+            self._browser_installed = is_browser_installed()
+        return self._browser_installed
+
+    @pyqtSlot(result=bool)
+    def isInstallingBrowser(self):
+        return self._is_installing_browser
+
+    @pyqtSlot()
+    def installBrowser(self):
+        """Install Playwright Chromium browser in background thread."""
+        if self._is_installing_browser:
+            return
+
+        self._is_installing_browser = True
+        self.browserInstallStatusChanged.emit()
+
+        def worker():
+            from services.browser_bootstrap import install_browser
+            try:
+                success, message = install_browser(
+                    browser="chromium",
+                    on_output=lambda line: self.browserInstallLogAdded.emit(line),
+                )
+                self._browser_installed = success
+                if not success:
+                    self.browserInstallLogAdded.emit(f"Error: {message}")
+            except Exception as e:
+                self._browser_installed = False
+                self.browserInstallLogAdded.emit(f"Error: {e}")
+            finally:
+                self._is_installing_browser = False
+                self.browserInstallStatusChanged.emit()
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    @pyqtSlot()
+    def recheckBrowser(self):
+        """Force re-check browser installation status."""
+        self._browser_installed = None
+        self.browserInstallStatusChanged.emit()
