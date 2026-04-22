@@ -18,6 +18,9 @@ Item {
             analyzeRoot.writeConflictMessage = message
             writeConflictPopup.open()
         }
+        function onBrowserNotInstalled() {
+            browserNotInstalledPopup.open()
+        }
     }
 
     Popup {
@@ -70,6 +73,66 @@ Item {
                     onClicked: {
                         writeConflictPopup.close()
                         analysisHandler.startAnalysisForce()
+                    }
+                }
+            }
+        }
+    }
+
+    Popup {
+        id: browserNotInstalledPopup
+        anchors.centerIn: parent
+        width: 420
+        height: browserNotInstalledContent.implicitHeight + 40
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            color: "#FFFFFF"
+            radius: 12
+            border.color: "#E65100"
+            border.width: 2
+        }
+
+        Column {
+            id: browserNotInstalledContent
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 12
+
+            Text {
+                text: "⚠ Browser Not Installed"
+                font.bold: true
+                font.pixelSize: 16
+                color: "#E65100"
+            }
+
+            Text {
+                text: "Playwright Chromium browser is required for analysis.\nPlease install it from the Settings tab before starting."
+                width: parent.width
+                wrapMode: Text.WordWrap
+                color: "#333333"
+            }
+
+            Row {
+                anchors.right: parent.right
+                spacing: 8
+
+                Button {
+                    text: "Close"
+                    onClicked: browserNotInstalledPopup.close()
+                }
+
+                Button {
+                    text: "Go to Settings"
+                    onClicked: {
+                        browserNotInstalledPopup.close()
+                        if (analyzeRoot.appWindow && analyzeRoot.appWindow.settingsWindow) {
+                            analyzeRoot.appWindow.settingsWindow.show()
+                            analyzeRoot.appWindow.settingsWindow.raise()
+                            analyzeRoot.appWindow.settingsWindow.requestActivate()
+                        }
                     }
                 }
             }

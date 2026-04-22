@@ -30,6 +30,7 @@ class AnalysisHandler(QObject):
     progressChanged = pyqtSignal()  # Emitted when progress data (checked_page/total_page) changes
     sessionReset = pyqtSignal(str, arguments=['message'])  # Emitted when session is auto-reset
     writeConflictDetected = pyqtSignal(str, arguments=['message'])
+    browserNotInstalled = pyqtSignal()  # Emitted when browser is not found
 
     def __init__(self):
         super().__init__()
@@ -49,6 +50,12 @@ class AnalysisHandler(QObject):
             print("Analysis already running, bringing browser to front...")
             if self.analyzer:
                 self.analyzer.bring_to_front()
+            return
+
+        # Check browser installation before starting
+        from services.browser_bootstrap import is_browser_installed
+        if not is_browser_installed():
+            self.browserNotInstalled.emit()
             return
 
         if not self._force_start_once:
