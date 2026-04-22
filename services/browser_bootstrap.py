@@ -18,10 +18,14 @@ def _get_driver_command() -> tuple[list[str], dict]:
     if isinstance(driver_executable, tuple):
         node_exe, cli_js = driver_executable
         cmd = [str(node_exe), str(cli_js)]
+        local_browsers_dir = os.path.join(os.path.dirname(str(cli_js)), ".local-browsers")
     else:
         cmd = [str(driver_executable)]
+        local_browsers_dir = os.path.join(os.path.dirname(str(driver_executable)), "package", ".local-browsers")
         
-    return cmd, get_driver_env()
+    env = get_driver_env()
+    env["PLAYWRIGHT_BROWSERS_PATH"] = local_browsers_dir
+    return cmd, env
 
 
 def is_browser_installed(browser: str = "chromium") -> bool:
