@@ -16,6 +16,8 @@ build_options = {
         "PyQt6.QtQuick",
         "PyQt6.QtNetwork",
         "playwright",
+        "playwright._impl",
+        "playwright.driver",
         "pandas",
         "requests",
         "bs4",
