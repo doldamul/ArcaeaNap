@@ -6,8 +6,7 @@ from PyQt6.QtGui import QGuiApplication, QSurfaceFormat
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtCore import QUrl
 
-from utils.app_fonts import register_embedded_fonts
-from utils.configuration import config
+from utils.app_fonts import register_embedded_fonts, get_app_root
 from handlers.startup_handler import StartupHandler
 from handlers.analysis_handler import AnalysisHandler
 from handlers.stats_handler import StatsHandler
@@ -23,7 +22,7 @@ def main():
     QSurfaceFormat.setDefaultFormat(fmt)
 
     app = QGuiApplication(sys.argv)
-    qml_font_context = register_embedded_fonts(config['general']['cache_path'])
+    qml_font_context = register_embedded_fonts()
 
     print("Arcaea Nap v0.1")
 
@@ -57,7 +56,7 @@ def main():
     settings_handler.arcaeaOnlineConnectionChanged.connect(profile_handler.refreshProfile)
 
     qml_filename = "main.qml"
-    qml_filepath = os.path.join(config['general']['cache_path'], 'ui', qml_filename)
+    qml_filepath = os.path.join(get_app_root(), 'ui', qml_filename)
 
     engine.load(QUrl.fromLocalFile(qml_filepath))
 

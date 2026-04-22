@@ -130,7 +130,6 @@ class SettingsHandler(QObject):
         
         # Data files/folders to migrate
         data_items = [
-            'ui',
             'thumbnails',
             'user_scores.db',
             'login.dat',
