@@ -926,12 +926,19 @@ Window {
 
                         property bool installed: settingsHandler ? settingsHandler.isBrowserInstalled() : false
                         property bool installing: settingsHandler ? settingsHandler.isInstallingBrowser() : false
+                        property string installLog: ""
 
                         Connections {
                             target: settingsHandler
                             function onBrowserInstallStatusChanged() {
                                 browserSetupCard.installed = settingsHandler.isBrowserInstalled()
                                 browserSetupCard.installing = settingsHandler.isInstallingBrowser()
+                                if (!browserSetupCard.installing) {
+                                    browserSetupCard.installLog = ""
+                                }
+                            }
+                            function onBrowserInstallLogAdded(message) {
+                                browserSetupCard.installLog = message
                             }
                         }
 
@@ -986,6 +993,16 @@ Window {
                                         verticalAlignment: Text.AlignVCenter
                                     }
                                 }
+                            }
+
+                            // Log output
+                            Text {
+                                visible: browserSetupCard.installing && browserSetupCard.installLog !== ""
+                                Layout.fillWidth: true
+                                text: browserSetupCard.installLog
+                                font.pixelSize: 11
+                                color: "#666666"
+                                elide: Text.ElideRight
                             }
                         }
                     }
