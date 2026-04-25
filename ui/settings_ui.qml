@@ -25,6 +25,8 @@ Window {
 
     // Cache Migration Loading Modal
     property bool isMigrating: false
+    property string pendingCachePath: ""
+    property string cachePathModeHelpText: "Hover over an option to see details."
     
     Connections {
         target: settingsHandler
@@ -247,6 +249,117 @@ Window {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
+                }
+            }
+        }
+    }
+
+    Dialog {
+        id: cachePathModeDialog
+        parent: settingsWindow.contentItem
+        anchors.centerIn: parent
+        width: 500
+        height: cachePathModeContent.implicitHeight + 24
+        modal: true
+        padding: 0
+        closePolicy: Popup.NoAutoClose
+        onClosed: {
+            settingsWindow.pendingCachePath = ""
+            settingsWindow.cachePathModeHelpText = "Hover over an option to see details."
+        }
+
+        background: Rectangle {
+            color: "#FFFFFF"
+            radius: 12
+            border.color: "#E0E0E0"
+            border.width: 1
+        }
+
+        ColumnLayout {
+            id: cachePathModeContent
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 14
+
+            RowLayout {
+                Layout.fillWidth: true
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "Which cache path data would you like to use?"
+                    font.bold: true
+                    font.pixelSize: 16
+                    color: "#333"
+                    wrapMode: Text.WordWrap
+                }
+
+                Basic.Button {
+                    text: "✕"
+                    hoverEnabled: true
+                    onClicked: cachePathModeDialog.close()
+                    background: Rectangle {
+                        color: parent.hovered ? "#EFEFEF" : "transparent"
+                        radius: 12
+                    }
+                }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 72
+                text: settingsWindow.cachePathModeHelpText
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                color: "#444"
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+
+                Basic.Button {
+                    id: useOldCacheDataButton
+                    Layout.fillWidth: true
+                    text: "Use data from old cache path"
+                    hoverEnabled: true
+                    onHoveredChanged: {
+                        if (hovered) {
+                            settingsWindow.cachePathModeHelpText =
+                                "Move ArcaeaNap data from your current cache path to the new one.\nExisting files in the new path will be overwritten."
+                        } else if (!useNewCacheDataButton.hovered) {
+                            settingsWindow.cachePathModeHelpText = "Hover over an option to see details."
+                        }
+                    }
+                    onClicked: {
+                        if (settingsHandler && settingsWindow.pendingCachePath !== "") {
+                            settingsHandler.prepareCacheMigration(settingsWindow.pendingCachePath)
+                        }
+                        cachePathModeDialog.close()
+                    }
+                    background: Rectangle { color: "#F0F0F0"; radius: 8 }
+                }
+
+                Basic.Button {
+                    id: useNewCacheDataButton
+                    Layout.fillWidth: true
+                    text: "Use data from new cache path"
+                    hoverEnabled: true
+                    onHoveredChanged: {
+                        if (hovered) {
+                            settingsWindow.cachePathModeHelpText =
+                                "Use ArcaeaNap data already in the new cache path.\nNothing will be copied or deleted.\nRecommended for multi-client setups."
+                        } else if (!useOldCacheDataButton.hovered) {
+                            settingsWindow.cachePathModeHelpText = "Hover over an option to see details."
+                        }
+                    }
+                    onClicked: {
+                        if (settingsHandler && settingsWindow.pendingCachePath !== "") {
+                            settingsHandler.switchCachePathOnly(settingsWindow.pendingCachePath)
+                        }
+                        cachePathModeDialog.close()
+                    }
+                    background: Rectangle { color: "#F0F0F0"; radius: 8 }
                 }
             }
         }
@@ -1175,7 +1288,14 @@ Window {
                     FolderDialog {
                         id: folderDialog
                         title: "Select Cache Directory"
-                        onAccepted: if (settingsHandler) settingsHandler.prepareCacheMigration(folderDialog.selectedFolder)
+                        onAccepted: {
+                            settingsWindow.pendingCachePath = folderDialog.selectedFolder
+                            settingsWindow.cachePathModeHelpText = "Hover over an option to see details."
+                            cachePathModeDialog.open()
+                        }
+                        onRejected: {
+                            settingsWindow.pendingCachePath = ""
+                        }
                     }
                 }
             }

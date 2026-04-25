@@ -115,6 +115,28 @@ class SettingsHandler(QObject):
         print(f"[SettingsHandler] Preparing cache migration to '{new_path}'...")
         self.cacheMigrationStarting.emit()
 
+    @pyqtSlot(str)
+    def switchCachePathOnly(self, new_path):
+        """
+        Switch cache_path without migrating data files.
+        This mode is intended for multi-client usage where existing files are kept as-is.
+        """
+        if new_path.startswith("file:///"):
+            new_path = new_path[8:]
+
+        old_path = config['general']['cache_path']
+        old_abs = self._get_absolute_cache_path(old_path)
+        new_abs = os.path.abspath(new_path)
+
+        if os.path.normpath(old_abs) == os.path.normpath(new_abs):
+            return
+
+        os.makedirs(new_abs, exist_ok=True)
+        config['general']['cache_path'] = new_path
+        print(f"[SettingsHandler] Cache path switched without migration: '{old_abs}' -> '{new_abs}'")
+        self.cachePathChanged.emit()
+        self.settingsChanged.emit()
+
     @pyqtSlot()
     def executeCacheMigration(self):
         """
