@@ -171,3 +171,4 @@ config.ini
 .cursor
 .github
 .claude
+.worktrees/
