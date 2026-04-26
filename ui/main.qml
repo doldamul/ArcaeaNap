@@ -279,14 +279,19 @@ ApplicationWindow {
         }
         function onCacheMigrationFinished(error) {
             window.isCacheMigrating = false
-            // Refresh all handlers to use new thumbnail paths
-            if (error === "") {
-                if (statsHandler) {
-                    statsHandler.refreshStats()
-                }
-                if (statisticsHandler) {
-                    statisticsHandler.refreshData()
-                }
+        }
+        function onCachePathApplied() {
+            if (statsHandler) {
+                statsHandler.refreshStats()
+            }
+            if (statisticsHandler) {
+                statisticsHandler.refreshData()
+            }
+            if (profileHandler) {
+                profileHandler.refreshProfile()
+            }
+            if (analysisHandler) {
+                analysisHandler.refreshViewData()
             }
         }
         function onSongDatabaseUpdateStarting() {

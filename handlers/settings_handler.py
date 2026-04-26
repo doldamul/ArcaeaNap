@@ -24,6 +24,7 @@ class SettingsHandler(QObject):
     mostPlayedOrderChanged = pyqtSignal()  # Grouping criteria, difficulty filter, most played scope
     songTitleLanguageChanged = pyqtSignal()
     cachePathChanged = pyqtSignal()
+    cachePathApplied = pyqtSignal()
     analyzeModeChanged = pyqtSignal(bool, arguments=['enabled'])
     # Migration signals
     cacheMigrationStarting = pyqtSignal()  # Emitted before migration - QML should release file handles
@@ -92,6 +93,17 @@ class SettingsHandler(QObject):
             return os.path.normpath(os.path.join(project_root, path))
         return os.path.abspath(path)
 
+    def _emit_cache_path_applied_updates(self):
+        """Emit all state-refresh signals after cache path is successfully applied."""
+        self._sheet_versions = self._load_sheet_versions()
+        self.cachePathChanged.emit()
+        self.settingsChanged.emit()
+        self.arcaeaOnlineConnectionChanged.emit()
+        self.googleSheetConnectionChanged.emit()
+        self.sheetBindingChanged.emit()
+        self.sheetVersionsChanged.emit()
+        self.cachePathApplied.emit()
+
     @pyqtSlot(str)
     def prepareCacheMigration(self, new_path):
         """
@@ -134,8 +146,7 @@ class SettingsHandler(QObject):
         os.makedirs(new_abs, exist_ok=True)
         config['general']['cache_path'] = new_path
         print(f"[SettingsHandler] Cache path switched without migration: '{old_abs}' -> '{new_abs}'")
-        self.cachePathChanged.emit()
-        self.settingsChanged.emit()
+        self._emit_cache_path_applied_updates()
 
     @pyqtSlot()
     def executeCacheMigration(self):
@@ -196,8 +207,7 @@ class SettingsHandler(QObject):
             
             # Phase 3: Update config (this is the point of no return)
             config['general']['cache_path'] = new_path
-            self.cachePathChanged.emit()
-            self.settingsChanged.emit()
+            self._emit_cache_path_applied_updates()
             
             # Phase 4: Delete old items (failure here is acceptable - data is safe in new location)
             for item in copied_items:

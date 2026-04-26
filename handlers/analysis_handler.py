@@ -122,6 +122,14 @@ class AnalysisHandler(QObject):
         if self._settings_handler:
             self._settings_handler.arcaeaOnlineConnectionChanged.emit()
 
+    @pyqtSlot()
+    def refreshViewData(self):
+        """Force Analyze tab to re-read status/pin/progress/thumbnail data from current cache path."""
+        self.pinUpdated.emit()
+        self.progressChanged.emit()
+        self.dataUpdated.emit()
+        self.statusChanged.emit(self.getStatus())
+
     @pyqtSlot(result=str)
     def getStatus(self):
         """Returns current analysis status: 'closed', 'login', 'ready', 'analyzing'"""
