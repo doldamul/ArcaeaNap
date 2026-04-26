@@ -172,3 +172,5 @@ config.ini
 .github
 .claude
 .worktrees/
+docs
+tests
