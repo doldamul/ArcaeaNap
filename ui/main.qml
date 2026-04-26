@@ -45,20 +45,39 @@ ApplicationWindow {
 
         // [수정] RowLayout 제거 -> 앵커(Anchors) 기반의 독립 배치로 변경
 
-        // 1. 로고 (왼쪽 고정)
-        Text {
-            id: logoText
-            text: "ArcaeaNap"
-            font.pixelSize: 20
-            font.bold: true
-            color: "#1A1A1A"
-            
+        // 1. 브랜드 로고 + 텍스트 (왼쪽 고정)
+        Item {
+            id: brandContainer
             anchors.left: parent.left
             anchors.leftMargin: 40
             anchors.verticalCenter: parent.verticalCenter
-            
-            // [핵심] 창 너비가 좁아지면(예: 800px 미만) 로고를 숨겨서 탭 공간 확보
+            width: brandRow.implicitWidth
+            height: 40
             visible: window.width > 800
+
+            Row {
+                id: brandRow
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 8
+
+                Image {
+                    id: brandLogo
+                    width: 28
+                    height: 28
+                    source: (typeof appLogoSource === "string") ? appLogoSource : ""
+                    fillMode: Image.PreserveAspectFit
+                    visible: source !== ""
+                }
+
+                Text {
+                    id: logoText
+                    text: "ArcaeaNap"
+                    font.pixelSize: 20
+                    font.bold: true
+                    color: "#1A1A1A"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
         }
 
         // 2. 탭 메뉴 컨테이너 (정중앙 고정)

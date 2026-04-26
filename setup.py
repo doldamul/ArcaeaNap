@@ -6,6 +6,12 @@ import sys
 from cx_Freeze import Executable, setup
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+LOGO_ICO_PATH = os.path.join(PROJECT_ROOT, "logo.ico")
+
+include_files = [
+    (os.path.join(PROJECT_ROOT, "fonts"), "fonts"),
+    (os.path.join(PROJECT_ROOT, "ui"), "ui"),
+]
 
 build_options = {
     "packages": [
@@ -46,14 +52,18 @@ build_options = {
         "scipy",
         "PIL",
     ],
-    "include_files": [
-        (os.path.join(PROJECT_ROOT, "fonts"), "fonts"),
-        (os.path.join(PROJECT_ROOT, "ui"), "ui"),
-    ],
+    "include_files": include_files,
 }
 
 base = "gui" if sys.platform == "win32" else None
-executables = [Executable("main.py", base=base, target_name="ArcaeaNap.exe")]
+executable_kwargs = {
+    "script": "main.py",
+    "base": base,
+    "target_name": "ArcaeaNap.exe",
+}
+if os.path.isfile(LOGO_ICO_PATH):
+    executable_kwargs["icon"] = LOGO_ICO_PATH
+executables = [Executable(**executable_kwargs)]
 
 setup(
     name="ArcaeaNap",
