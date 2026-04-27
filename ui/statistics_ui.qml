@@ -2165,9 +2165,9 @@ Item {
                             
                             // Display order: Track Lost -> Easy Clear -> Track Complete -> Hard Clear -> Full Recall -> Pure Memory
                             property var clearTypeItems: [
-                                { id: 0, label: "Track Lost", color: "#7A7A7A" },
+                                { id: 0, label: "Track Lost", color: "#80354A" },
                                 { id: 4, label: "Easy Clear", color: "#50C050" },
-                                { id: 1, label: "Track Complete", color: "#808080" },
+                                { id: 1, label: "Track Complete", color: "#a18fa7" },
                                 { id: 5, label: "Hard Clear", color: "#C2185B" },
                                 { id: 2, label: "Full Recall", color: "#F48FB1" },
                                 { id: 3, label: "Pure Memory", color: "#4AA8A8" }
