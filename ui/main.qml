@@ -35,6 +35,40 @@ ApplicationWindow {
 
     font.family: baseUiFontFamily
 
+    function showWindow(targetWindow) {
+        if (!targetWindow) {
+            return
+        }
+        if (targetWindow.visible) {
+            targetWindow.raise()
+            targetWindow.requestActivate()
+        } else {
+            targetWindow.show()
+        }
+    }
+
+    function showAboutWindow() {
+        if (!aboutWindow) {
+            return
+        }
+        aboutWindow.appTitle = (typeof appTitle === "string") ? appTitle : "ArcaeaNap"
+        aboutWindow.appVersion = (typeof appVersion === "string") ? appVersion : ""
+        aboutWindow.appLicense = (typeof appLicense === "string") ? appLicense : ""
+        aboutWindow.repositoryUrl = (typeof repositoryUrl === "string") ? repositoryUrl : ""
+        aboutWindow.appLogoSource = (typeof appLogoSource === "string") ? appLogoSource : ""
+        aboutWindow.openSourceItems = (typeof openSourceItems !== "undefined") ? openSourceItems : []
+        aboutWindow.buildDate = (typeof buildDate === "string") ? buildDate : ""
+        showWindow(aboutWindow)
+    }
+
+    function showOssLicensesWindow() {
+        if (!ossLicensesWindow) {
+            return
+        }
+        ossLicensesWindow.openSourceItems = (typeof openSourceItems !== "undefined") ? openSourceItems : []
+        showWindow(ossLicensesWindow)
+    }
+
     // --- 통합 상단 네비게이션 바 ---
     Rectangle {
         id: navBar
@@ -77,6 +111,13 @@ ApplicationWindow {
                     color: "#1A1A1A"
                     anchors.verticalCenter: parent.verticalCenter
                 }
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: window.showAboutWindow()
             }
         }
 
@@ -229,10 +270,38 @@ ApplicationWindow {
     }
     
     property Window settingsWindow: settingsWindowLoader.item
+    Loader {
+        id: aboutWindowLoader
+        source: "about_ui.qml"
+        asynchronous: false
+    }
+
+    property Window aboutWindow: aboutWindowLoader.item
+
+    Loader {
+        id: ossLicensesWindowLoader
+        source: "oss_licenses_ui.qml"
+        asynchronous: false
+    }
+
+    property Window ossLicensesWindow: ossLicensesWindowLoader.item
+
+    Connections {
+        target: aboutWindow
+        function onOpenOssRequested() {
+            window.showOssLicensesWindow()
+        }
+    }
 
     onClosing: {
         if (settingsWindow && settingsWindow.visible) {
             settingsWindow.close()
+        }
+        if (aboutWindow && aboutWindow.visible) {
+            aboutWindow.close()
+        }
+        if (ossLicensesWindow && ossLicensesWindow.visible) {
+            ossLicensesWindow.close()
         }
     }
 

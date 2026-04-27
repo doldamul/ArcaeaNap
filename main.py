@@ -13,6 +13,7 @@ from handlers.stats_handler import StatsHandler
 from handlers.statistics_handler import StatisticsHandler
 from handlers.profile_handler import ProfileHandler
 from handlers.settings_handler import SettingsHandler
+from services.about_service import build_about_context
 try:
     from utils.embedded_app_icon import get_embedded_app_icon
 except Exception:
@@ -106,13 +107,14 @@ def main():
     app = QGuiApplication(sys.argv)
     qml_font_context = register_embedded_fonts()
     app_icon, app_logo_source = _resolve_icons()
+    about_context = build_about_context(get_app_root())
 
     if not app_icon.isNull():
         app.setWindowIcon(app_icon)
     else:
         print("[main] App icon file not found; using default executable icon.")
 
-    print("Arcaea Nap v0.1")
+    print(f"Arcaea Nap v{about_context['appVersion']}")
 
     print("UI loading...")
     engine = QQmlApplicationEngine()
@@ -122,6 +124,8 @@ def main():
         "appLogoSource",
         app_logo_source,
     )
+    for key, value in about_context.items():
+        engine.rootContext().setContextProperty(key, value)
 
     # Register handlers
     analysis_handler = AnalysisHandler()

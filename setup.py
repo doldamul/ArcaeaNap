@@ -2,15 +2,23 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 
 from cx_Freeze import Executable, setup
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 LOGO_ICO_PATH = os.path.join(PROJECT_ROOT, "logo.ico")
 
+# Record build timestamp
+BUILD_DATE_PATH = os.path.join(PROJECT_ROOT, "build_date.txt")
+with open(BUILD_DATE_PATH, "w", encoding="utf-8") as f:
+    f.write(str(time.time()))
+
 include_files = [
     (os.path.join(PROJECT_ROOT, "fonts"), "fonts"),
     (os.path.join(PROJECT_ROOT, "ui"), "ui"),
+    (os.path.join(PROJECT_ROOT, "licenses"), "licenses"),
+    (BUILD_DATE_PATH, "build_date.txt"),
 ]
 
 build_options = {
