@@ -1267,12 +1267,9 @@ Item {
                             skillFlagSegment.selectedIndex = 1 // Show
                             filterPopup.updateFlagFilter()  // Apply consultant sheet flags reset to backend
                             
-                            clearType0.checked = true
-                            clearType1.checked = true
-                            clearType2.checked = true
-                            clearType3.checked = true
-                            clearType4.checked = true
-                            clearType5.checked = true
+                            clearRangeSlider.handleAIndex = 0
+                            clearRangeSlider.handleBIndex = clearRangeSlider.clearTypeItems.length > 0 ? clearRangeSlider.clearTypeItems.length - 1 : 0
+                            filterPopup.updateClearTypeFilter()  // Apply the reset to backend
                         }
                     }
                 }
@@ -2154,6 +2151,302 @@ Item {
                     
                     Rectangle { height: 1; Layout.fillWidth: true; color: "#E0E0E0" }
                     
+                    // Clear Type Filter
+                    Column {
+                        spacing: 10
+                        Layout.fillWidth: true
+                        
+                        Text { text: "Clear Range"; font.pixelSize: 14; font.bold: true; color: "#333" }
+                        
+                        Item {
+                            id: clearRangeSlider
+                            width: parent.width
+                            height: 60
+                            
+                            // Display order: Track Lost -> Easy Clear -> Track Complete -> Hard Clear -> Full Recall -> Pure Memory
+                            property var clearTypeItems: [
+                                { id: 0, label: "Track Lost", color: "#7A7A7A" },
+                                { id: 4, label: "Easy Clear", color: "#50C050" },
+                                { id: 1, label: "Track Complete", color: "#808080" },
+                                { id: 5, label: "Hard Clear", color: "#C2185B" },
+                                { id: 2, label: "Full Recall", color: "#F48FB1" },
+                                { id: 3, label: "Pure Memory", color: "#4AA8A8" }
+                            ]
+                            
+                            property int handleAIndex: 0
+                            property int handleBIndex: clearTypeItems.length > 0 ? clearTypeItems.length - 1 : 0
+                            property int minIndex: Math.min(handleAIndex, handleBIndex)
+                            property int maxIndex: Math.max(handleAIndex, handleBIndex)
+                            
+                            function getDisplayLabel(idx) {
+                                if (idx >= 0 && idx < clearTypeItems.length) return clearTypeItems[idx].label
+                                return ""
+                            }
+                            
+                            function getHandleLabel(idx) {
+                                var label = getDisplayLabel(idx)
+                                if (label === "Track Lost") return "Track\nLost"
+                                if (label === "Pure Memory") return "Pure\nMemory"
+                                return label
+                            }
+                            
+                            function hexToRgb(hex) {
+                                var clean = hex.replace("#", "")
+                                return {
+                                    r: parseInt(clean.substring(0, 2), 16),
+                                    g: parseInt(clean.substring(2, 4), 16),
+                                    b: parseInt(clean.substring(4, 6), 16)
+                                }
+                            }
+                            
+                            function rgbToHex(r, g, b) {
+                                return "#" + r.toString(16).padStart(2, "0") + g.toString(16).padStart(2, "0") + b.toString(16).padStart(2, "0")
+                            }
+                            
+                            function interpolateColor(colorA, colorB, t) {
+                                var a = hexToRgb(colorA)
+                                var b = hexToRgb(colorB)
+                                var r = Math.round(a.r + (b.r - a.r) * t)
+                                var g = Math.round(a.g + (b.g - a.g) * t)
+                                var bl = Math.round(a.b + (b.b - a.b) * t)
+                                return rgbToHex(r, g, bl)
+                            }
+                            
+                            function getColorForClearIndex(idx) {
+                                var n = clearTypeItems.length
+                                if (n <= 1) return "#7A7A7A"
+
+                                var bounded = Math.max(0, Math.min(idx, n - 1))
+                                var i0 = Math.floor(bounded)
+                                var i1 = Math.min(i0 + 1, n - 1)
+                                var t = bounded - i0
+                                return interpolateColor(clearTypeItems[i0].color, clearTypeItems[i1].color, t)
+                            }
+                            
+                            function getColorForIndex(idx) {
+                                if (idx >= 0 && idx < clearTypeItems.length) return getColorForClearIndex(idx)
+                                return "#7A7A7A"
+                            }
+                            
+                            function getSelectedTypes() {
+                                var selected = []
+                                for (var i = minIndex; i <= maxIndex; i++) {
+                                    selected.push(clearTypeItems[i].id)
+                                }
+                                return selected
+                            }
+                            
+                            Rectangle {
+                                id: clearTrack
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.verticalCenterOffset: -10
+                                height: 6
+                                radius: 3
+                                color: "#E0E0E0"
+                                
+                                Repeater {
+                                    model: clearRangeSlider.clearTypeItems.length
+                                    
+                                    Rectangle {
+                                        x: clearRangeSlider.clearTypeItems.length > 1 ?
+                                            10 + (index / (clearRangeSlider.clearTypeItems.length - 1)) * (parent.width - 20) - 1 : 0
+                                        y: -3
+                                        width: 2
+                                        height: 12
+                                        radius: 1
+                                        color: "#C0C0C0"
+                                    }
+                                }
+                                
+                                Rectangle {
+                                    id: clearActiveRegion
+                                    property real handleWidth: 20
+                                    property real trackUsableWidth: parent.width - handleWidth
+                                    property real minPos: clearRangeSlider.clearTypeItems.length > 1 ?
+                                        (handleWidth / 2) + (clearRangeSlider.minIndex / (clearRangeSlider.clearTypeItems.length - 1)) * trackUsableWidth : 0
+                                    property real maxPos: clearRangeSlider.clearTypeItems.length > 1 ?
+                                        (handleWidth / 2) + (clearRangeSlider.maxIndex / (clearRangeSlider.clearTypeItems.length - 1)) * trackUsableWidth : parent.width
+                                    
+                                    x: minPos
+                                    width: maxPos - minPos
+                                    height: parent.height
+                                    clip: true
+                                    
+                                    Canvas {
+                                        id: clearGradientCanvas
+                                        property real handleWidth: 20
+                                        property real trackUsableWidth: clearTrack.width - handleWidth
+                                        
+                                        x: (handleWidth / 2) - clearActiveRegion.x
+                                        width: trackUsableWidth
+                                        height: parent.height
+                                        
+                                        property var dataList: clearRangeSlider.clearTypeItems
+                                        onDataListChanged: requestPaint()
+                                        onWidthChanged: requestPaint()
+                                        
+                                        onPaint: {
+                                            var ctx = getContext("2d")
+                                            ctx.reset()
+                                            
+                                            var n = clearRangeSlider.clearTypeItems.length
+                                            if (n <= 1) {
+                                                var singleColor = clearRangeSlider.getColorForClearIndex(0)
+                                                ctx.fillStyle = singleColor
+                                                ctx.beginPath()
+                                                ctx.roundedRect(0, 0, width, height, 3)
+                                                ctx.fill()
+                                                return
+                                            }
+                                            
+                                            for (var i = 0; i < n - 1; i++) {
+                                                var x0 = (i / (n - 1)) * width
+                                                var x1 = ((i + 1) / (n - 1)) * width
+                                                var color0 = clearRangeSlider.getColorForClearIndex(i)
+                                                var color1 = clearRangeSlider.getColorForClearIndex(i + 1)
+                                                var grad = ctx.createLinearGradient(x0, 0, x1, 0)
+                                                grad.addColorStop(0, color0)
+                                                grad.addColorStop(1, color1)
+                                                ctx.fillStyle = grad
+                                                ctx.fillRect(x0, 0, x1 - x0 + 1, height)
+                                            }
+                                            
+                                            ctx.globalCompositeOperation = "destination-in"
+                                            ctx.fillStyle = "black"
+                                            ctx.beginPath()
+                                            ctx.roundedRect(0, 0, width, height, 3)
+                                            ctx.fill()
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Rectangle {
+                                id: clearHandleA
+                                width: 20
+                                height: 20
+                                radius: 10
+                                property string baseColor: clearRangeSlider.getColorForIndex(clearRangeSlider.handleAIndex)
+                                color: clearHandleAMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
+                                border.color: "white"
+                                border.width: 2
+                                x: clearRangeSlider.clearTypeItems.length > 1 ?
+                                    (clearRangeSlider.handleAIndex / (clearRangeSlider.clearTypeItems.length - 1)) * (clearTrack.width - width) : 0
+                                anchors.verticalCenter: clearTrack.verticalCenter
+                                
+                                Text {
+                                    property bool tooClose: Math.abs(clearRangeSlider.handleAIndex - clearRangeSlider.handleBIndex) <= 1
+                                    property bool isRightHandle: clearHandleA.x > clearHandleB.x
+                                    property bool showAbove: tooClose && isRightHandle
+                                    y: showAbove ? -height - 4 : parent.height + 4
+                                    x: clearRangeSlider.handleAIndex === 0 ? Math.max(-parent.x, (parent.width - width) / 2) : (parent.width - width) / 2
+                                    text: clearRangeSlider.getHandleLabel(clearRangeSlider.handleAIndex)
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    color: "#333"
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+                                
+                                MouseArea {
+                                    id: clearHandleAMouse
+                                    anchors.fill: parent
+                                    anchors.topMargin: -20
+                                    anchors.bottomMargin: -20
+                                    preventStealing: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    
+                                    property int startIndex: 0
+                                    property real pressGlobalX: 0
+                                    
+                                    onPressed: (mouse) => {
+                                        startIndex = clearRangeSlider.handleAIndex
+                                        var mapped = mapToItem(clearTrack, mouse.x, mouse.y)
+                                        pressGlobalX = mapped.x
+                                    }
+                                    
+                                    onPositionChanged: (mouse) => {
+                                        if (pressed && clearRangeSlider.clearTypeItems.length > 1) {
+                                            var mapped = mapToItem(clearTrack, mouse.x, mouse.y)
+                                            var deltaX = mapped.x - pressGlobalX
+                                            var stepWidth = (clearTrack.width - parent.width) / (clearRangeSlider.clearTypeItems.length - 1)
+                                            var indexDelta = Math.round(deltaX / stepWidth)
+                                            var newIdx = Math.max(0, Math.min(startIndex + indexDelta, clearRangeSlider.clearTypeItems.length - 1))
+                                            clearRangeSlider.handleAIndex = newIdx
+                                        }
+                                    }
+                                    
+                                    onReleased: {
+                                        filterPopup.updateClearTypeFilter()
+                                    }
+                                }
+                            }
+                            
+                            Rectangle {
+                                id: clearHandleB
+                                width: 20
+                                height: 20
+                                radius: 10
+                                property string baseColor: clearRangeSlider.getColorForIndex(clearRangeSlider.handleBIndex)
+                                color: clearHandleBMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
+                                border.color: "white"
+                                border.width: 2
+                                x: clearRangeSlider.clearTypeItems.length > 1 ?
+                                    (clearRangeSlider.handleBIndex / (clearRangeSlider.clearTypeItems.length - 1)) * (clearTrack.width - width) : clearTrack.width - width
+                                anchors.verticalCenter: clearTrack.verticalCenter
+                                
+                                Text {
+                                    property bool tooClose: Math.abs(clearRangeSlider.handleAIndex - clearRangeSlider.handleBIndex) <= 1
+                                    property bool isRightHandle: clearHandleB.x > clearHandleA.x
+                                    property bool showAbove: tooClose && isRightHandle
+                                    y: showAbove ? -height - 4 : parent.height + 4
+                                    x: clearRangeSlider.handleBIndex === 0 ? Math.max(-parent.x, (parent.width - width) / 2) : (parent.width - width) / 2
+                                    text: clearRangeSlider.getHandleLabel(clearRangeSlider.handleBIndex)
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    color: "#333"
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+                                
+                                MouseArea {
+                                    id: clearHandleBMouse
+                                    anchors.fill: parent
+                                    anchors.topMargin: -20
+                                    anchors.bottomMargin: -20
+                                    preventStealing: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    
+                                    property int startIndex: 0
+                                    property real pressGlobalX: 0
+                                    
+                                    onPressed: (mouse) => {
+                                        startIndex = clearRangeSlider.handleBIndex
+                                        var mapped = mapToItem(clearTrack, mouse.x, mouse.y)
+                                        pressGlobalX = mapped.x
+                                    }
+                                    
+                                    onPositionChanged: (mouse) => {
+                                        if (pressed && clearRangeSlider.clearTypeItems.length > 1) {
+                                            var mapped = mapToItem(clearTrack, mouse.x, mouse.y)
+                                            var deltaX = mapped.x - pressGlobalX
+                                            var stepWidth = (clearTrack.width - parent.width) / (clearRangeSlider.clearTypeItems.length - 1)
+                                            var indexDelta = Math.round(deltaX / stepWidth)
+                                            var newIdx = Math.max(0, Math.min(startIndex + indexDelta, clearRangeSlider.clearTypeItems.length - 1))
+                                            clearRangeSlider.handleBIndex = newIdx
+                                        }
+                                    }
+                                    
+                                    onReleased: {
+                                        filterPopup.updateClearTypeFilter()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Rectangle { height: 1; Layout.fillWidth: true; color: "#E0E0E0" }
+                    
                     // Chart Flags
                     Column {
                         spacing: 10
@@ -2184,59 +2477,6 @@ Item {
                             }
                             
 
-                        }
-                    }
-                    
-                    Rectangle { height: 1; Layout.fillWidth: true; color: "#E0E0E0" }
-                    
-                    // Clear Type Filter
-                    Column {
-                        spacing: 10
-                        Layout.fillWidth: true
-                        
-                        Text { text: "Clear Types"; font.pixelSize: 14; font.bold: true; color: "#333" }
-                        
-                        GridLayout {
-                            columns: 2
-                            columnSpacing: 15
-                            rowSpacing: 8
-                            
-                            CheckBox {
-                                id: clearType0
-                                text: "Track Lost"
-                                checked: true
-                                onCheckedChanged: filterPopup.updateClearTypeFilter()
-                            }
-                            CheckBox {
-                                id: clearType1
-                                text: "Track Complete"
-                                checked: true
-                                onCheckedChanged: filterPopup.updateClearTypeFilter()
-                            }
-                            CheckBox {
-                                id: clearType2
-                                text: "Full Recall"
-                                checked: true
-                                onCheckedChanged: filterPopup.updateClearTypeFilter()
-                            }
-                            CheckBox {
-                                id: clearType3
-                                text: "Pure Memory"
-                                checked: true
-                                onCheckedChanged: filterPopup.updateClearTypeFilter()
-                            }
-                            CheckBox {
-                                id: clearType4
-                                text: "Easy Clear"
-                                checked: true
-                                onCheckedChanged: filterPopup.updateClearTypeFilter()
-                            }
-                            CheckBox {
-                                id: clearType5
-                                text: "Hard Clear"
-                                checked: true
-                                onCheckedChanged: filterPopup.updateClearTypeFilter()
-                            }
                         }
                     }
                 }
@@ -2293,13 +2533,7 @@ Item {
         function updateClearTypeFilter() {
             if (!initialized) return  // Skip during initialization
             
-            var types = []
-            if (clearType0.checked) types.push(0)
-            if (clearType1.checked) types.push(1)
-            if (clearType2.checked) types.push(2)
-            if (clearType3.checked) types.push(3)
-            if (clearType4.checked) types.push(4)
-            if (clearType5.checked) types.push(5)
+            var types = clearRangeSlider.getSelectedTypes()
             
             if (statisticsHandler) {
                 statisticsHandler.setFilter("clear_types", types)
