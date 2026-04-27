@@ -9,16 +9,20 @@ from cx_Freeze import Executable, setup
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 LOGO_ICO_PATH = os.path.join(PROJECT_ROOT, "logo.ico")
 
-# Record build timestamp
-BUILD_DATE_PATH = os.path.join(PROJECT_ROOT, "build_date.txt")
-with open(BUILD_DATE_PATH, "w", encoding="utf-8") as f:
-    f.write(str(time.time()))
+# Update build info in source code
+APP_TITLE = "ArcaeaNap"
+APP_VERSION = "0.1"
+BUILD_INFO_PATH = os.path.join(PROJECT_ROOT, "utils", "app_build_info.py")
+with open(BUILD_INFO_PATH, "w", encoding="utf-8") as f:
+    f.write(f'"""Auto-generated build information. Do not edit manually."""\n\n')
+    f.write(f'APP_TITLE = "{APP_TITLE}"\n')
+    f.write(f'APP_VERSION = "{APP_VERSION}"\n')
+    f.write(f'BUILD_TIMESTAMP = {time.time()}\n')
 
 include_files = [
     (os.path.join(PROJECT_ROOT, "fonts"), "fonts"),
     (os.path.join(PROJECT_ROOT, "ui"), "ui"),
     (os.path.join(PROJECT_ROOT, "licenses"), "licenses"),
-    (BUILD_DATE_PATH, "build_date.txt"),
 ]
 
 build_options = {

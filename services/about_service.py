@@ -9,8 +9,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-APP_TITLE = "ArcaeaNap"
-APP_VERSION = "0.1"
+from utils import app_build_info
+
+APP_TITLE = app_build_info.APP_TITLE
+APP_VERSION = app_build_info.APP_VERSION
 APP_LICENSE = "GNU GPL v3.0"
 DEFAULT_REPOSITORY_URL = "https://github.com/doldamul/ArcaeaNap"
 
@@ -182,16 +184,9 @@ def _get_build_date() -> str:
     if not getattr(sys, "frozen", False):
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (debug)"
 
-    # Frozen mode: try to read stored build timestamp
-    try:
-        # In cx_Freeze, app root is usually where the executable is
-        app_root = Path(sys.executable).resolve().parent
-        timestamp_file = app_root / "build_date.txt"
-        if timestamp_file.exists():
-            ts_val = float(timestamp_file.read_text(encoding="utf-8").strip())
-            return datetime.fromtimestamp(ts_val).strftime("%Y-%m-%d %H:%M:%S")
-    except Exception:
-        pass
+    # Frozen mode: use stored build timestamp
+    if app_build_info.BUILD_TIMESTAMP > 0:
+        return datetime.fromtimestamp(app_build_info.BUILD_TIMESTAMP).strftime("%Y-%m-%d %H:%M:%S")
 
     return "Unknown"
 
