@@ -8,7 +8,6 @@ from repositories.song_repository import (
 )
 from repositories.score_repository import ScoreRepository, PlayCountRepository, PinRepository
 import sqlite3
-import pandas as pd
 import time
 import os
 import re
@@ -1364,51 +1363,6 @@ class ArcaeaOnline:
             self.log_callback(formatted_message)
 
 
-def check_db_data():
-    DB_FILENAME = 'user_scores.db'
-    DB_FILEPATH = os.path.join(config['general']['cache_path'], DB_FILENAME)
-    if not os.path.exists(DB_FILEPATH):
-        print(f"Error: '{DB_FILEPATH}' not found.")
-        return
-
-    try:
-        conn = sqlite3.connect(DB_FILEPATH)
-
-        query = "SELECT * FROM scores"
-        df = pd.read_sql(query, conn)
-        conn.close()
-
-        if df.empty:
-            print("DB is empty.")
-            return
-
-        if 'time_played' in df.columns:
-            df['play_date'] = pd.to_datetime(df['time_played'], unit='ms')
-            cols = ['play_date', 'title_en', 'difficulty', 'score'] + [
-                c for c in df.columns if c not in ['play_date', 'title_en', 'difficulty', 'score']
-            ]
-            df = df[cols]
-
-        print(f"=== Total records: {len(df)} ===")
-        print("\n1. Head 5:")
-        print(df.head())
-
-        print("\n2. Info:")
-        print(df.info())
-
-        print("\n3. Describe:")
-        pd.set_option('display.float_format', lambda x: '%.2f' % x)
-        print(df[['score', 'shiny_perfect_count', 'miss_count']].describe())
-        
-        sample_song_id = df['arcaea_id'].iloc[0]
-        print(f"\n4. History for song ({sample_song_id}):")
-        print(df[df['arcaea_id'] == sample_song_id][['play_date', 'title_en', 'score', 'perfect_count']])
-
-    except Exception as e:
-        print(f"Error checking DB: {e}")
-
-
 if __name__=='__main__':
     analyzer = ArcaeaOnline()
     analyzer.start()
-    # check_db_data()

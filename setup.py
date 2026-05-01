@@ -99,7 +99,6 @@ build_options = {
         "PyQt6.QtQuick",
         "PyQt6.QtNetwork",
         "playwright",
-        "pandas",
         "requests",
         "bs4",
         "google.auth",
