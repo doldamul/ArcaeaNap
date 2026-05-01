@@ -20,7 +20,7 @@ from services.connection_store import get_provider, set_provider, remove_provide
 from services.keyring_store import get_secret, set_secret, delete_secret
 
 SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/spreadsheets.readonly",
     "https://www.googleapis.com/auth/drive.file",
     "https://www.googleapis.com/auth/userinfo.email",
     "openid"
