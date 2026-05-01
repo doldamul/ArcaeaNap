@@ -1,5 +1,6 @@
 import os
 import json
+import sys
 import threading
 import socket
 import wsgiref.simple_server
@@ -37,6 +38,80 @@ REVERSE_ALIAS_MAP = {
     'April showers': 'April Showers',
 }
 
+# CLIENT_CONST_BEGIN
+CLIENT = ["", "", ""]  # [0]: key, [1]: id, [2]: sec
+# CLIENT_CONST_END
+
+_MOCK_MARKERS = ("REPLACE_ME", "YOUR_", "<", "CHANGE_ME", "MOCK")
+
+
+def _is_mock_value(value):
+    normalized = str(value or "").strip().upper()
+    if not normalized:
+        return True
+    return any(marker in normalized for marker in _MOCK_MARKERS)
+
+
+def _read_client_values():
+    if not getattr(sys, "frozen", False):
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        fp = os.path.join(root_dir, "client_secret.json")
+        try:
+            with open(fp, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError as e:
+            raise Exception("Google features are disabled. Missing client_secret.json in project root.") from e
+        except json.JSONDecodeError as e:
+            raise Exception("Google features are disabled. Invalid JSON in client_secret.json.") from e
+
+        if not isinstance(data, dict):
+            raise Exception("Google features are disabled. client_secret.json must be a JSON object.")
+
+        installed = data.get("installed", data.get("web", {}))
+        if not isinstance(installed, dict):
+            raise Exception("Google features are disabled. client_secret.json missing installed/web object.")
+
+        key = str(installed.get("api_key", data.get("api_key", ""))).strip()
+        idv = str(installed.get("client_id", "")).strip()
+        sec = str(installed.get("client_secret", "")).strip()
+    else:
+        try:
+            key = str(CLIENT[0]).strip()
+            idv = str(CLIENT[1]).strip()
+            sec = str(CLIENT[2]).strip()
+        except Exception as e:
+            raise Exception("Google features are disabled. Missing CLIENT values in build data.") from e
+
+    if _is_mock_value(key) or _is_mock_value(idv) or _is_mock_value(sec):
+        raise Exception("Google features are disabled. OAuth values are not initialized.")
+
+    return key, idv, sec
+
+
+def _derive_app(idv):
+    match = re.match(r'^(\d+)-', idv)
+    if match:
+        return match.group(1)
+    return ''
+
+
+def _build_oauth_source(idv, sec, key):
+    id_name = "client_id"
+    sec_name = "client_secret"
+    key_name = "api_key"
+    app_name = "app_id"
+    installed = {
+        id_name: idv,
+        sec_name: sec,
+        "redirect_uris": ["http://localhost"],
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        key_name: key,
+        app_name: _derive_app(idv),
+    }
+    return {"installed": installed}
+
+
 def _get_bound_sheet_id():
     """Get bound sheet ID from account_connections.json, or None if not bound."""
     try:
@@ -60,31 +135,11 @@ def run_google_picker(cancellation_context=None):
     
     access_token = creds.token
     
-    # Read optional API key / app ID from client_secret.json
-    secret_filepath = os.path.join(config['general']['cache_path'], 'client_secret.json')
-    api_key = ''
-    app_id = ''
-    try:
-        with open(secret_filepath, 'r') as f:
-            secret_data = json.load(f)
-        installed = secret_data.get('installed', secret_data.get('web', {}))
-        api_key = installed.get('api_key', secret_data.get('api_key', ''))
-        app_id = installed.get('app_id', secret_data.get('app_id', ''))
-
-        # If app_id is not explicitly available, derive numeric project number
-        # from OAuth client_id prefix (e.g. 1234567890-xxxxx.apps.googleusercontent.com)
-        if not app_id:
-            client_id = installed.get('client_id', '')
-            match = re.match(r'^(\d+)-', client_id)
-            if match:
-                app_id = match.group(1)
-    except Exception:
-        pass
-
-    if not api_key:
-        raise Exception(
-            "Google Picker requires API key. Add installed.api_key in client_secret.json."
-        )
+    key, idv, sec = _read_client_values()
+    src = _build_oauth_source(idv, sec, key)
+    app = src.get("installed", {}).get("app_id", "")
+    if not app:
+        app = _derive_app(idv)
     
     # Find a free port
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -99,7 +154,7 @@ def run_google_picker(cancellation_context=None):
         'page_loaded': False,
         'last_ping_at': None
     }
-    picker_html = _build_picker_html(access_token, api_key, app_id, port)
+    picker_html = _build_picker_html(access_token, key, app, port)
     
     def picker_app(environ, start_response):
         path = environ['PATH_INFO']
@@ -205,13 +260,13 @@ def run_google_picker(cancellation_context=None):
     return state['result']
 
 
-def _build_picker_html(access_token, api_key, app_id, callback_port):
+def _build_picker_html(access_token, key, app, callback_port):
     """Build HTML page with Google Picker for spreadsheet selection."""
     picker_config_parts = []
-    if api_key:
-        picker_config_parts.append(f'.setDeveloperKey("{api_key}")')
-    if app_id:
-        picker_config_parts.append(f'.setAppId("{app_id}")')
+    if key:
+        picker_config_parts.append(f'.setDeveloperKey("{key}")')
+    if app:
+        picker_config_parts.append(f'.setAppId("{app}")')
     picker_config = '\n                '.join(picker_config_parts)
     
     return f"""<!DOCTYPE html>
@@ -782,8 +837,8 @@ def title_for_wiki(name):
     return match.group(1), match.group(2)
 
 def get_creds(cancellation_context=None, interactive=True):
-    secret_filename = 'client_secret.json'
-    secret_filepath = os.path.join(config['general']['cache_path'], secret_filename)
+    key, idv, sec = _read_client_values()
+    src = _build_oauth_source(idv, sec, key)
     
     creds = None
     token_data = None
@@ -798,14 +853,10 @@ def get_creds(cancellation_context=None, interactive=True):
             token_data['token'] = get_secret('google_token') or ''
             token_data['refresh_token'] = get_secret('google_refresh_token') or ''
             
-            # Read client_secret from client_secret.json (canonical source)
-            try:
-                with open(secret_filepath, 'r') as f:
-                    secret_data = json.load(f)
-                installed = secret_data.get('installed', secret_data.get('web', {}))
-                token_data['client_secret'] = installed.get('client_secret', '')
-            except Exception:
-                token_data['client_secret'] = ''
+            # Restore required OAuth fields from CLIENT constant.
+            token_data['client_secret'] = sec
+            token_data['client_id'] = idv
+            token_data.setdefault('token_uri', 'https://oauth2.googleapis.com/token')
             
             # Create Credentials object
             try:
@@ -835,9 +886,7 @@ def get_creds(cancellation_context=None, interactive=True):
         if cancellation_context and cancellation_context.is_cancelled():
              return None
              
-        flow = InstalledAppFlow.from_client_secrets_file(
-            secret_filepath, SCOPES
-        )
+        flow = InstalledAppFlow.from_client_config(src, SCOPES)
         # Use our custom cancellable flow
         creds = run_cancellable_flow(flow, cancellation_context)
         

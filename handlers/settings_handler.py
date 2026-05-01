@@ -174,7 +174,6 @@ class SettingsHandler(QObject):
             'login.dat',
             'songs.db',
             CONNECTION_STORE_FILENAME,
-            'client_secret.json',
         ]
         
         copied_items = []

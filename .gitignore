@@ -165,6 +165,7 @@ cython_debug/
 # project configuration files
 arcaea_nap_data/**
 config.ini
+client_secret.json
 
 # agent
 .agent
