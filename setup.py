@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sys
 import time
 
 from cx_Freeze import Executable, setup
+from cx_Freeze.command.build_exe import build_exe
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 LOGO_ICO_PATH = os.path.join(PROJECT_ROOT, "logo.ico")
@@ -97,8 +99,6 @@ build_options = {
         "PyQt6.QtQuick",
         "PyQt6.QtNetwork",
         "playwright",
-        "playwright._impl",
-        "playwright.driver",
         "pandas",
         "requests",
         "bs4",
@@ -140,6 +140,31 @@ if os.path.isfile(LOGO_ICO_PATH):
     executable_kwargs["icon"] = LOGO_ICO_PATH
 executables = [Executable(**executable_kwargs)]
 
+
+class BuildExeWithoutBundledBrowsers(build_exe):
+    """Remove Playwright bundled browsers from cx_Freeze output."""
+
+    def run(self) -> None:
+        super().run()
+        build_root = os.path.abspath(str(self.build_exe))
+        bundled_browsers = os.path.join(
+            build_root,
+            "lib",
+            "playwright",
+            "driver",
+            "package",
+            ".local-browsers",
+        )
+        if not os.path.isdir(bundled_browsers):
+            return
+
+        shutil.rmtree(bundled_browsers)
+        if os.path.exists(bundled_browsers):
+            raise RuntimeError(
+                f"Failed to remove Playwright bundled browsers directory: {bundled_browsers}"
+            )
+        print(f"Removed Playwright bundled browsers: {bundled_browsers}")
+
 try:
     _write_build_info(APP_TITLE, APP_VERSION, time.time())
     original_consultant = _inject_client_const(_load_client_data_for_build())
@@ -149,6 +174,7 @@ try:
         description="a simple record viewer for Arcaea",
         options={"build_exe": build_options},
         executables=executables,
+        cmdclass={"build_exe": BuildExeWithoutBundledBrowsers},
     )
 finally:
     if "original_consultant" in locals():
