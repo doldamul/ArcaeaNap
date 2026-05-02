@@ -108,11 +108,11 @@ def _find_license_file(filename: str, roots: list[Path] | None = None) -> Path:
     for root in roots:
         base = Path(root).resolve()
         for candidate_root in [base, *base.parents]:
-            candidate = candidate_root / "licenses" / filename
+            candidate = candidate_root / "resources" / "licenses" / filename
             if candidate.is_file():
                 return candidate
 
-    raise FileNotFoundError(f"Missing license text file: {roots[0] / 'licenses' / filename}")
+    raise FileNotFoundError(f"Missing license text file: {roots[0] / 'resources' / 'licenses' / filename}")
 
 
 def _read_license_text(filename: str, copyright_owner: str) -> str:

@@ -8,7 +8,7 @@ import sys
 from PyQt6.QtGui import QFontDatabase
 
 BASE_UI_FONT_FAMILY = "Segoe UI, Roboto, Helvetica, Arial, sans-serif"
-TITLE_FONT_DIRNAME = "fonts"
+TITLE_FONT_DIRNAME = os.path.join("resources", "fonts")
 TITLE_FONT_FILENAME = "NotoSansJP-VariableFont_wght.ttf"
 
 CONTEXT_KEY_BASE_UI_FONT = "embeddedBaseUiFontFamily"

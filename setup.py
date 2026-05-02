@@ -11,7 +11,7 @@ from cx_Freeze import Executable, setup
 from cx_Freeze.command.build_exe import build_exe
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-LOGO_ICO_PATH = os.path.join(PROJECT_ROOT, "logo.ico")
+LOGO_ICO_PATH = os.path.join(PROJECT_ROOT, "resources", "logo.ico")
 CLIENT_DATA_JSON_PATH = os.path.join(PROJECT_ROOT, "client_secret.json")
 CONSULTANT_PATH = os.path.join(PROJECT_ROOT, "utils", "web_consultantsheet.py")
 
@@ -85,9 +85,8 @@ def _inject_client_const(values: list[str]) -> str:
     return original
 
 include_files = [
-    (os.path.join(PROJECT_ROOT, "fonts"), "fonts"),
-    (os.path.join(PROJECT_ROOT, "ui"), "ui"),
-    (os.path.join(PROJECT_ROOT, "licenses"), "licenses"),
+    (os.path.join(PROJECT_ROOT, "resources"), "resources"),
+    (os.path.join(PROJECT_ROOT, "ui"), os.path.join("resources", "ui")),
 ]
 
 build_options = {

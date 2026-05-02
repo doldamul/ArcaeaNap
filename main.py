@@ -78,7 +78,7 @@ def _resolve_icons():
     if not icon.isNull():
         return icon, _icon_to_data_url(icon, size=256)
 
-    fallback_ico = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.ico")
+    fallback_ico = os.path.join(get_app_root(), "resources", "logo.ico")
     if os.path.isfile(fallback_ico):
         file_icon = QIcon(fallback_ico)
         return file_icon, _icon_to_data_url(file_icon, size=256)
@@ -152,7 +152,10 @@ def main():
     settings_handler.arcaeaOnlineConnectionChanged.connect(profile_handler.refreshProfile)
 
     qml_filename = "main.qml"
-    qml_filepath = os.path.join(get_app_root(), 'ui', qml_filename)
+    if getattr(sys, "frozen", False):
+        qml_filepath = os.path.join(get_app_root(), "resources", "ui", qml_filename)
+    else:
+        qml_filepath = os.path.join(get_app_root(), "ui", qml_filename)
 
     engine.load(QUrl.fromLocalFile(qml_filepath))
 
