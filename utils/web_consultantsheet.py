@@ -931,7 +931,7 @@ def _save_google_credentials(creds):
             print("[GoogleAuth] Fetching user info...")
             # Set a timeout for this discovery build/execute to prevent hanging
             socket.setdefaulttimeout(10) 
-            user_info_service = build('oauth2', 'v2', credentials=creds)
+            user_info_service = build('oauth2', 'v2', credentials=creds, cache_discovery=False)
             user_info = user_info_service.userinfo().get().execute()
             user_email = user_info.get('email', '')
             print(f"[GoogleAuth] User email: {user_email}")
