@@ -108,9 +108,7 @@ build_options = {
         "keyring",
         "win32ctypes",
     ],
-    "includes": [
-        "win32timezone",
-    ],
+    "includes": [],
     "excludes": [
         "pytest",
         "unittest",
