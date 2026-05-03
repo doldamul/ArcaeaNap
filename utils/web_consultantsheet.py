@@ -7,10 +7,10 @@ import wsgiref.simple_server
 import wsgiref.util
 import webbrowser
 import time
+import requests
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
 from utils.configuration import config
 import gspread
 import re
@@ -928,17 +928,15 @@ def _save_google_credentials(creds):
         # Extract user email using Google API Client
         user_email = ''
         try:
-            print("[GoogleAuth] Fetching user info...")
-            # Set a timeout for this discovery build/execute to prevent hanging
-            socket.setdefaulttimeout(10) 
-            user_info_service = build('oauth2', 'v2', credentials=creds, cache_discovery=False)
-            user_info = user_info_service.userinfo().get().execute()
+            print("[GoogleAuth] Fetching user info via API...")
+            headers = {'Authorization': f'Bearer {creds.token}'}
+            response = requests.get('https://www.googleapis.com/oauth2/v2/userinfo', headers=headers, timeout=10)
+            response.raise_for_status()
+            user_info = response.json()
             user_email = user_info.get('email', '')
             print(f"[GoogleAuth] User email: {user_email}")
         except Exception as e:
             print(f"[GoogleAuth] Error extracting user email (non-critical): {e}")
-        finally:
-             socket.setdefaulttimeout(None) # Reset timeout
         
         # Get token info
         token_info = json.loads(creds.to_json())
