@@ -978,7 +978,10 @@ Window {
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
 
                     // Database Management
-                    Text { text: "Song Database"; font.bold: true; color: "#333" }
+                    Text {
+                        text: settingsHandler && settingsHandler.isSongsDbExisting ? "Song Database" : "Generate Song Database"
+                        font.bold: true; color: "#333"
+                    }
                     
                     Rectangle {
                         Layout.fillWidth: true
@@ -993,15 +996,26 @@ Window {
                             
                             Column {
                                 spacing: 2
-                                Text { text: "Update Song Database"; font.bold: true; color: "#1976D2" }
-                                Text { text: "Rebuild song database from online sources"; font.pixelSize: 11; color: "#1976D2" }
+                                Text {
+                                    text: settingsHandler && settingsHandler.isSongsDbExisting ? "Update Song Database" : "Generate Song Database"
+                                    font.bold: true; color: "#1976D2"
+                                }
+                                Text {
+                                    text: settingsHandler && settingsHandler.isSongsDbExisting ? "Rebuild song database from online sources" : "Generate song database from online sources"
+                                    font.pixelSize: 11; color: "#1976D2"
+                                }
                             }
                             
                             Item { Layout.fillWidth: true }
                             
                             Basic.Button {
                                 id: updateDbButton
-                                text: settingsHandler && settingsHandler.isUpdatingSongDatabase() ? "Updating..." : "Update"
+                                text: {
+                                    if (settingsHandler && settingsHandler.isUpdatingSongDatabase()) {
+                                        return "Updating..."
+                                    }
+                                    return settingsHandler && settingsHandler.isSongsDbExisting ? "Update" : "Generate"
+                                }
                                 enabled: !settingsHandler || !settingsHandler.isUpdatingSongDatabase()
                                 onClicked: if (settingsHandler) settingsHandler.updateSongDatabase()
 

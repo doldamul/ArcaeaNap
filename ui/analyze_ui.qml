@@ -139,6 +139,66 @@ Item {
         }
     }
 
+    Popup {
+        id: dbMissingAnalyzePopup
+        anchors.centerIn: parent
+        width: 420
+        height: dbMissingAnalyzeContent.implicitHeight + 40
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            color: "#FFFFFF"
+            radius: 12
+            border.color: "#E65100"
+            border.width: 2
+        }
+
+        Column {
+            id: dbMissingAnalyzeContent
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 12
+
+            Text {
+                text: "⚠ Database Missing"
+                font.bold: true
+                font.pixelSize: 16
+                color: "#E65100"
+            }
+
+            Text {
+                text: "songs.db is required for analysis.\nPlease generate it from the Settings."
+                width: parent.width
+                wrapMode: Text.WordWrap
+                color: "#333333"
+            }
+
+            Row {
+                anchors.right: parent.right
+                spacing: 8
+
+                Button {
+                    text: "Close"
+                    onClicked: dbMissingAnalyzePopup.close()
+                }
+
+                Button {
+                    text: "Go to Settings"
+                    onClicked: {
+                        dbMissingAnalyzePopup.close()
+                        if (analyzeRoot.appWindow && analyzeRoot.appWindow.settingsWindow) {
+                            analyzeRoot.appWindow.settingsWindow.show()
+                            analyzeRoot.appWindow.settingsWindow.raise()
+                            analyzeRoot.appWindow.settingsWindow.requestActivate()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // --- 메인 컨텐츠 영역 ---
     ScrollView {
         id: scrollView

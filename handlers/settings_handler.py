@@ -4,7 +4,8 @@ import os
 import threading
 import time
 from datetime import datetime
-from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant
+from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant, pyqtProperty
+from repositories.song_repository import get_db_path
 from utils.web_arcaeaonline import ArcaeaOnline
 from utils.song_db_builder import rebuild_songs_db
 from services.connection_store import (
@@ -64,6 +65,10 @@ class SettingsHandler(QObject):
     def set_analyzer(self, analyzer):
         """Connect to ArcaeaOnline instance for play count mode control."""
         self._analyzer = analyzer
+
+    @pyqtProperty(bool, notify=settingsChanged)
+    def isSongsDbExisting(self):
+        return os.path.exists(get_db_path())
 
     # --- General Settings ---
     @pyqtSlot(result=str)
@@ -304,6 +309,7 @@ class SettingsHandler(QObject):
             try:
                 rebuild_songs_db()
                 self.songDatabaseUpdateFinished.emit(True, "Song database updated successfully.")
+                self.settingsChanged.emit()
             except Exception as e:
                 print(f"[SettingsHandler] Song database update failed: {e}")
                 traceback.print_exc()

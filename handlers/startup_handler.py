@@ -11,6 +11,7 @@ class StartupHandler(QObject):
     loadingFinished = pyqtSignal()
     errorOccurred = pyqtSignal(str)
     logAdded = pyqtSignal(str)
+    songsDbMissing = pyqtSignal()  # 추가된 시그널
 
     def __init__(self):
         super().__init__()
@@ -24,7 +25,13 @@ class StartupHandler(QObject):
             self.loadingFinished.emit()
             return
 
-        print("songs.db missing. Starting initial data load...")
+        print("songs.db missing. Waiting for user decision...")
+        self.songsDbMissing.emit()  # 자동 생성 대신 시그널 발생
+
+    @pyqtSlot()
+    def startInitialLoad(self):
+        """사용자가 DB 생성을 수락했을 때 수동으로 호출되는 슬롯"""
+        print("Starting initial data load...")
         self.loadingStarted.emit()
 
         self.thread = threading.Thread(target=self._load_data, daemon=True)

@@ -400,6 +400,9 @@ ApplicationWindow {
                 statisticsHandler.refreshData()
             }
         }
+        function onGoogleSheetConnectionChanged() {
+            dbMissingPopup.refreshGoogleConnectionState()
+        }
     }
 
     // --- Song Database Update Modal (ApplicationModal blocks all windows) ---
@@ -490,6 +493,213 @@ ApplicationWindow {
         }
     }
 
+    Popup {
+        id: dbMissingPopup
+        anchors.centerIn: parent
+        width: 420
+        height: dbMissingContent.implicitHeight + 40
+        modal: true
+        focus: true
+        closePolicy: Popup.NoAutoClose // 수동 조작으로만 닫히게 설정
+
+        property string helpText: "Hover over an option to see details."
+        function refreshGoogleConnectionState() {
+            if (!settingsHandler || !popupGoogleButton) {
+                return
+            }
+            popupGoogleButton.isConnected = settingsHandler.isGoogleSheetConnected()
+            popupGoogleButton.connectionInfo = settingsHandler.getGoogleSheetConnectionInfo()
+        }
+        onOpened: refreshGoogleConnectionState()
+
+        background: Rectangle {
+            color: "#FFFFFF"
+            radius: 12
+            border.color: "#E0E0E0"
+            border.width: 1
+        }
+
+        ColumnLayout {
+            id: dbMissingContent
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 20
+
+            Text {
+                Layout.fillWidth: true
+                text: "Song Database Missing"
+                font.bold: true
+                font.pixelSize: 18
+                color: "#333333"
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "Google Account login is required to build the initial songs.db."
+                wrapMode: Text.WordWrap
+                color: "#666666"
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            // Google connection card
+            Rectangle {
+                id: popupGoogleButton
+                Layout.alignment: Qt.AlignHCenter
+                Layout.fillWidth: true
+                Layout.maximumWidth: 360
+                Layout.preferredHeight: 86
+                radius: 10
+                color: isConnected ? "#E8F5E9" : "#F7F7F7"
+                border.color: isConnected ? "#4CAF50" : "#E0E0E0"
+                border.width: 1
+
+                property bool isConnected: settingsHandler ? settingsHandler.isGoogleSheetConnected() : false
+                property var connectionInfo: settingsHandler ? settingsHandler.getGoogleSheetConnectionInfo() : ({})
+                property string connectionText: {
+                    var info = popupGoogleButton.connectionInfo
+                    if (!info || Object.keys(info).length === 0) return ""
+                    if (!info.user_email) return ""
+                    if (info.formatted_date) {
+                        return info.user_email + "\n" + info.formatted_date
+                    }
+                    return info.user_email
+                }
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    spacing: 12
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        Text {
+                            text: "Google Sheet"
+                            font.bold: true
+                            font.pixelSize: 13
+                            color: popupGoogleButton.isConnected ? "#2E7D32" : "#424242"
+                        }
+
+                        Text {
+                            text: popupGoogleButton.isConnected ? "Connected" : "Not Connected"
+                            font.pixelSize: 11
+                            color: popupGoogleButton.isConnected ? "#2E7D32" : "#E53935"
+                        }
+
+                        Text {
+                            visible: popupGoogleButton.isConnected && popupGoogleButton.connectionText.length > 0
+                            text: popupGoogleButton.connectionText
+                            font.pixelSize: 10
+                            color: "#757575"
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                    }
+
+                    Basic.Button {
+                        Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                        Layout.preferredWidth: 110
+                        text: popupGoogleButton.isConnected ? "Disconnect" : "Connect"
+                        onClicked: {
+                            if (settingsHandler) {
+                                if (popupGoogleButton.isConnected) {
+                                    settingsHandler.disconnectGoogleSheet()
+                                } else {
+                                    settingsHandler.connectGoogleSheet()
+                                }
+                                dbMissingPopup.refreshGoogleConnectionState()
+                            }
+                        }
+                        background: Rectangle {
+                            color: "#E0E0E0"
+                            radius: 6
+                        }
+                    }
+                }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 40
+                text: dbMissingPopup.helpText
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                color: "#444444"
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+
+                    Basic.Button {
+                        id: generateNowBtn
+                        Layout.fillWidth: true
+                        text: "Generate Now"
+                        enabled: popupGoogleButton.isConnected
+                        hoverEnabled: true
+                        onHoveredChanged: {
+                            if (hovered) {
+                                dbMissingPopup.helpText = "Start generating songs.db now. This may take a few minutes."
+                            } else if (!generateLaterBtn.hovered) {
+                                dbMissingPopup.helpText = "Hover over an option to see details."
+                            }
+                        }
+                        onClicked: {
+                            dbMissingPopup.close()
+                            if (startupHandler) {
+                                startupHandler.startInitialLoad()
+                            }
+                        }
+                        background: Rectangle { color: generateNowBtn.enabled ? "#F0F0F0" : "#FAFAFA"; radius: 8 }
+                    }
+
+                    Text {
+                        text: "Requires Google login"
+                        font.pixelSize: 10
+                        color: "#E65100"
+                        horizontalAlignment: Text.AlignHCenter
+                        Layout.fillWidth: true
+                        visible: !generateNowBtn.enabled
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+
+                    Basic.Button {
+                        id: generateLaterBtn
+                        Layout.fillWidth: true
+                        text: "Generate Later"
+                        hoverEnabled: true
+                        onHoveredChanged: {
+                            if (hovered) {
+                                dbMissingPopup.helpText = "Skip for now. You can generate it later in the Settings tab."
+                            } else if (!generateNowBtn.hovered) {
+                                dbMissingPopup.helpText = "Hover over an option to see details."
+                            }
+                        }
+                        onClicked: {
+                            dbMissingPopup.close()
+                            window.isLoading = false
+                        }
+                        background: Rectangle { color: "#F0F0F0"; radius: 8 }
+                    }
+                    
+                    // 빈 공간 채우기 용도
+                    Item { Layout.preferredHeight: 14; Layout.fillWidth: true; visible: !generateNowBtn.enabled }
+                }
+            }
+        }
+    }
+
     Connections {
         target: startupHandler
         function onLoadingStarted() {
@@ -497,6 +707,9 @@ ApplicationWindow {
         }
         function onLoadingFinished() {
             window.isLoading = false
+            if (settingsHandler) {
+                settingsHandler.settingsChanged() // isSongsDbExisting 프로퍼티 갱신을 유도
+            }
             // Refresh all handlers after database is created
             if (statsHandler) {
                 statsHandler.refreshStats()
@@ -508,6 +721,12 @@ ApplicationWindow {
         function onErrorOccurred(msg) {
             console.log("Loading error: " + msg)
             window.isLoading = false
+        }
+        function onSongsDbMissing() {
+            // DB가 없을 때 팝업 표시
+            window.isLoading = false
+            dbMissingPopup.refreshGoogleConnectionState()
+            dbMissingPopup.open()
         }
     }
     
@@ -529,6 +748,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        dbMissingPopup.refreshGoogleConnectionState()
         if (startupHandler) {
             startupHandler.checkAndLoad()
         }
