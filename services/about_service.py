@@ -32,13 +32,6 @@ OPEN_SOURCE_ITEMS = [
         "license_file": "apache-2.0.txt",
     },
     {
-        "name": "pandas",
-        "url": "https://pandas.pydata.org/",
-        "license": "BSD-3-Clause",
-        "copyright": "The pandas development team",
-        "license_file": "bsd-3-clause.txt",
-    },
-    {
         "name": "requests",
         "url": "https://requests.readthedocs.io/",
         "license": "Apache-2.0",
