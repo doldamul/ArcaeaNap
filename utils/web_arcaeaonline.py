@@ -255,7 +255,7 @@ class ArcaeaOnline:
         self.notify_status_changed()
         mark_write_activity("user_scores_db", "analysis_session")
         
-        lang = 'ko'
+        lang = 'en'
         url = f'https://arcaea.lowiro.com/{lang}/profile/scores?page=1'
         
         try:

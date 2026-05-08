@@ -681,7 +681,7 @@ class SettingsHandler(QObject):
                 temp_analyzer = ArcaeaOnline()
                 temp_analyzer.log = lambda msg: print(f"[ArcaeaOnline] {msg}")
                 
-                lang = 'ko'
+                lang = 'en'
                 url = f'https://arcaea.lowiro.com/{lang}/profile/scores?page=1'
                 
                 # Initialize browser and login
