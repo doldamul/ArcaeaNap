@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy - ArcaeaNap</title>
+    <link rel="stylesheet" href="assets/style.css" />
+  </head>
+  <body>
+    <header class="sticky-header visible">
+      <a href="index.html" class="header-logo">
+        <img src="assets/logo.png" alt="ArcaeaNap Logo" />
+        <span>ArcaeaNap</span>
+      </a>
+      <div class="header-actions">
+        <a href="https://github.com/doldamul/ArcaeaNap" class="github-link"
+          >Github <span class="icon-external">↗</span></a
+        >
+        <a
+          href="https://github.com/doldamul/ArcaeaNap/releases"
+          class="button primary"
+          style="padding: 0.5rem 1rem; font-size: 0.9rem"
+          >Download</a
+        >
+      </div>
+    </header>
+
+    <div class="scroll-container">
+      <!-- Section 1: Header -->
+      <section class="legal-header">
+        <div class="hero-branding">
+          <img src="assets/logo.png" alt="ArcaeaNap Logo" />
+          <h1>Privacy Policy</h1>
+        </div>
+      </section>
+
+      <!-- Section 2: Content -->
+      <section class="legal-section">
+        <div class="legal-container">
+          <p><strong>Effective Date: May 8, 2026</strong></p>
+          <hr />
+          <h3>1. Introduction</h3>
+          <p>
+            This privacy policy explains how ArcaeaNap handles data. ArcaeaNap
+            is a desktop application designed for Arcaea players.
+          </p>
+
+          <h3>2. Data Collection and Usage</h3>
+          <p>
+            ArcaeaNap is a local-first application. All sensitive information,
+            including your Arcaea Online credentials and API tokens, are stored
+            locally on your machine. We do not operate a centralized server that
+            collects your personal data.
+          </p>
+          <p>
+            <strong>Google User Data:</strong> When you connect your Google
+            account to ArcaeaNap, the application requests access to your email
+            address (for account identification, using the
+            <code>https://www.googleapis.com/auth/userinfo.email</code> and
+            <code>openid</code> scopes) and permissions to read and manage
+            specific files in your Google Drive (specifically, the Google Sheet
+            used to store your data, using the
+            <code>https://www.googleapis.com/auth/drive.file</code> scope). This
+            data is used solely for the purpose of exporting and synchronizing
+            your local Arcaea play records to your personal Google Sheet.
+            Additionally, the application accesses a public, community-maintained
+            Google Sheet in read-only mode (using the
+            <code>https://www.googleapis.com/auth/spreadsheets.readonly</code>
+            scope) to fetch the general song data required to generate the local
+            song database.
+          </p>
+
+          <h3>3. Data Transmission and Sharing</h3>
+          <p>
+            Your data is never shared with or sold to third parties. It is only
+            transmitted directly from your local machine to the following
+            official endpoints as necessary for the application's core
+            functionality:
+          </p>
+          <ul>
+            <li>
+              Official Arcaea Online servers (for fetching your play records).
+            </li>
+            <li>
+              Google API endpoints (for syncing your data directly to your
+              personal Google Sheets and fetching public song data).
+            </li>
+          </ul>
+
+          <h3>4. Data Deletion and Retention</h3>
+          <p>
+            Users can revoke the app's access permissions at any time from their
+            Google Account settings. Locally stored information can be completely
+            removed by the user by directly deleting the data folder.
+          </p>
+
+          <h3>5. Google API Services Limited Use Disclosure</h3>
+          <p>
+            ArcaeaNap's use and transfer to any other app of information
+            received from Google APIs will adhere to the
+            <a
+              href="https://developers.google.com/terms/api-services-user-data-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Google API Services User Data Policy</a
+            >, including the Limited Use requirements.
+          </p>
+
+          <h3>6. Data Security</h3>
+          <p>
+            Since the application runs entirely on your local machine, the
+            security of your data depends on your local system's security.
+            ArcaeaNap uses standard OS-level encryption for sensitive tokens
+            where available.
+          </p>
+
+          <h3>7. Third-Party Services</h3>
+          <p>
+            ArcaeaNap integrates with lowiro's Arcaea Online and Google Sheets.
+            Please refer to their respective privacy policies regarding how they
+            handle data once it reaches their servers.
+          </p>
+
+          <h3>8. Contact</h3>
+          <p>
+            For inquiries regarding this policy, please contact
+            arcaeanap@googlegroups.com or reach out via GitHub Issues.
+          </p>
+        </div>
+      </section>
+
+      <!-- Section 4: Footer -->
+      <footer id="footer">
+        <div class="footer-links">
+          <a href="ko/privacy_policy.html">한국어</a> |
+          <a href="privacy_policy.html">English</a>
+        </div>
+        <p>Developer: doldamul | Software License: GNU GPL v3.0</p>
+        <p>
+          Arcaea and all related assets are the property of lowiro. All rights
+          reserved.
+        </p>
+        <div class="footer-links">
+          <a href="privacy_policy.html">Privacy Policy</a>
+          <a href="terms_of_service.html">Terms of Service</a>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

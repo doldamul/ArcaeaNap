@@ -191,6 +191,9 @@ def build_about_context(repo_root: str) -> dict[str, Any]:
         "appVersion": APP_VERSION,
         "appLicense": APP_LICENSE,
         "repositoryUrl": resolve_repository_url(safe_repo_root),
+        "websiteUrl": "https://doldamul.github.io/ArcaeaNap",
+        "privacyPolicyUrl": "https://doldamul.github.io/ArcaeaNap/privacy_policy",
+        "termsOfServiceUrl": "https://doldamul.github.io/ArcaeaNap/terms_of_service",
         "openSourceItems": _build_open_source_items(),
         "buildDate": _get_build_date(),
     }

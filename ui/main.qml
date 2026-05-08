@@ -58,6 +58,9 @@ ApplicationWindow {
         aboutWindow.appLogoSource = (typeof appLogoSource === "string") ? appLogoSource : ""
         aboutWindow.openSourceItems = (typeof openSourceItems !== "undefined") ? openSourceItems : []
         aboutWindow.buildDate = (typeof buildDate === "string") ? buildDate : ""
+        aboutWindow.websiteUrl = (typeof websiteUrl === "string") ? websiteUrl : ""
+        aboutWindow.privacyPolicyUrl = (typeof privacyPolicyUrl === "string") ? privacyPolicyUrl : ""
+        aboutWindow.termsOfServiceUrl = (typeof termsOfServiceUrl === "string") ? termsOfServiceUrl : ""
         showWindow(aboutWindow)
     }
 

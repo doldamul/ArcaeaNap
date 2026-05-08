@@ -173,5 +173,5 @@ client_secret.json
 .github
 .claude
 .worktrees/
-docs
+agent_docs
 tests

@@ -1,0 +1,305 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+
+:root {
+    --primary-color: #6C5B7B; /* App Purple */
+    --primary-light: #8e7ea0;
+    --text-color: #333;
+    --text-title: #1A1A1A; /* App title color */
+    --text-secondary: #666;
+    --bg-light: #F9F8FC; /* Soft Lavender Grey */
+    --bg-white: #FFFFFF;
+    --bg-header: rgba(255, 255, 255, 0.8);
+    --border-color: #EEEEEE;
+    --title-font: 'Noto Sans JP', sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    overflow: auto;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 18px;
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+.scroll-container {
+    width: 100%;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+}
+
+/* Sticky Header */
+.sticky-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 60px;
+    z-index: 1000;
+    background: var(--bg-header);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    transform: translateY(-100%);
+    transition: transform 0.3s ease-in-out;
+}
+
+.sticky-header.visible {
+    transform: translateY(0);
+}
+
+.header-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    color: var(--text-title);
+    font-weight: bold;
+}
+
+.header-logo img {
+    width: 32px;
+    height: 32px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+}
+
+.header-actions .github-link {
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+}
+
+.header-actions .github-link:hover {
+    color: var(--primary-color);
+}
+
+.header-actions .icon-external {
+    margin-left: 0.3rem;
+    font-size: 0.8em;
+    opacity: 0.6;
+}
+
+section {
+    min-height: 80vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5rem 2rem; /* Slightly reduced padding */
+    text-align: center;
+}
+
+section.hero-section {
+    min-height: 100vh;
+}
+
+section.legal-section {
+    min-height: auto;
+    padding: 4rem 2rem;
+    justify-content: flex-start;
+}
+
+section.legal-header {
+    min-height: 40vh;
+}
+
+section:nth-child(odd) {
+    background-color: var(--bg-light);
+}
+
+section:nth-child(even) {
+    background-color: var(--bg-white);
+}
+
+.screenshot-container {
+    max-width: 85%;
+    max-height: 70vh;
+    margin-bottom: 2rem;
+}
+
+.screenshot-container img {
+    width: 100%;
+    height: auto;
+    max-height: 70vh;
+    object-fit: contain;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: white;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+}
+
+/* Hero Branding */
+.hero-branding {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem; /* Reduced from 2rem */
+}
+
+.hero-branding img {
+    width: 120px; /* Slightly reduced from 140px */
+    height: 120px;
+    margin-bottom: 0.5rem;
+}
+
+h1 {
+    font-size: 2.8rem;
+    margin: 0;
+    font-family: var(--title-font);
+    color: var(--text-title);
+}
+
+.hero-branding h1 {
+    font-size: 4rem; /* Slightly reduced from 4.5rem for calmness */
+    font-weight: 700; /* Match app bolding */
+    letter-spacing: -0.03em; /* Tighter tracking for premium feel */
+}
+
+/* Reduced title size for legal pages */
+section.legal-header .hero-branding h1 {
+    font-size: 2.8rem;
+}
+
+section.legal-header .hero-branding img {
+    width: 80px;
+    height: 80px;
+}
+
+.description-text {
+    max-width: 1000px; /* Increased width from 900px */
+    font-size: 1.3rem; 
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin: 0 auto;
+}
+
+.warning-text {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin-top: 10px;
+}
+
+/* CTA Buttons */
+.cta-group {
+    display: flex;
+    gap: 1.5rem; /* Reduced gap from 2rem */
+    justify-content: center;
+    align-items: flex-start;
+    margin-top: 2rem; /* Reduced from 3rem */
+}
+
+.btn-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem; /* Reduced gap */
+}
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.7rem 1.8rem; /* Reduced from 1rem 2.2rem */
+    border-radius: 10px;
+    font-weight: 700;
+    transition: all 0.2s;
+    text-decoration: none;
+    line-height: 1;
+    font-size: 1.05rem; /* Reduced from 1.15rem */
+}
+
+.button .icon-external {
+    margin-left: 0.5rem;
+    font-size: 0.9em;
+    opacity: 0.7;
+}
+
+.subtext {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.button.primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.button.primary:hover {
+    background: var(--primary-light);
+}
+
+.button.secondary {
+    background: transparent;
+    color: var(--primary-color);
+    border: 2px solid var(--primary-color);
+}
+
+.button.secondary:hover {
+    background: var(--bg-light);
+}
+
+footer {
+    padding: 3rem 2rem; /* Reduced from 6rem */
+    background: var(--bg-white);
+    text-align: center;
+    font-size: 1.05rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.footer-links {
+  margin: 10px 0; /* Reduced from 15px */
+}
+
+footer p {
+    margin: 0.5rem 0; /* Tighten paragraph spacing */
+}
+
+.footer-links a {
+  margin: 0 12px;
+  text-decoration: none;
+  color: var(--primary-color);
+}
+
+.footer-links a:hover {
+  text-decoration: underline;
+}
+
+.legal-container {
+    max-width: 900px;
+    margin: 0 auto;
+    text-align: left;
+    padding: 2rem;
+    font-size: 1.2rem; 
+    line-height: 1.9;
+}
+
+.legal-container h3 {
+    font-size: 1.8rem;
+    margin-top: 2.5rem;
+}
+
+.legal-container hr {
+    border: 0;
+    border-top: 1px solid var(--border-color);
+    margin: 2rem 0;
+}
