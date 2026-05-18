@@ -41,7 +41,7 @@ ArcaeaNap is a fast and convenient Arcaea play record viewer. It saves Arcaea On
 5. In Settings, log in to Arcaea Online and ensure your subscription is active.
 6. Click the Start Analysis button in the Analyze tab to access Arcaea Online.
 7. Wait a moment on the play record page. The browser will automatically detect your play records and song jacket images, saving them to your local PC.
-8. Visit all pages for each difficulty.
+8. Visit all pages for each difficulty. Be careful that no new records from Arcaea are registered during this time.
 9. Explore your play records in the Home and Statistics tabs.
 
 After the initial setup, you only need to visit the pages for your latest play records.
