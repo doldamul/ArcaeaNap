@@ -921,6 +921,30 @@ class ArcaeaOnline:
         if not target_element:
             return None
         
+        while self.status.is_running:
+            try:        
+                # HTML 요소의 disabled 클래스를 통해 로딩 상태 확인
+                is_loading = self.page.evaluate("""() => {
+                    const diffSelect = document.querySelector('.difficulty-select');
+                    if (diffSelect && diffSelect.classList.contains('disabled')) return true;
+                    
+                    const pagination = document.querySelector('.pagination-container');
+                    if (pagination) {
+                        const items = pagination.querySelectorAll('*');
+                        for (let i = 0; i < items.length; i++) {
+                            if (items[i].classList.contains('disabled')) return true;
+                        }
+                    }
+                    return false;
+                }""")
+                
+                if not is_loading: # 로딩 중이 아닐 때만 다음 단계로 넘어감
+                    break
+                time.sleep(0.2)
+            except Exception:
+                time.sleep(0.2)
+                continue
+        
         user_data = None
         while self.status.is_running:
             try:
