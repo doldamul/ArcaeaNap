@@ -1295,7 +1295,6 @@ class ArcaeaOnline:
                 }}""",
                 timeout=5000
             )
-            time.sleep(2)  # 이미지 응답 완료 대기
         except Exception as e:
             if self._is_browser_closed_error(e):
                 return
@@ -1310,6 +1309,26 @@ class ArcaeaOnline:
         
         if not img_elements:
             return
+            
+        # 다운로드할 대상 파일명(캐시 키) 수집
+        target_filenames = set()
+        for i, img_elem in enumerate(img_elements):
+            if i in missing:
+                try:
+                    img_url = img_elem.get_attribute('src')
+                    if img_url and 'webassets.lowiro.com' in img_url:
+                        url_filename = img_url.split('/')[-1].split('?')[0]
+                        target_filenames.add(url_filename)
+                except Exception:
+                    continue
+                    
+        # 캐시 폴링 루프 (최대 10초 대기)
+        if target_filenames:
+            start_time = time.time()
+            while time.time() - start_time < 10.0:
+                if all(filename in self.thumbnail_collector.cached_images for filename in target_filenames):
+                    break
+                time.sleep(0.2)
         
         # 미저장 항목만 처리
         saved_count = 0
