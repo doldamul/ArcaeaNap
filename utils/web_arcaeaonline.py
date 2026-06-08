@@ -12,6 +12,8 @@ import time
 import os
 import re
 import base64
+import threading
+import sys
 from datetime import datetime, timezone
 from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext, TimeoutError as PlaywrightTimeout
 from utils.browser_utils import get_browser
@@ -30,6 +32,8 @@ ARCAEAONLINE_DOMAIN = "arcaea.lowiro.com"
 ALBUM_JACKET_SELECTOR = "img.album-jacket"
 
 DIFFICULTY_NAMES = {0: 'pst', 1: 'prs', 2: 'ftr', 3: 'byd', 4: 'etr'}
+# 메인 루프 펌핑 간격(ms). 다른 스레드 플래그 변경 감지 지연의 상한.
+POLL_MS = 100
 
 
 @dataclass
@@ -145,6 +149,13 @@ class ArcaeaOnline:
         self.current_sort = None
         self.current_search_text = ''
         self._difficulty_tag: Optional[str] = None
+        
+        # Network state flags
+        self._is_api_fetching = False
+        self._wake_event = threading.Event()
+        # 콘솔 이벤트 단일 진실 소스 (유실 방지: maxlen 없음)
+        # append=디스패처 greenlet / popleft=메인 루프, 동일 OS 스레드 교대 실행이라 락 불필요
+        self._console_events: deque = deque()
 
         # Session auto-reset detection
         self.scanned_pages: Dict[int, Dict[int, list]] = {}  # difficulty -> {page -> [time_played]}
@@ -268,6 +279,91 @@ class ArcaeaOnline:
             )
             self.page = self.context.new_page()
             
+            # Inject UI event listeners (Vue.js Reactivity Watcher)
+            self.page.add_init_script("""
+                (() => {
+                    if (window.hasArcaeaNapWatcher) return;
+                    window.hasArcaeaNapWatcher = true;
+
+                    const selector = "#app > section > div:nth-child(3)";
+                    let currentVue = null;
+                    let lastEmitSig = null;         // 직전 emit한 페이지 내용 서명(연속 동일내용 중복 emit 방지)
+
+                    // 1. 클릭 및 인터랙션 즉시 감지 리스너 (캡처링 단계 적용)
+                    const triggerClick = (e) => {
+                        // 데이터 무관 클릭(album-profile의 no-active/up-arrow 등)이 유발하는
+                        // 동일 내용 __AO_PAGE__는 아래 lastEmitSig 중복제거가 자동으로 억제한다.
+                        let diff = e.target.closest('.difficulty-selector');
+                        if (diff) {
+                            const label = diff.querySelector('.label');
+                            console.log("__AO_CLICK__|DIFF|" + (label ? label.textContent : ""));
+                            return;
+                        }
+                        if (e.target.closest('.pagination-container')) {
+                            // 자식 페이지 버튼이 아니라 컨테이너 자체(버튼 사이 여백)를 직접 클릭하면
+                            // textContent가 모든 페이지번호의 연결이 되어 잘못된 PAGE 값을 만든다 → 무시.
+                            if (e.target.matches('.pagination-container')) {
+                                return;
+                            }
+                            const t = e.target.textContent.trim();
+                            if (/^(\\d+|<|>)$/.test(t)) {   // 단일 페이지번호 또는 이전/다음 화살표만 허용
+                                console.log("__AO_CLICK__|PAGE|" + t);
+                            }
+                            return;                          // 그 외(비매칭)는 조용히 무시
+                        }
+                        let sortBtn = e.target.closest('.group-dropdown .li-dropdown');
+                        if (sortBtn) {
+                            console.log("__AO_CLICK__|SORT|" + sortBtn.textContent.trim());
+                            return;
+                        }
+                    };
+                    document.addEventListener('click', triggerClick, true);
+                    
+                    // 2. Vue 데이터 갱신 완료 감시
+                    setInterval(() => {
+                        const el = document.querySelector(selector);
+                        if (el && el.__vue__) {
+                            if (el.__vue__ !== currentVue) {
+                                currentVue = el.__vue__;
+                                const vue = el.__vue__;
+
+                                let notifyTimer = null;
+                                const debouncedNotify = () => {
+                                    if (notifyTimer) clearTimeout(notifyTimer);
+                                    notifyTimer = setTimeout(() => {
+                                        vue.$nextTick(() => {
+                                            if (!vue.userScores || vue.userScores.length === 0) {
+                                                console.log("__AO_DEBUG__: Empty userScores array detected. Ignoring.");
+                                                return;
+                                            }
+                                            // 직전과 동일한 페이지 내용이면 중복 emit 억제.
+                                            // (난이도 변경 시 SPA가 userScores를 동일 내용으로 2회 재할당해
+                                            //  watcher가 같은 내용으로 두 번 fire하는 문제 대응. 난이도/페이지/
+                                            //  정렬/검색/레코드가 바뀌면 서명이 달라져 정상 emit됨)
+                                            const us = vue.userScores;
+                                            const sort = vue.dropDownSelectedValue && vue.dropDownSelectedValue.value;
+                                            const sig = vue.selectedDifficulty + ":" + vue.currentPage
+                                                + ":" + (vue.searchTerm || "") + ":" + (sort || "")
+                                                + ":" + us.length
+                                                + ":" + (us[0] ? us[0].time_played : "")
+                                                + ":" + (us[us.length - 1] ? us[us.length - 1].time_played : "");
+                                            if (sig === lastEmitSig) {
+                                                console.log("__AO_DEBUG__: Duplicate __AO_PAGE__ suppressed (same content).");
+                                                return;
+                                            }
+                                            lastEmitSig = sig;
+                                            console.log("__AO_PAGE__");
+                                        });
+                                    }, 50);
+                                };
+
+                                vue.$watch('userScores', debouncedNotify);
+                            }
+                        }
+                    }, 200);
+                })()
+            """)
+            
             # Cache browser PID via window title marker (browser-agnostic)
             self._browser_pid = self._detect_browser_pid()
             
@@ -294,6 +390,15 @@ class ArcaeaOnline:
             self._difficulty_tag = None
             
             self.notify_progress_changed()
+            _click_analyzing_since = None
+
+            # 첫 페이지는 별도 reload 없이 처리한다. 로그인 직후(세션 복원 goto 또는
+            # 수동 로그인 리다이렉트)에 로드되는 플레이기록 페이지에서 __AO_PAGE__가
+            # 발생하며, 항상 켜진 _handle_console가 이를 deque에 캡처하므로 메인 루프가
+            # 그대로 수신해 save_data로 첫 페이지를 저장한다.
+            # (init 단계에서 reload를 두면, 로그인 로드의 초기 __AO_PAGE__ 발생 전에
+            #  reload가 끼어들어 로드와 경합 → 첫 페이지가 간헐적으로 누락되는 문제가 있어 제거.)
+            self.log("Waiting for first page data...")
 
             while self.status.is_running and not self._browser_closed:
                 try:
@@ -301,51 +406,82 @@ class ArcaeaOnline:
                     if self._mode_toggle_pending:
                         self._mode_toggle_pending = False
                         self._reset_analysis_session(
-                            current_page=self.current_pageno, 
+                            current_page=self.current_pageno,
                             msg="Play Count Analyze Mode changed. Session refreshed"
                         )
                         continue
 
-                    # Polling for page change
-                    if self.has_page_changed():
-                        pass  # Continue to process
-                    else:
-                        time.sleep(1)
+                    # 콘솔 이벤트 대기(항상 켜진 핸들러가 deque에 적재 → 유실 없음).
+                    # 클릭 분석 진행 중이면 더 길게(2초) 대기하되, 내부 펌핑은 POLL_MS마다 플래그 재확인.
+                    wait_timeout = 2000 if _click_analyzing_since else POLL_MS
+                    msg_text = self._wait_for_console(timeout_ms=wait_timeout)
+
+                    if msg_text:
+                        self.log(f"Console message received: {msg_text}", with_tag=False, debug=True)
+
+                    if not msg_text or msg_text.startswith("__AO_DEBUG__"):
+                        # __AO_CLICK__ 후 2초 이상 __AO_PAGE__ 없으면 ready로 복구
+                        if _click_analyzing_since and time.time() - _click_analyzing_since > 2.0:
+                            self.status.status = 'ready'
+                            self.notify_status_changed()
+                            restore_pointer_events(self.page)
+                            _click_analyzing_since = None
                         continue
+
+                    if msg_text.startswith("__AO_CLICK__"):
+                        # 파이썬 내에서 동일 클릭 여부 판단 (Bypass)
+                        if self._should_bypass_click(msg_text):
+                            self.log("Identical click detected. Bypassing...", with_tag=False, debug=True)
+                            continue
+
+                        # 클릭 시점에 즉시 analyzing 전환 + 포인터 차단(분석 중 클릭 방지)
+                        if self.status.status != 'analyzing':
+                            self.status.status = 'analyzing'
+                            self.notify_status_changed()
+                            block_pointer_events(self.page)
+                            self.log('User interaction detected.', with_tag=False, debug=True)
+                            # 빌드 앱에 표시되는 로그는 AO_PAGE와 동일하게 'New page detected.'로 통일
+                            self.log('New page detected.', with_tag=False)
+                            _click_analyzing_since = time.time()
+                        continue
+
+                    elif msg_text == "__AO_PAGE__":
+                        _click_analyzing_since = None
+                        # 페이지 로드 완료 시점에 데이터 저장
+                        try:
+                            # analyzing 전환 시에만 차단(클릭 분기가 이미 차단한 경우 중복 차단 방지).
+                            # 중복 차단 시 restore가 원상복구에 실패해 화면이 영구 차단될 수 있음.
+                            if self.status.status != 'analyzing':
+                                self.log('New page detected.', with_tag=False)
+                                block_pointer_events(self.page)
+
+                            self.status.status = 'analyzing'
+                            self.notify_status_changed()
+
+                            self.save_data()
+                        except Exception as e:
+                            if self._is_browser_closed_error(e):
+                                break
+                        finally:
+                            try:
+                                self.status.status = 'ready'
+                                self.notify_status_changed()
+                                restore_pointer_events(self.page)
+                            except Exception:
+                                pass
+
+                        # Check if page is still alive
+                        try:
+                            self.page.title()
+                        except Exception:
+                            break
+
                 except Exception as e:
                     # 브라우저 종료 감지
                     if self._is_browser_closed_error(e):
                         break
-                    time.sleep(1)
+                    time.sleep(1.0)
                     continue
-                
-                if not self.status.is_running:
-                    break
-
-                try:
-                    block_pointer_events(self.page)
-                    
-                    self.status.status = 'analyzing'
-                    self.notify_status_changed()
-                    self.log('New page detected.', with_tag=False)
-
-                    self.save_data()
-                except Exception as e:
-                    if self._is_browser_closed_error(e):
-                        break
-                finally:
-                    try:
-                        self.status.status = 'ready'
-                        self.notify_status_changed()
-                        restore_pointer_events(self.page)
-                    except Exception:
-                        pass
-                
-                # Check if page is still alive
-                try:
-                    self.page.title()
-                except Exception:
-                    break
 
             # 이벤트 리스너로 종료 감지된 경우 로그 출력
             if self._browser_closed:
@@ -359,6 +495,43 @@ class ArcaeaOnline:
         finally:
             self.stop()
     
+    def _wait_for_console(self, predicate=None, timeout_ms: int = 10000) -> Optional[str]:
+        """deque(항상 켜진 핸들러가 채움)를 단일 진실 소스로, predicate 매칭 메시지를 반환.
+
+        - predicate=None: 임의의 __AO_* 메시지 한 건 반환(스테디 루프용).
+        - predicate 지정: 매칭 전까지 본 비매칭 메시지는 순서 보존하여 deque로 되돌림(유실 방지).
+        - expect_console_message는 데이터 캡처가 아니라 '다음 콘솔 이벤트 도착 OR 짧은 타임아웃까지
+          효율적으로 대기(저지연 깨우기)' 용도로만 쓴다. 반환값은 무시한다.
+        반환: 매칭 메시지 text, 없으면 None.
+        """
+        deadline = time.time() + timeout_ms / 1000
+        held = []  # predicate 비매칭 메시지 임시 보관(순서 보존)
+        try:
+            while self.status.is_running and not self._browser_closed:
+                # 1) 이미 도착한 이벤트부터 소비 (틈새 방지: 핸들러가 채워둔 것)
+                while self._console_events:
+                    text = self._console_events.popleft()
+                    if predicate is None or predicate(text):
+                        return text
+                    held.append(text)  # 비매칭 → 보관(이미 popleft됨 → 동일 패스 재방문 없음 → 무한루프 없음)
+
+                remaining_ms = int((deadline - time.time()) * 1000)
+                if remaining_ms <= 0:
+                    return None
+
+                # 2) 저지연 깨우기: 다음 콘솔 이벤트 또는 짧은 타임아웃까지 펌핑
+                pump_ms = max(1, min(POLL_MS, remaining_ms))
+                try:
+                    with self.page.expect_console_message(timeout=pump_ms):
+                        pass
+                except PlaywrightTimeout:
+                    pass  # 타임아웃 → 루프 상단에서 플래그 재확인(반응성)
+            return None
+        finally:
+            # 매칭/타임아웃/탈출 어느 경우든 보관분을 원래 순서대로 deque 앞으로 복구
+            if held:
+                self._console_events.extendleft(reversed(held))
+
     def _is_browser_closed_error(self, e: Exception) -> bool:
         """브라우저/페이지 종료 관련 예외인지 확인"""
         error_msg = str(e).lower()
@@ -379,12 +552,14 @@ class ArcaeaOnline:
         self.status.status = 'closed'
         self.notify_status_changed()
         clear_write_activity("user_scores_db")
+        self._wake_event.set()
 
     def stop(self):
         self.status.is_running = False
         self.status.status = 'closed'
         self.notify_status_changed()
         clear_write_activity("user_scores_db")
+        self._wake_event.set()
         
         try:
             if self.page:
@@ -516,18 +691,47 @@ class ArcaeaOnline:
             print(f"Failed to bring browser to front: {e}")
 
     
+    def _on_browser_closed_event(self):
+        self._browser_closed = True
+        self._wake_event.set()
+
+    def _handle_console(self, msg):
+        """항상 켜진 콘솔 핸들러. 모든 __AO_* 메시지를 deque에 적재(유실 0의 단일 진실 소스)."""
+        text = msg.text
+        if (text.startswith("__AO_CLICK__")
+                or text == "__AO_PAGE__"
+                or text.startswith("__AO_DEBUG__")):
+            self._console_events.append(text)
+        if text.startswith("__AO_DEBUG__"):
+            self.log(f"DEBUG: {text}", with_tag=False, debug=True)
+
     def setup_browser_listeners(self):
         """Set up browser event listeners for close detection and response interception."""
         if not self.page or not self.context or not self.browser:
              return
 
         self._browser_closed = False
-        self.page.on("close", lambda: setattr(self, '_browser_closed', True))
-        self.context.on("close", lambda: setattr(self, '_browser_closed', True))
-        self.browser.on("disconnected", lambda: setattr(self, '_browser_closed', True))
-        
+        self.page.on("close", self._on_browser_closed_event)
+        self.context.on("close", self._on_browser_closed_event)
+        self.browser.on("disconnected", self._on_browser_closed_event)
+
+        self.page.on("console", self._handle_console)
+
         # Response intercept
         self.page.on("response", self.thumbnail_collector.handle_response)
+        
+        # API Request tracking
+        self.page.on("request", self._on_request)
+        self.page.on("requestfinished", self._on_request_done)
+        self.page.on("requestfailed", self._on_request_done)
+
+    def _on_request(self, request):
+        if "profile/scores" in request.url:
+            self._is_api_fetching = True
+
+    def _on_request_done(self, request):
+        if "profile/scores" in request.url:
+            self._is_api_fetching = False
 
     def login(self, url):        
         # Initialize browser closed flag if not set (needed for direct login calls)
@@ -758,42 +962,35 @@ class ArcaeaOnline:
         except Exception as e:
             self.log(f"Error updating profile: {e}")
 
-    def has_page_changed(self) -> bool:
-        if not self.status.is_running:
-            return False
-        
-        try:
-            difficulty_select = self.page.locator('.difficulty-select')
-            if 'disabled' in (difficulty_select.get_attribute('class') or ''):
-                return False
-
-            new_difficulty = self.page.locator(".difficulty-selector.active .label").text_content()
-            new_pageno = self.page.locator('.selected.no-select').text_content()
-            new_sort = self.page.locator('div.dropdown > div > span:nth-child(1)').text_content()
-
-            if new_difficulty != self.current_difficulty or new_pageno != self.current_pageno or new_sort != self.current_sort:
-                self.current_difficulty = new_difficulty
-                self.current_pageno = new_pageno
-                self.current_sort = new_sort
+    def _should_bypass_click(self, click_payload: str) -> bool:
+        """
+        __AO_CLICK__|타입|값 형태의 페이로드를 분석하여 동일 요소 클릭인지 판별합니다.
+        동일하다면 불필요한 이벤트이므로 Bypass하기 위해 True 반환.
+        """
+        parts = click_payload.split('|')
+        if len(parts) >= 3:
+            click_type = parts[1]
+            click_val = parts[2]
+            
+            if click_type == "DIFF" and click_val == self.current_difficulty:
                 return True
-
-            new_search_text = self.page.locator('div.search-box > input[type=text]').input_value()
-
-            if new_search_text != self.current_search_text:
-                time.sleep(0.4)
-                waited_new_search_text = self.page.locator('div.search-box > input[type=text]').input_value()
-                if new_search_text != waited_new_search_text:
-                    return False
-
-                time.sleep(0.4)
-                waited_new_search_text = self.page.locator('div.search-box > input[type=text]').input_value()
-                if new_search_text == waited_new_search_text:
-                    self.current_search_text = new_search_text
+            if click_type == "PAGE" and click_val == self.current_pageno:
+                return True
+            if click_type == "SORT" and self.current_sort:
+                if click_val.lower() in self.current_sort.lower():
                     return True
                 
-            return False
+        return False
+
+    def _sync_dom_state(self):
+        try:
+            if not self.page or self.page.is_closed(): return
+            self.current_difficulty = self.page.locator(".difficulty-selector.active .label").text_content()
+            self.current_pageno = self.page.locator('.selected.no-select').text_content()
+            self.current_sort = self.page.locator('div.dropdown > div > span:nth-child(1)').text_content()
+            self.current_search_text = self.page.locator('div.search-box > input[type=text]').input_value()
         except Exception:
-            return False
+            pass
 
     def save_data(self):
         """
@@ -911,39 +1108,13 @@ class ArcaeaOnline:
             PageScoreData 또는 None (데이터 없음/중복시)
         """
         target_element = None
-        while self.status.is_running:
-            try:
-                target_element = self.page.wait_for_selector(VUE_COMPONENT_SELECTOR, timeout=1000)
-                break
-            except Exception:
-                continue
-        
+        try:
+            target_element = self.page.wait_for_selector(VUE_COMPONENT_SELECTOR, timeout=1000)
+        except Exception:
+            pass
+            
         if not target_element:
             return None
-        
-        while self.status.is_running:
-            try:        
-                # HTML 요소의 disabled 클래스를 통해 로딩 상태 확인
-                is_loading = self.page.evaluate("""() => {
-                    const diffSelect = document.querySelector('.difficulty-select');
-                    if (diffSelect && diffSelect.classList.contains('disabled')) return true;
-                    
-                    const pagination = document.querySelector('.pagination-container');
-                    if (pagination) {
-                        const items = pagination.querySelectorAll('*');
-                        for (let i = 0; i < items.length; i++) {
-                            if (items[i].classList.contains('disabled')) return true;
-                        }
-                    }
-                    return false;
-                }""")
-                
-                if not is_loading: # 로딩 중이 아닐 때만 다음 단계로 넘어감
-                    break
-                time.sleep(0.2)
-            except Exception:
-                time.sleep(0.2)
-                continue
         
         user_data = None
         while self.status.is_running:
@@ -966,10 +1137,10 @@ class ArcaeaOnline:
                 continue
         
         if user_data == self.previous_user_data:
-            time.sleep(0.5)
             return None
         
         self.previous_user_data = user_data
+        self._sync_dom_state()
         
         user_scores = user_data.get('userScores') if user_data else None
         if not user_scores or len(user_scores) == 0:
@@ -1034,7 +1205,7 @@ class ArcaeaOnline:
         if page in self.scanned_pages[difficulty]:
             if self.scanned_pages[difficulty][page] != current_times:
                 self.log(f"Session reset: Page {page} content changed on revisit.", with_tag=False)
-                reloaded = self._reset_analysis_session(page)
+                reloaded = self._reset_analysis_session(current_page=page)
                 self.scanned_pages[difficulty][page] = current_times
                 return reloaded
             return False  # 동일 내용이면 중복 체크 불필요
@@ -1047,7 +1218,7 @@ class ArcaeaOnline:
         for tp in current_times:
             if tp in all_scanned:
                 self.log(f"Session reset: Already scanned record detected on page {page}.", with_tag=False)
-                reloaded = self._reset_analysis_session(page)
+                reloaded = self._reset_analysis_session(current_page=page)
                 self.scanned_pages[difficulty][page] = current_times
                 return reloaded
 
@@ -1074,8 +1245,15 @@ class ArcaeaOnline:
             try:
                 current_url = self.page.url
                 page1_url = re.sub(r'page=\d+', 'page=1', current_url)
+
+                self._console_events.clear()  # 네비게이션 직전 stale 이벤트 제거(경합 방지)
                 self.page.goto(page1_url)
-                reloaded = True
+                result = self._wait_for_console(
+                    predicate=lambda t: t == "__AO_PAGE__",
+                    timeout_ms=5000,
+                )
+
+                reloaded = bool(result)
                 # has_page_changed()가 이동한 페이지를 새 페이지로 감지하도록 초기화
                 self.current_pageno = None
                 self.current_difficulty = None
@@ -1395,7 +1573,10 @@ class ArcaeaOnline:
         self.checked_page[difficulty] = set()
         self.total_page[difficulty] = None
 
-    def log(self, message: str, with_tag: bool = True):
+    def log(self, message: str, with_tag: bool = True, debug: bool = False):
+        # AO_* 프로토콜 수신 등 디버깅용 로그는 빌드(frozen) 앱에서는 표시하지 않는다.
+        if debug and getattr(sys, "frozen", False):
+            return
         timestamp = time.strftime("[%H:%M:%S]")
         diff_tag = f"[{self._difficulty_tag}]" if getattr(self, '_difficulty_tag', None) and with_tag else ""
         formatted_message = f"{timestamp}{diff_tag} {message}"

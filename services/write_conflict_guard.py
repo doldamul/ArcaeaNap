@@ -54,12 +54,26 @@ def _marker_candidates(target: str) -> list[str]:
 
 def _atomic_write_json(path: str, payload: dict) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp_path = f"{path}.tmp"
+    tmp_path = f"{path}.{os.getpid()}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
         f.flush()
         os.fsync(f.fileno())
-    os.replace(tmp_path, path)
+    # Retry os.replace with backoff (Dropbox/OneDrive may lock the target)
+    for attempt in range(3):
+        try:
+            os.replace(tmp_path, path)
+            return
+        except OSError:
+            if attempt < 2:
+                time.sleep(0.1 * (attempt + 1))
+    # Final fallback: direct write (non-atomic but functional)
+    try:
+        os.remove(tmp_path)
+    except OSError:
+        pass
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
 
 
 def _log_marker_io_failure(action: str, target: str, error: Exception) -> None:
