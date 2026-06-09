@@ -1205,6 +1205,13 @@ Window {
                             Layout.alignment: Qt.AlignRight
                             property bool checked: settingsHandler ? settingsHandler.getAnalyzeModeEnabled() : false
 
+                            Connections {
+                                target: settingsHandler
+                                function onAnalyzeModeChanged(enabled) {
+                                    analyzeToggle.checked = enabled
+                                }
+                            }
+
                             Rectangle {
                                 id: toggleTrack
                                 anchors.fill: parent

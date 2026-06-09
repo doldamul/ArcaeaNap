@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
+import QtQuick.Controls.Basic as Basic
 
 Item {
     id: analyzeRoot
@@ -294,7 +295,116 @@ Item {
                             }
                         }
 
-                        Item { Layout.preferredHeight: 20; Layout.fillHeight: true }
+                        // Start Analysis 버튼을 위로 더 올리기 위해 간격 추가 확대
+                        Item { height: 80 }
+
+                        // Play Count Analyze Mode Toggle (Capsule UI)
+                        Rectangle {
+                            Layout.alignment: Qt.AlignLeft
+                            implicitWidth: analyzeModeRow.implicitWidth + 32
+                            height: 46
+                            radius: 23
+                            color: "#F8F8F8"
+                            border.color: "#E0E0E0"
+                            border.width: 1
+
+                            RowLayout {
+                                id: analyzeModeRow
+                                anchors.fill: parent
+                                anchors.leftMargin: 20
+                                anchors.rightMargin: 12
+                                spacing: 12
+
+                                // 텍스트와 툴팁 영역
+                                RowLayout {
+                                    spacing: 6
+                                    Text { 
+                                        text: "Play Count Analyze Mode"
+                                        font.bold: true
+                                        color: "#333" 
+                                    }
+                                    
+                                    Text {
+                                        text: "🛈"
+                                        font.pixelSize: 14
+                                        color: analyzeModeHelpMouse.containsMouse ? "#6A0DAD" : "#999"
+                                        
+                                        MouseArea {
+                                            id: analyzeModeHelpMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                        }
+                                        
+                                        Basic.ToolTip {
+                                            visible: analyzeModeHelpMouse.containsMouse
+                                            delay: 100
+                                            timeout: -1
+                                            x: parent.width + 10
+                                            y: -10
+                                            
+                                            contentItem: Text {
+                                                text: "Arcaea Online resets 'Yearly Play Count' data annually on Jan 1st (00:00 GMT).\n\n" +
+                                                      "Normally, the analyzer updates play count of a record only when a new score is found, for ensuring record consistency and preventing server strain. Enable this mode to temporarily bypass limits and update play counts for ALL songs.\n" +
+                                                      "This is useful for archiving your complete yearly statistics before the reset."
+                                                font.pixelSize: 12
+                                                color: "#FFFFFF"
+                                                wrapMode: Text.WordWrap
+                                            }
+                                            
+                                            background: Rectangle {
+                                                color: "#333333"
+                                                radius: 6
+                                                opacity: 0.95
+                                            }
+                                            
+                                            width: 350
+                                        }
+                                    }
+                                }
+
+                                // 토글 스위치 영역
+                                Item {
+                                    id: analyzeModeToggle_analyze
+                                    width: 48; height: 26
+                                    property bool checked: settingsHandler ? settingsHandler.getAnalyzeModeEnabled() : false
+
+                                    Connections {
+                                        target: settingsHandler
+                                        function onAnalyzeModeChanged(enabled) {
+                                            analyzeModeToggle_analyze.checked = enabled
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        id: toggleTrack_analyze
+                                        anchors.fill: parent
+                                        radius: 13
+                                        color: analyzeModeToggle_analyze.checked ? "#6A0DAD" : "#E0E0E0"
+                                        border.color: analyzeModeToggle_analyze.checked ? "#6A0DAD" : "#CCCCCC"
+                                        Behavior on color { ColorAnimation { duration: 200 } }
+                                        Behavior on border.color { ColorAnimation { duration: 200 } }
+
+                                        Rectangle {
+                                            width: 22; height: 22; radius: 11
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            x: analyzeModeToggle_analyze.checked ? parent.width - width - 2 : 2
+                                            color: "white"
+                                            
+                                            Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutCubic } }
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            analyzeModeToggle_analyze.checked = !analyzeModeToggle_analyze.checked
+                                            if (settingsHandler) settingsHandler.setAnalyzeModeEnabled(analyzeModeToggle_analyze.checked)
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         // 하단 상태바
                         Rectangle {
