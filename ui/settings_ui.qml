@@ -1561,6 +1561,7 @@ Window {
                             onCheckedChanged: if (settingsHandler) settingsHandler.setShowDescription(checked)
                         }
                         CheckBox {
+                            id: showPlayCountTimeCheckBox
                             text: "Show Play Count & Play Time"
                             checked: settingsHandler ? settingsHandler.getShowPlayCountTime() : true
                             onCheckedChanged: if (settingsHandler) settingsHandler.setShowPlayCountTime(checked)
@@ -1570,7 +1571,7 @@ Window {
                         RowLayout {
                             id: playStatsDiffFilterRow
                             Layout.leftMargin: 20
-                            visible: settingsHandler ? settingsHandler.getShowPlayCountTime() : true
+                            visible: showPlayCountTimeCheckBox.checked
                             
                             property bool pstChecked: true
                             property bool prsChecked: true

@@ -32,6 +32,11 @@ Item {
     property string profileDescriptionText: settingsHandler ? settingsHandler.getProfileDescription() : ""
     property bool showPlayCountTime: settingsHandler ? settingsHandler.getShowPlayCountTime() : true
     property bool showPlayCountMostPlayed: settingsHandler ? settingsHandler.getShowPlayCountMostPlayed() : true
+    property bool isProfileInfoEmpty: !showNameInProfile && 
+                                      !showFriendCodeInProfile && 
+                                      !showPotentialInProfile && 
+                                      !showDescriptionInProfile && 
+                                      !showPlayCountTime
     readonly property var appWindow: ApplicationWindow.window
     readonly property string titleFontFamily: (appWindow && appWindow.titleFontFamily)
         ? appWindow.titleFontFamily
@@ -466,17 +471,19 @@ Item {
                     }
                 }
 
-                // 프로필 이미지 영역: 패널 너비 60%, 우측 정렬 오버레이, 좌 10% / 우 5% 페이드 그라데이션
+                // 프로필 이미지 영역: 패널 너비 60% (또는 조건부 100%), 우측 정렬 오버레이
                 Item {
                     id: profileImageClipArea
                     anchors.right: profileCardRect.right
                     anchors.top: profileCardRect.top
+                    anchors.topMargin: 1
                     anchors.bottom: profileCardRect.bottom
-                    width: profileCardRect.width * 0.6
+                    anchors.bottomMargin: 1
+                    width: homeRoot.isProfileInfoEmpty ? profileCardRect.width : profileCardRect.width * 0.6
                     z: 1
                     clip: true
 
-                    // Rounded mask + 좌측 10%·우측 5% 투명도 페이드 (이미지 영역 기준)
+                    // Rounded mask + 좌우 페이드 그라데이션 분기 처리
                     Item {
                         id: profileImageMaskItem
                         anchors.fill: parent
@@ -484,12 +491,15 @@ Item {
                         layer.enabled: true
                         layer.smooth: true
                         layer.samples: 4
+
+                        // 기존의 비대칭형 그라데이션 마스크 (텍스트가 있을 때)
                         Rectangle {
-                            id: maskRect
+                            id: standardMaskRect
                             anchors.fill: parent
                             radius: 30
                             antialiasing: true
                             smooth: true
+                            opacity: homeRoot.isProfileInfoEmpty ? 0 : 1
 
                             // 프로필 텍스트 영역 침범 너비를 동적으로 계산하여 그라데이션 위치 자동 확장
                             property real overlapRatio: {
@@ -502,12 +512,12 @@ Item {
                             
                             property real fadeEndRatio: {
                                 // 텍스트 끝나는 지점에서 좀 더 넉넉한 여유(약 12% 가량)를 두고 100% 선명해지도록 설정
-                                var end = Math.max(0.2, maskRect.overlapRatio + 0.12); 
+                                var end = Math.max(0.2, standardMaskRect.overlapRatio + 0.12); 
                                 return Math.min(0.85, end);
                             }
                             property real fullyOpaqueRatio: {
                                 // 꼬리를 0.15 비율(전체 너비의 약 15%)까지 더 길게 빼서 극도로 완만하게 연장합니다.
-                                return Math.min(0.92, maskRect.fadeEndRatio + 0.15);
+                                return Math.min(0.92, standardMaskRect.fadeEndRatio + 0.15);
                             }
 
                             gradient: Gradient {
@@ -515,21 +525,21 @@ Item {
                                 
                                 // 초중반에 미리 선명도(알파값)를 끌어올려 끝단에서 튀는 현상을 막는 Ease-Out 형태의 곡선입니다.
                                 GradientStop { position: 0;                                  color: "#00000000" } // 0%
-                                GradientStop { position: maskRect.fadeEndRatio * 0.10;       color: "#1AFFFFFF" } // 10% (기존 5%보다 진하게)
-                                GradientStop { position: maskRect.fadeEndRatio * 0.20;       color: "#33FFFFFF" } // 20%
-                                GradientStop { position: maskRect.fadeEndRatio * 0.35;       color: "#59FFFFFF" } // 35%
-                                GradientStop { position: maskRect.fadeEndRatio * 0.50;       color: "#80FFFFFF" } // 50% (기존 30%에서 대폭 끌어올림)
-                                GradientStop { position: maskRect.fadeEndRatio * 0.65;       color: "#A6FFFFFF" } // 65%
-                                GradientStop { position: maskRect.fadeEndRatio * 0.80;       color: "#CCFFFFFF" } // 80%
-                                GradientStop { position: maskRect.fadeEndRatio * 0.90;       color: "#E0FFFFFF" } // 88%
-                                GradientStop { position: maskRect.fadeEndRatio;              color: "#E6FFFFFF" } // 90% (연장 구간 초입에 이미 거의 다 선명해짐)
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.10;       color: "#1AFFFFFF" } // 10% (기존 5%보다 진하게)
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.20;       color: "#33FFFFFF" } // 20%
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.35;       color: "#59FFFFFF" } // 35%
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.50;       color: "#80FFFFFF" } // 50% (기존 30%에서 대폭 끌어올림)
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.65;       color: "#A6FFFFFF" } // 65%
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.80;       color: "#CCFFFFFF" } // 80%
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.90;       color: "#E0FFFFFF" } // 88%
+                                GradientStop { position: standardMaskRect.fadeEndRatio;              color: "#E6FFFFFF" } // 90% (연장 구간 초입에 이미 거의 다 선명해짐)
                                 
                                 // 연장 꼬리 구간: 이미 90%까지 도달해 있으므로, 남은 10%의 투명도만 아주 얕고 길게 펴발라 끝이 튀는 현상을 방지
-                                GradientStop { position: maskRect.fadeEndRatio + (maskRect.fullyOpaqueRatio - maskRect.fadeEndRatio) * 0.2; color: "#EBFFFFFF" } // 92%
-                                GradientStop { position: maskRect.fadeEndRatio + (maskRect.fullyOpaqueRatio - maskRect.fadeEndRatio) * 0.4; color: "#F0FFFFFF" } // 94%
-                                GradientStop { position: maskRect.fadeEndRatio + (maskRect.fullyOpaqueRatio - maskRect.fadeEndRatio) * 0.6; color: "#F5FFFFFF" } // 96%
-                                GradientStop { position: maskRect.fadeEndRatio + (maskRect.fullyOpaqueRatio - maskRect.fadeEndRatio) * 0.8; color: "#FAFFFFFF" } // 98%
-                                GradientStop { position: maskRect.fullyOpaqueRatio;                                                         color: "#FFFFFFFF" } // 100% 완전 선명
+                                GradientStop { position: standardMaskRect.fadeEndRatio + (standardMaskRect.fullyOpaqueRatio - standardMaskRect.fadeEndRatio) * 0.2; color: "#EBFFFFFF" } // 92%
+                                GradientStop { position: standardMaskRect.fadeEndRatio + (standardMaskRect.fullyOpaqueRatio - standardMaskRect.fadeEndRatio) * 0.4; color: "#F0FFFFFF" } // 94%
+                                GradientStop { position: standardMaskRect.fadeEndRatio + (standardMaskRect.fullyOpaqueRatio - standardMaskRect.fadeEndRatio) * 0.6; color: "#F5FFFFFF" } // 96%
+                                GradientStop { position: standardMaskRect.fadeEndRatio + (standardMaskRect.fullyOpaqueRatio - standardMaskRect.fadeEndRatio) * 0.8; color: "#FAFFFFFF" } // 98%
+                                GradientStop { position: standardMaskRect.fullyOpaqueRatio;                                                         color: "#FFFFFFFF" } // 100% 완전 선명
                                 
                                 // 우측 코너 페이드: 시각적으로 완전히 투명해진 것처럼 보이지만,
                                 // 너무 일찍 이미지가 사라져버리는 현상을 막기 위해 끝단 투명도를 0%가 아닌 5~10% 수준으로 살짝 남깁니다.
@@ -537,6 +547,32 @@ Item {
                                 GradientStop { position: 0.950;                              color: "#B3FFFFFF" } // 70%
                                 GradientStop { position: 0.975;                              color: "#66FFFFFF" } // 40%
                                 GradientStop { position: 1.000;                              color: "#1AFFFFFF" } // 약 10% 불투명 (거의 투명하게 보이지만 형태의 끝단까지 형체가 유지됨)
+                            }
+                        }
+
+                        // 신규 대칭형 그라데이션 마스크 (텍스트가 없을 때)
+                        Rectangle {
+                            id: symmetricMaskRect
+                            anchors.fill: parent
+                            radius: 30
+                            antialiasing: true
+                            smooth: true
+                            opacity: homeRoot.isProfileInfoEmpty ? 1 : 0
+
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                
+                                // 좌측의 짧은 페이드 (절반으로 줄임)
+                                GradientStop { position: 0.000;                              color: "#1AFFFFFF" }
+                                GradientStop { position: 0.0125;                             color: "#66FFFFFF" }
+                                GradientStop { position: 0.025;                              color: "#B3FFFFFF" }
+                                GradientStop { position: 0.040;                              color: "#FFFFFFFF" }
+                                
+                                // 우측의 짧은 페이드 (절반으로 줄임)
+                                GradientStop { position: 0.960;                              color: "#FFFFFFFF" }
+                                GradientStop { position: 0.975;                              color: "#B3FFFFFF" }
+                                GradientStop { position: 0.9875;                             color: "#66FFFFFF" }
+                                GradientStop { position: 1.000;                              color: "#1AFFFFFF" }
                             }
                         }
                     }
