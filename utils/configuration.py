@@ -18,6 +18,11 @@ _config_default = {
     'profile': {
         'show_friend_code': True,
         'show_potential': False,
+        'show_name': True,
+        'show_description': True,
+        'show_play_count_time': True,
+        'play_stats_diff_filter': 'all',
+        'show_play_count_most_played': True,
         'profile_image': '',
         'profile_description': '',
         'grouping_criteria': 'song',  # 'song' or 'chart'
@@ -67,6 +72,11 @@ _converters = {
     'profile': {
         'show_friend_code': lambda v: v.lower() == 'true',
         'show_potential': lambda v: v.lower() == 'true',
+        'show_name': lambda v: v.lower() == 'true',
+        'show_description': lambda v: v.lower() == 'true',
+        'show_play_count_time': lambda v: v.lower() == 'true',
+        'play_stats_diff_filter': str,
+        'show_play_count_most_played': lambda v: v.lower() == 'true',
         'profile_image': str,
         'profile_description': str,
         'grouping_criteria': str,

@@ -27,6 +27,11 @@ Item {
     // Profile privacy options
     property bool showFriendCodeInProfile: settingsHandler ? settingsHandler.getShowFriendCode() : true
     property bool showPotentialInProfile: settingsHandler ? settingsHandler.getShowPotential() : false
+    property bool showNameInProfile: settingsHandler ? settingsHandler.getShowName() : true
+    property bool showDescriptionInProfile: settingsHandler ? settingsHandler.getShowDescription() : true
+    property string profileDescriptionText: settingsHandler ? settingsHandler.getProfileDescription() : ""
+    property bool showPlayCountTime: settingsHandler ? settingsHandler.getShowPlayCountTime() : true
+    property bool showPlayCountMostPlayed: settingsHandler ? settingsHandler.getShowPlayCountMostPlayed() : true
     readonly property var appWindow: ApplicationWindow.window
     readonly property string titleFontFamily: (appWindow && appWindow.titleFontFamily)
         ? appWindow.titleFontFamily
@@ -71,6 +76,11 @@ Item {
             profileImagePath = (settingsHandler && settingsHandler.getProfileImage()) ? settingsHandler.getProfileImage() : ""
             homeRoot.showFriendCodeInProfile = settingsHandler ? settingsHandler.getShowFriendCode() : homeRoot.showFriendCodeInProfile
             homeRoot.showPotentialInProfile = settingsHandler ? settingsHandler.getShowPotential() : homeRoot.showPotentialInProfile
+            homeRoot.showNameInProfile = settingsHandler ? settingsHandler.getShowName() : homeRoot.showNameInProfile
+            homeRoot.showDescriptionInProfile = settingsHandler ? settingsHandler.getShowDescription() : homeRoot.showDescriptionInProfile
+            homeRoot.profileDescriptionText = settingsHandler ? settingsHandler.getProfileDescription() : homeRoot.profileDescriptionText
+            homeRoot.showPlayCountTime = settingsHandler ? settingsHandler.getShowPlayCountTime() : homeRoot.showPlayCountTime
+            homeRoot.showPlayCountMostPlayed = settingsHandler ? settingsHandler.getShowPlayCountMostPlayed() : homeRoot.showPlayCountMostPlayed
         }
         function onMostPlayedOrderChanged() {
             homeRoot.groupingCriteriaLabel = (settingsHandler && settingsHandler.getGroupingCriteria() === 'chart') ? 'Chart' : 'Song'
@@ -101,6 +111,11 @@ Item {
         if (settingsHandler) {
             homeRoot.showFriendCodeInProfile = settingsHandler.getShowFriendCode()
             homeRoot.showPotentialInProfile = settingsHandler.getShowPotential()
+            homeRoot.showNameInProfile = settingsHandler.getShowName()
+            homeRoot.showDescriptionInProfile = settingsHandler.getShowDescription()
+            homeRoot.profileDescriptionText = settingsHandler.getProfileDescription()
+            homeRoot.showPlayCountTime = settingsHandler.getShowPlayCountTime()
+            homeRoot.showPlayCountMostPlayed = settingsHandler.getShowPlayCountMostPlayed()
             homeRoot.groupingCriteriaLabel = (settingsHandler.getGroupingCriteria() === 'chart') ? 'Chart' : 'Song'
             homeRoot.aggregationScopeLabel = (settingsHandler.getMostPlayedScope() === 'this_year') ? new Date().getFullYear().toString() : 'All time'
         }
@@ -174,6 +189,7 @@ Item {
                                 color: "#999999"
                                 font.pixelSize: 12
                                 font.letterSpacing: 1.5
+                                visible: homeRoot.showNameInProfile || homeRoot.showDescriptionInProfile
                             }
 
                             Text {
@@ -181,6 +197,21 @@ Item {
                                 color: "#1A1A1A"
                                 font.pixelSize: 42
                                 font.bold: true
+                                visible: homeRoot.showNameInProfile
+                            }
+                            
+                            // 닉네임이 숨겨졌을 때 표시되는 Description 텍스트 (Bold)
+                            Text {
+                                text: homeRoot.profileDescriptionText
+                                color: "#1A1A1A"
+                                font.pixelSize: 20
+                                font.bold: true
+                                Layout.fillWidth: true
+                                Layout.maximumWidth: profileCardRect.width * 0.36
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 4
+                                clip: true
+                                visible: !homeRoot.showNameInProfile && homeRoot.showDescriptionInProfile && text !== ""
                             }
 
                             Text {
@@ -192,9 +223,22 @@ Item {
                                 visible: profileData.connected && profileData.user_code && homeRoot.showFriendCodeInProfile
                             }
                             
+                            // 닉네임이 보일 때 표시되는 Description 텍스트 (Regular)
+                            Text {
+                                text: homeRoot.profileDescriptionText
+                                color: "#666666"
+                                font.pixelSize: 18
+                                Layout.fillWidth: true
+                                Layout.maximumWidth: profileCardRect.width * 0.36
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 4
+                                clip: true
+                                visible: homeRoot.showNameInProfile && homeRoot.showDescriptionInProfile && text !== ""
+                            }
+                            
                             Item {
                                 height: 20
-                                visible: homeRoot.showPotentialInProfile
+                                visible: homeRoot.showPotentialInProfile && !(homeRoot.showNameInProfile && homeRoot.showDescriptionInProfile && homeRoot.profileDescriptionText !== "")
                             } // Spacer
                             
                             Text {
@@ -282,6 +326,7 @@ Item {
                                 Layout.fillWidth: false
                                 Layout.alignment: Qt.AlignLeft
                                 spacing: 20
+                                visible: homeRoot.showPlayCountTime
                                 
                                 // --- COLUMN 1: Play Count (Right-aligned) ---
                                 ColumnLayout {
@@ -767,6 +812,7 @@ Item {
                             // Play Count
                             Column {
                                 Layout.alignment: Qt.AlignRight | Qt.AlignVCenter 
+                                visible: homeRoot.showPlayCountMostPlayed
 
                                 Text {
                                     text: model.playCount

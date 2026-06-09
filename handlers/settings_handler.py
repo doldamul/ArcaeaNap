@@ -535,6 +535,56 @@ class SettingsHandler(QObject):
         self.profileDisplayChanged.emit()
         self.settingsChanged.emit()
 
+    @pyqtSlot(result=bool)
+    def getShowName(self):
+        return config['profile']['show_name']
+
+    @pyqtSlot(bool)
+    def setShowName(self, show):
+        config['profile']['show_name'] = str(show)
+        self.profileDisplayChanged.emit()
+        self.settingsChanged.emit()
+
+    @pyqtSlot(result=bool)
+    def getShowDescription(self):
+        return config['profile']['show_description']
+
+    @pyqtSlot(bool)
+    def setShowDescription(self, show):
+        config['profile']['show_description'] = str(show)
+        self.profileDisplayChanged.emit()
+        self.settingsChanged.emit()
+
+    @pyqtSlot(result=bool)
+    def getShowPlayCountTime(self):
+        return config['profile']['show_play_count_time']
+
+    @pyqtSlot(bool)
+    def setShowPlayCountTime(self, show):
+        config['profile']['show_play_count_time'] = str(show)
+        self.profileDisplayChanged.emit()
+        self.settingsChanged.emit()
+
+    @pyqtSlot(result=str)
+    def getPlayStatsDiffFilter(self):
+        return config['profile']['play_stats_diff_filter']
+
+    @pyqtSlot(str)
+    def setPlayStatsDiffFilter(self, filters):
+        config['profile']['play_stats_diff_filter'] = filters
+        self.profileDisplayChanged.emit()
+        self.settingsChanged.emit()
+
+    @pyqtSlot(result=bool)
+    def getShowPlayCountMostPlayed(self):
+        return config['profile']['show_play_count_most_played']
+
+    @pyqtSlot(bool)
+    def setShowPlayCountMostPlayed(self, show):
+        config['profile']['show_play_count_most_played'] = str(show)
+        self.profileDisplayChanged.emit()
+        self.settingsChanged.emit()
+
     @pyqtSlot(result=str)
     def getProfileImage(self):
         return config['profile']['profile_image']
@@ -554,6 +604,7 @@ class SettingsHandler(QObject):
     @pyqtSlot(str)
     def setProfileDescription(self, text):
         config['profile']['profile_description'] = text
+        self.profileDisplayChanged.emit()
         self.settingsChanged.emit()
 
     @pyqtSlot(result=str)

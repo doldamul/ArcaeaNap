@@ -372,6 +372,13 @@ Window {
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
         clip: true
         padding: 40
+        
+        TapHandler {
+            onTapped: {
+                profileDescArea.focus = false
+                profileDescArea.deselect()
+            }
+        }
 
         ColumnLayout {
             width: scrollView.availableWidth
@@ -1462,6 +1469,46 @@ Window {
                                         color: "#666"
                                     }
                                 }
+                                
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.maximumWidth: 320
+                                    Layout.preferredHeight: 70
+                                    color: "#F9F9F9"
+                                    border.color: profileDescArea.activeFocus ? "#4CAF50" : "#E0E0E0"
+                                    radius: 4
+
+                                    TextEdit {
+                                        id: profileDescArea
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        text: settingsHandler ? settingsHandler.getProfileDescription() : ""
+                                        font.pixelSize: 13
+                                        color: "#666"
+                                        wrapMode: TextEdit.Wrap
+                                        selectByMouse: true
+                                        
+                                        Text {
+                                            text: "Write a short description (max 120 chars)..."
+                                            color: "#AAA"
+                                            font.pixelSize: 13
+                                            visible: !profileDescArea.text
+                                        }
+
+                                        onTextChanged: {
+                                            if (text.length > 120) {
+                                                var cursor = cursorPosition;
+                                                text = text.substring(0, 120);
+                                                cursorPosition = cursor > 120 ? 120 : cursor;
+                                            }
+                                        }
+                                        onActiveFocusChanged: {
+                                            if (!activeFocus && settingsHandler) {
+                                                settingsHandler.setProfileDescription(text)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                             
                             Item {
@@ -1481,17 +1528,213 @@ Window {
 
                     // Privacy Options
                     Text { text: "Privacy"; font.bold: true; color: "#333" }
-                    RowLayout {
-                        spacing: 30
-                        CheckBox {
-                            text: "Show Friend Code"
-                            checked: settingsHandler ? settingsHandler.getShowFriendCode() : false
-                            onCheckedChanged: if (settingsHandler) settingsHandler.setShowFriendCode(checked)
+                    ColumnLayout {
+                        spacing: 10
+                        RowLayout {
+                            spacing: 30
+                            CheckBox {
+                                text: "Show Name"
+                                checked: settingsHandler ? settingsHandler.getShowName() : true
+                                onCheckedChanged: if (settingsHandler) settingsHandler.setShowName(checked)
+                            }
+                            CheckBox {
+                                text: "Show Friend Code"
+                                checked: settingsHandler ? settingsHandler.getShowFriendCode() : false
+                                onCheckedChanged: if (settingsHandler) settingsHandler.setShowFriendCode(checked)
+                            }
+                            CheckBox {
+                                text: "Show Potential"
+                                checked: settingsHandler ? settingsHandler.getShowPotential() : false
+                                onCheckedChanged: if (settingsHandler) settingsHandler.setShowPotential(checked)
+                            }
                         }
                         CheckBox {
-                            text: "Show Potential"
-                            checked: settingsHandler ? settingsHandler.getShowPotential() : false
-                            onCheckedChanged: if (settingsHandler) settingsHandler.setShowPotential(checked)
+                            text: "Show Description"
+                            checked: settingsHandler ? settingsHandler.getShowDescription() : true
+                            onCheckedChanged: if (settingsHandler) settingsHandler.setShowDescription(checked)
+                        }
+                        CheckBox {
+                            text: "Show Play Count & Play Time"
+                            checked: settingsHandler ? settingsHandler.getShowPlayCountTime() : true
+                            onCheckedChanged: if (settingsHandler) settingsHandler.setShowPlayCountTime(checked)
+                        }
+                        
+                        // Play Stats Difficulty Filter
+                        RowLayout {
+                            id: playStatsDiffFilterRow
+                            Layout.leftMargin: 20
+                            visible: settingsHandler ? settingsHandler.getShowPlayCountTime() : true
+                            
+                            property bool pstChecked: true
+                            property bool prsChecked: true
+                            property bool ftrChecked: true
+                            property bool etrChecked: true
+                            property bool bydChecked: true
+                            property bool isOff: false
+
+                            function loadFromConfig() {
+                                if (!settingsHandler) return
+                                var raw = settingsHandler.getPlayStatsDiffFilter()
+                                if (raw === "all") {
+                                    pstChecked = prsChecked = ftrChecked = etrChecked = bydChecked = true
+                                    isOff = false
+                                } else if (raw === "off") {
+                                    pstChecked = prsChecked = ftrChecked = etrChecked = bydChecked = true
+                                    isOff = true
+                                } else {
+                                    isOff = false
+                                    var parts = raw ? raw.split(",") : []
+                                    pstChecked = parts.indexOf("pst") >= 0
+                                    prsChecked = parts.indexOf("prs") >= 0
+                                    ftrChecked = parts.indexOf("ftr") >= 0
+                                    etrChecked = parts.indexOf("etr") >= 0
+                                    bydChecked = parts.indexOf("byd") >= 0
+                                }
+                                updateAllState()
+                            }
+
+                            function applyToConfig() {
+                                if (!settingsHandler) return
+                                if (isOff) {
+                                    settingsHandler.setPlayStatsDiffFilter("off")
+                                } else {
+                                    var parts = []
+                                    if (pstChecked) parts.push("pst")
+                                    if (prsChecked) parts.push("prs")
+                                    if (ftrChecked) parts.push("ftr")
+                                    if (etrChecked) parts.push("etr")
+                                    if (bydChecked) parts.push("byd")
+
+                                    if (parts.length === 5) {
+                                        settingsHandler.setPlayStatsDiffFilter("all")
+                                    } else if (parts.length === 0) {
+                                        settingsHandler.setPlayStatsDiffFilter("off")
+                                    } else {
+                                        settingsHandler.setPlayStatsDiffFilter(parts.join(","))
+                                    }
+                                }
+                                if (typeof statsHandler !== "undefined") statsHandler.refreshStats()
+                            }
+
+                            function updateAllState() {
+                                if (isOff) {
+                                    playStatsAllCheck.checkState = Qt.Unchecked
+                                    playStatsAllCheck.text = "Off"
+                                } else {
+                                    var count =
+                                        (pstChecked ? 1 : 0) +
+                                        (prsChecked ? 1 : 0) +
+                                        (ftrChecked ? 1 : 0) +
+                                        (etrChecked ? 1 : 0) +
+                                        (bydChecked ? 1 : 0)
+                                    if (count === 0) {
+                                        playStatsAllCheck.checkState = Qt.Unchecked
+                                        playStatsAllCheck.text = "Off"
+                                    } else {
+                                        playStatsAllCheck.checkState = (count === 5) ? Qt.Checked : Qt.PartiallyChecked
+                                        playStatsAllCheck.text = "On"
+                                    }
+                                }
+                            }
+
+                            Component.onCompleted: loadFromConfig()
+
+                            spacing: 10
+                            Text { text: "Difficulty Filter:" }
+
+                            CheckBox {
+                                id: playStatsAllCheck
+                                text: "On"
+                                tristate: true
+                                onClicked: {
+                                    if (playStatsDiffFilterRow.isOff) {
+                                        // turn on (all checked)
+                                        playStatsDiffFilterRow.isOff = false
+                                        playStatsDiffFilterRow.pstChecked = true
+                                        playStatsDiffFilterRow.prsChecked = true
+                                        playStatsDiffFilterRow.ftrChecked = true
+                                        playStatsDiffFilterRow.etrChecked = true
+                                        playStatsDiffFilterRow.bydChecked = true
+                                    } else {
+                                        var count = (playStatsDiffFilterRow.pstChecked ? 1 : 0) +
+                                                    (playStatsDiffFilterRow.prsChecked ? 1 : 0) +
+                                                    (playStatsDiffFilterRow.ftrChecked ? 1 : 0) +
+                                                    (playStatsDiffFilterRow.etrChecked ? 1 : 0) +
+                                                    (playStatsDiffFilterRow.bydChecked ? 1 : 0)
+                                        if (count === 5) {
+                                            // all checked -> turn off
+                                            playStatsDiffFilterRow.isOff = true
+                                        } else {
+                                            // partial -> check all
+                                            playStatsDiffFilterRow.isOff = false
+                                            playStatsDiffFilterRow.pstChecked = true
+                                            playStatsDiffFilterRow.prsChecked = true
+                                            playStatsDiffFilterRow.ftrChecked = true
+                                            playStatsDiffFilterRow.etrChecked = true
+                                            playStatsDiffFilterRow.bydChecked = true
+                                        }
+                                    }
+                                    playStatsDiffFilterRow.applyToConfig()
+                                    playStatsDiffFilterRow.updateAllState()
+                                }
+                            }
+
+                            CheckBox {
+                                text: "PST"
+                                checked: playStatsDiffFilterRow.pstChecked
+                                enabled: !playStatsDiffFilterRow.isOff
+                                onToggled: {
+                                    playStatsDiffFilterRow.pstChecked = checked
+                                    playStatsDiffFilterRow.applyToConfig()
+                                    playStatsDiffFilterRow.updateAllState()
+                                }
+                            }
+                            CheckBox {
+                                text: "PRS"
+                                checked: playStatsDiffFilterRow.prsChecked
+                                enabled: !playStatsDiffFilterRow.isOff
+                                onToggled: {
+                                    playStatsDiffFilterRow.prsChecked = checked
+                                    playStatsDiffFilterRow.applyToConfig()
+                                    playStatsDiffFilterRow.updateAllState()
+                                }
+                            }
+                            CheckBox {
+                                text: "FTR"
+                                checked: playStatsDiffFilterRow.ftrChecked
+                                enabled: !playStatsDiffFilterRow.isOff
+                                onToggled: {
+                                    playStatsDiffFilterRow.ftrChecked = checked
+                                    playStatsDiffFilterRow.applyToConfig()
+                                    playStatsDiffFilterRow.updateAllState()
+                                }
+                            }
+                            CheckBox {
+                                text: "ETR"
+                                checked: playStatsDiffFilterRow.etrChecked
+                                enabled: !playStatsDiffFilterRow.isOff
+                                onToggled: {
+                                    playStatsDiffFilterRow.etrChecked = checked
+                                    playStatsDiffFilterRow.applyToConfig()
+                                    playStatsDiffFilterRow.updateAllState()
+                                }
+                            }
+                            CheckBox {
+                                text: "BYD"
+                                checked: playStatsDiffFilterRow.bydChecked
+                                enabled: !playStatsDiffFilterRow.isOff
+                                onToggled: {
+                                    playStatsDiffFilterRow.bydChecked = checked
+                                    playStatsDiffFilterRow.applyToConfig()
+                                    playStatsDiffFilterRow.updateAllState()
+                                }
+                            }
+                        }
+                        
+                        CheckBox {
+                            text: "Show Play Count in Most Played"
+                            checked: settingsHandler ? settingsHandler.getShowPlayCountMostPlayed() : true
+                            onCheckedChanged: if (settingsHandler) settingsHandler.setShowPlayCountMostPlayed(checked)
                         }
                     }
 

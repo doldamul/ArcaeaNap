@@ -97,29 +97,52 @@ class StatsHandler(QObject):
     @pyqtSlot()
     def refreshStats(self):
         cache_path = config['general']['cache_path']
-        count, seconds = play_stats_total(cache_path)
-        self._total_count = count
-
-        hours = seconds // 3600
-        minutes = (seconds % 3600) // 60
-        self._total_time_str = f"{hours}h {minutes}m"
-
+        
         diff_info = [
             (code, DIFFICULTY_NAMES[code], DIFFICULTY_COLORS[code])
             for code in DIFFICULTY_ORDER
         ]
 
         stats = []
+        total_count = 0
+        total_seconds = 0
+
+        # get filter
+        diff_filter_str = config['profile']['play_stats_diff_filter']
+        if diff_filter_str == 'all':
+            filter_set = set(DIFFICULTY_ORDER)
+            is_off = False
+        elif diff_filter_str == 'off':
+            filter_set = set(DIFFICULTY_ORDER)
+            is_off = True
+        else:
+            from models.constants import DIFFICULTY_CODE_TO_INT
+            filter_set = set(DIFFICULTY_CODE_TO_INT.get(d) for d in diff_filter_str.split(',') if d in DIFFICULTY_CODE_TO_INT)
+            is_off = False
+
         for code, name, color in diff_info:
             diff_count, diff_seconds = play_stats_difficulty(cache_path, code)
-            diff_hours = diff_seconds // 3600
-            diff_minutes = (diff_seconds % 3600) // 60
-            stats.append({
-                'name': name,
-                'color': color,
-                'count': diff_count,
-                'time': f"{diff_hours}.{diff_minutes:02d}"
-            })
+            
+            # If off, we compute total but don't append to stats list
+            if is_off:
+                total_count += diff_count
+                total_seconds += diff_seconds
+            else:
+                if code in filter_set:
+                    total_count += diff_count
+                    total_seconds += diff_seconds
+                    diff_hours = diff_seconds // 3600
+                    diff_minutes = (diff_seconds % 3600) // 60
+                    stats.append({
+                        'name': name,
+                        'color': color,
+                        'count': diff_count,
+                        'time': f"{diff_hours}.{diff_minutes:02d}"
+                    })
 
+        self._total_count = total_count
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        self._total_time_str = f"{hours}h {minutes}m"
         self._difficulty_stats = stats
         self.statsChanged.emit()
