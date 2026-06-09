@@ -405,10 +405,16 @@ class ArcaeaOnline:
                     # Play Count Mode 토글 감지 → 분석 스레드에서 안전하게 세션 리셋
                     if self._mode_toggle_pending:
                         self._mode_toggle_pending = False
-                        self._reset_analysis_session(
+                        reloaded = self._reset_analysis_session(
                             current_page=self.current_pageno,
                             msg="Play Count Analyze Mode changed. Session refreshed"
                         )
+                        
+                        # 이미 1페이지라서 새로고침이 발생하지 않았다면,
+                        # 다음 루프가 곧바로 데이터를 분석할 수 있도록 가상의 이벤트를 큐에 주입
+                        if not reloaded:
+                            self._console_events.append("__AO_PAGE__")
+                            
                         continue
 
                     # 콘솔 이벤트 대기(항상 켜진 핸들러가 deque에 적재 → 유실 없음).
@@ -1241,20 +1247,16 @@ class ArcaeaOnline:
 
         # 1페이지로 이동 (이미 1페이지면 스킵)
         reloaded = False
-        if current_page != 1:
+        if current_page is None or str(current_page) != '1':
             try:
                 current_url = self.page.url
                 page1_url = re.sub(r'page=\d+', 'page=1', current_url)
 
                 self._console_events.clear()  # 네비게이션 직전 stale 이벤트 제거(경합 방지)
                 self.page.goto(page1_url)
-                result = self._wait_for_console(
-                    predicate=lambda t: t == "__AO_PAGE__",
-                    timeout_ms=5000,
-                )
 
-                reloaded = bool(result)
-                # has_page_changed()가 이동한 페이지를 새 페이지로 감지하도록 초기화
+                reloaded = True
+                # 이동한 페이지를 새 페이지로 감지하도록 초기화
                 self.current_pageno = None
                 self.current_difficulty = None
                 self.current_sort = None
