@@ -174,6 +174,10 @@ executables = [Executable(**executable_kwargs)]
 class ExtendedBuildExe(build_exe):
     """Custom build command for post-build optimizations."""
 
+    def finalize_options(self) -> None:
+        super().finalize_options()
+        self.build_exe = os.path.join(self.build_exe, "ArcaeaNap")
+
     def run(self) -> None:
         super().run()
         build_root = os.path.abspath(str(self.build_exe))
