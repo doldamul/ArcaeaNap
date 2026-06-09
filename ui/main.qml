@@ -103,6 +103,7 @@ ApplicationWindow {
                     height: 28
                     source: (typeof appLogoSource === "string") ? appLogoSource : ""
                     fillMode: Image.PreserveAspectFit
+                    mipmap: true
                     visible: source !== ""
                 }
 
