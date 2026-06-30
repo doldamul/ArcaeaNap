@@ -1159,7 +1159,7 @@ Window {
                                 }
                                 
                                 Text {
-                                    text: "🛈"
+                                    text: "ⓘ"
                                     font.pixelSize: 14
                                     color: helpMouse.containsMouse ? "#6A0DAD" : "#999"
                                     

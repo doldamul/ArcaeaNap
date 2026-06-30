@@ -4,7 +4,7 @@ import os
 
 from PyQt6.QtGui import QGuiApplication, QSurfaceFormat, QIcon, QImageReader, QPixmap
 from PyQt6.QtQml import QQmlApplicationEngine
-from PyQt6.QtCore import QUrl, QByteArray, QBuffer, QIODevice
+from PyQt6.QtCore import QUrl, QByteArray, QBuffer, QIODevice, Qt
 
 from utils.app_fonts import register_embedded_fonts, get_app_root
 from handlers.startup_handler import StartupHandler
@@ -105,14 +105,25 @@ def main():
     QSurfaceFormat.setDefaultFormat(fmt)
 
     app = QGuiApplication(sys.argv)
+    # Temporary patch: the UI is light-only, but QtQuick.Controls.Basic controls
+    # without an explicit text color (radio buttons, toggles, the About "Open
+    # Source Licenses" button) fall back to the palette's dark-mode text color and
+    # become invisible under macOS Dark Mode. Force the Light color scheme until a
+    # proper dark theme is implemented.
+    app.styleHints().setColorScheme(Qt.ColorScheme.Light)
     qml_font_context = register_embedded_fonts()
     app_icon, app_logo_source = _resolve_icons()
     about_context = build_about_context(get_app_root())
 
-    if not app_icon.isNull():
-        app.setWindowIcon(app_icon)
-    else:
-        print("[main] App icon file not found; using default executable icon.")
+    # On macOS the Dock/app icon comes from the app bundle (Assets.car / .icns).
+    # Calling setWindowIcon here would override that bundle icon at runtime with the
+    # embedded legacy icon, so only set it programmatically off-macOS (Windows/Linux
+    # taskbar need it).
+    if sys.platform != "darwin":
+        if not app_icon.isNull():
+            app.setWindowIcon(app_icon)
+        else:
+            print("[main] App icon file not found; using default executable icon.")
 
     print(f"Arcaea Nap v{about_context['appVersion']}")
 
@@ -163,7 +174,7 @@ def main():
         sys.exit(-1)
 
     root_window = engine.rootObjects()[0]
-    if hasattr(root_window, "setIcon"):
+    if sys.platform != "darwin" and hasattr(root_window, "setIcon"):
         if not app_icon.isNull():
             root_window.setIcon(app_icon)
 

@@ -598,103 +598,161 @@ class ArcaeaOnline:
         self._difficulty_tag = None
 
     def _detect_browser_pid(self):
-        """Detect browser PID by temporarily setting a unique window title marker.
-        
-        Sets document.title to a unique string, finds the OS window with that title
-        via EnumWindows, extracts the PID, then restores the original title.
-        Works with any browser (Chromium, Firefox, WebKit).
+        """Detect the running Playwright browser PID.
+
+        Windows: sets a unique window-title marker, finds the OS window via
+        EnumWindows, extracts the PID, then restores the original title.
+
+        macOS: scans NSWorkspace.runningApplications() and matches against
+        the PLAYWRIGHT_BROWSERS_PATH directory that browser_bootstrap.py sets.
+
+        Other platforms: returns None (no-op).
         """
-        import ctypes
-        import ctypes.wintypes
-        import time as _time
+        if sys.platform == "win32":
+            import ctypes
+            import ctypes.wintypes
+            import time as _time
 
-        TITLE_MARKER = "ArcaeaNap_BrowserID"
+            TITLE_MARKER = "ArcaeaNap_BrowserID"
 
-        try:
-            # 1. Set unique title marker
-            self.page.evaluate(f"document.title = '{TITLE_MARKER}'")
-            _time.sleep(0.3)  # Wait for window title to update
+            try:
+                # 1. Set unique title marker
+                self.page.evaluate(f"document.title = '{TITLE_MARKER}'")
+                _time.sleep(0.3)  # Wait for window title to update
 
-            # 2. Find window with the marker title
-            user32 = ctypes.windll.user32
-            EnumWindows = user32.EnumWindows
-            GetWindowTextW = user32.GetWindowTextW
-            GetWindowTextLengthW = user32.GetWindowTextLengthW
-            GetWindowThreadProcessId = user32.GetWindowThreadProcessId
-            IsWindowVisible = user32.IsWindowVisible
+                # 2. Find window with the marker title
+                user32 = ctypes.windll.user32
+                EnumWindows = user32.EnumWindows
+                GetWindowTextW = user32.GetWindowTextW
+                GetWindowTextLengthW = user32.GetWindowTextLengthW
+                GetWindowThreadProcessId = user32.GetWindowThreadProcessId
+                IsWindowVisible = user32.IsWindowVisible
 
-            WNDENUMPROC = ctypes.WINFUNCTYPE(
-                ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM
-            )
+                WNDENUMPROC = ctypes.WINFUNCTYPE(
+                    ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM
+                )
 
-            found_pid = None
+                found_pid = None
 
-            def enum_callback(hwnd, lparam):
-                nonlocal found_pid
-                if IsWindowVisible(hwnd):
-                    length = GetWindowTextLengthW(hwnd)
-                    if length > 0:
-                        buf = ctypes.create_unicode_buffer(length + 1)
-                        GetWindowTextW(hwnd, buf, length + 1)
-                        if TITLE_MARKER in buf.value:
-                            proc_id = ctypes.wintypes.DWORD()
-                            GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
-                            found_pid = proc_id.value
-                            return False  # stop enumeration
-                return True  # continue
+                def enum_callback(hwnd, lparam):
+                    nonlocal found_pid
+                    if IsWindowVisible(hwnd):
+                        length = GetWindowTextLengthW(hwnd)
+                        if length > 0:
+                            buf = ctypes.create_unicode_buffer(length + 1)
+                            GetWindowTextW(hwnd, buf, length + 1)
+                            if TITLE_MARKER in buf.value:
+                                proc_id = ctypes.wintypes.DWORD()
+                                GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
+                                found_pid = proc_id.value
+                                return False  # stop enumeration
+                    return True  # continue
 
-            EnumWindows(WNDENUMPROC(enum_callback), 0)
+                EnumWindows(WNDENUMPROC(enum_callback), 0)
 
-            # 3. Restore original title
-            self.page.evaluate("document.title = ''")
+                # 3. Restore original title
+                self.page.evaluate("document.title = ''")
 
-            return found_pid
+                return found_pid
 
-        except Exception as e:
-            print(f"Failed to detect browser PID: {e}")
+            except Exception as e:
+                print(f"Failed to detect browser PID: {e}")
+                return None
+
+        elif sys.platform == "darwin":
+            try:
+                from AppKit import NSWorkspace
+            except ImportError:
+                print("[_detect_browser_pid] pyobjc(AppKit) not available; skipping (macOS).")
+                return None
+
+            try:
+                browsers_dir = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+
+                for app in NSWorkspace.sharedWorkspace().runningApplications():
+                    url = app.executableURL()
+                    path = url.path() if url else None
+                    if path is None:
+                        continue
+                    # Primary match: executable is inside PLAYWRIGHT_BROWSERS_PATH
+                    if browsers_dir and path.startswith(browsers_dir):
+                        return int(app.processIdentifier())
+                    # Fallback: path contains "Chromium" and a playwright marker
+                    if not browsers_dir and "Chromium" in path and (
+                        ".local-browsers" in path or "playwright" in path
+                    ):
+                        return int(app.processIdentifier())
+
+                return None
+
+            except Exception as e:
+                print(f"Failed to detect browser PID: {e}")
+                return None
+
+        else:
             return None
 
     def bring_to_front(self):
-        """Bring the browser OS window to the foreground using cached PID."""
-        try:
-            import ctypes
-            import ctypes.wintypes
+        """Bring the browser OS window to the foreground using cached PID.
 
-            pid = getattr(self, '_browser_pid', None)
-            if not pid:
-                return
+        Windows: uses EnumWindows + SetForegroundWindow via ctypes.windll.
+        macOS: uses NSRunningApplication.activateWithOptions_ via pyobjc/AppKit.
+        Other platforms: no-op.
+        """
+        pid = getattr(self, '_browser_pid', None)
+        if not pid:
+            return
 
-            user32 = ctypes.windll.user32
-            EnumWindows = user32.EnumWindows
-            GetWindowThreadProcessId = user32.GetWindowThreadProcessId
-            IsWindowVisible = user32.IsWindowVisible
-            SetForegroundWindow = user32.SetForegroundWindow
-            ShowWindow = user32.ShowWindow
-            SW_RESTORE = 9
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                import ctypes.wintypes
 
-            WNDENUMPROC = ctypes.WINFUNCTYPE(
-                ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM
-            )
+                user32 = ctypes.windll.user32
+                EnumWindows = user32.EnumWindows
+                GetWindowThreadProcessId = user32.GetWindowThreadProcessId
+                IsWindowVisible = user32.IsWindowVisible
+                SetForegroundWindow = user32.SetForegroundWindow
+                ShowWindow = user32.ShowWindow
+                SW_RESTORE = 9
 
-            target_hwnd = None
+                WNDENUMPROC = ctypes.WINFUNCTYPE(
+                    ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM
+                )
 
-            def enum_callback(hwnd, lparam):
-                nonlocal target_hwnd
-                if IsWindowVisible(hwnd):
-                    proc_id = ctypes.wintypes.DWORD()
-                    GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
-                    if proc_id.value == pid:
-                        target_hwnd = hwnd
-                        return False  # stop enumeration
-                return True  # continue
+                target_hwnd = None
 
-            EnumWindows(WNDENUMPROC(enum_callback), 0)
+                def enum_callback(hwnd, lparam):
+                    nonlocal target_hwnd
+                    if IsWindowVisible(hwnd):
+                        proc_id = ctypes.wintypes.DWORD()
+                        GetWindowThreadProcessId(hwnd, ctypes.byref(proc_id))
+                        if proc_id.value == pid:
+                            target_hwnd = hwnd
+                            return False  # stop enumeration
+                    return True  # continue
 
-            if target_hwnd:
-                ShowWindow(target_hwnd, SW_RESTORE)
-                SetForegroundWindow(target_hwnd)
-        except Exception as e:
-            print(f"Failed to bring browser to front: {e}")
+                EnumWindows(WNDENUMPROC(enum_callback), 0)
+
+                if target_hwnd:
+                    ShowWindow(target_hwnd, SW_RESTORE)
+                    SetForegroundWindow(target_hwnd)
+            except Exception as e:
+                print(f"Failed to bring browser to front: {e}")
+
+        elif sys.platform == "darwin":
+            try:
+                from AppKit import NSRunningApplication, NSApplicationActivateIgnoringOtherApps
+                app = NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
+                if app:
+                    app.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
+            except ImportError:
+                print("[bring_to_front] pyobjc(AppKit) not available; skipping (macOS).")
+            except Exception as e:
+                print(f"Failed to bring browser to front: {e}")
+
+        else:
+            return
 
     
     def _on_browser_closed_event(self):

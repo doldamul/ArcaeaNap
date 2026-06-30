@@ -87,6 +87,13 @@ OPEN_SOURCE_ITEMS = [
         "copyright": "Enthought, Inc.",
         "license_file": "win32ctypes.txt",
     },
+    {
+        "name": "pyobjc",
+        "url": "https://github.com/ronaldoussoren/pyobjc",
+        "license": "MIT",
+        "copyright": "Ronald Oussoren and contributors",
+        "license_file": "mit.txt",
+    },
 ]
 
 

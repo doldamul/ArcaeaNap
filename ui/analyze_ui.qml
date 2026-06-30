@@ -325,7 +325,7 @@ Item {
                                     }
                                     
                                     Text {
-                                        text: "🛈"
+                                        text: "ⓘ"
                                         font.pixelSize: 14
                                         color: analyzeModeHelpMouse.containsMouse ? "#6A0DAD" : "#999"
                                         

@@ -1,10 +1,10 @@
 """Settings 탭 핸들러: 설정 관리, 계정 연동, 시트 관리, Song DB 업데이트, 프로필."""
-from utils.configuration import config
+from utils.configuration import config, resolve_cache_path
 import os
 import threading
 import time
 from datetime import datetime
-from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant, pyqtProperty
+from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant, pyqtProperty, QUrl
 from repositories.song_repository import get_db_path
 from utils.web_arcaeaonline import ArcaeaOnline
 from utils.song_db_builder import rebuild_songs_db
@@ -90,13 +90,20 @@ class SettingsHandler(QObject):
         self.songTitleLanguageChanged.emit()
         self.settingsChanged.emit()
 
+    @staticmethod
+    def _to_local_path(value: str) -> str:
+        """QML FileDialog/FolderDialog가 돌려주는 file:// URL을 OS별 로컬 경로로 변환."""
+        if value.startswith("file:"):
+            return QUrl(value).toLocalFile()
+        return value
+
     def _get_absolute_cache_path(self, path: str) -> str:
-        """Convert cache path to absolute path, resolving relative paths from script directory."""
-        if path.startswith('./') or path.startswith('.\\'):
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            project_root = os.path.dirname(base_dir)
-            return os.path.normpath(os.path.join(project_root, path))
-        return os.path.abspath(path)
+        """Convert cache path to absolute path.
+
+        Delegates to configuration.resolve_cache_path so the settings UI agrees
+        with where Configuration actually stores the cache (user-data dir on macOS).
+        """
+        return resolve_cache_path(path)
 
     def _emit_cache_path_applied_updates(self):
         """Emit all state-refresh signals after cache path is successfully applied."""
@@ -117,9 +124,8 @@ class SettingsHandler(QObject):
         then call executeCacheMigration().
         """
         # Allow use of file:// prefix for drag-and-drop support or dialog returns
-        if new_path.startswith("file:///"):
-            new_path = new_path[8:]
-        
+        new_path = self._to_local_path(new_path)
+
         old_path = config['general']['cache_path']
         old_abs = self._get_absolute_cache_path(old_path)
         new_abs = os.path.abspath(new_path)
@@ -138,8 +144,7 @@ class SettingsHandler(QObject):
         Switch cache_path without migrating data files.
         This mode is intended for multi-client usage where existing files are kept as-is.
         """
-        if new_path.startswith("file:///"):
-            new_path = new_path[8:]
+        new_path = self._to_local_path(new_path)
 
         old_path = config['general']['cache_path']
         old_abs = self._get_absolute_cache_path(old_path)
@@ -254,11 +259,16 @@ class SettingsHandler(QObject):
     def openCacheFolder(self):
         """Open the cache folder in the system file explorer."""
         import subprocess
+        import sys
         cache_path = self._get_absolute_cache_path(config['general']['cache_path'])
-        
-        if os.path.isdir(cache_path):
-            # Windows
-            subprocess.Popen(['explorer', cache_path])
+        if not os.path.isdir(cache_path):
+            return
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", cache_path])
+        elif os.name == "nt":
+            subprocess.Popen(["explorer", cache_path])
+        else:  # linux/기타
+            subprocess.Popen(["xdg-open", cache_path])
 
     @pyqtSlot(result=bool)
     def getAnalyzeModeEnabled(self):
@@ -591,8 +601,7 @@ class SettingsHandler(QObject):
 
     @pyqtSlot(str)
     def setProfileImage(self, path):
-        if path.startswith("file:///"):
-            path = path[8:]
+        path = self._to_local_path(path)
         config['profile']['profile_image'] = path.replace("\\", "/")
         self.profileDisplayChanged.emit()
         self.settingsChanged.emit()

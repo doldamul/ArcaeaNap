@@ -5,6 +5,8 @@ import os
 import subprocess
 from typing import Optional
 
+from utils.user_paths import get_user_data_dir
+
 
 def _get_driver_command() -> tuple[list[str], dict]:
     """Playwright driver 실행 경로를 반환한다.
@@ -23,6 +25,10 @@ def _get_driver_command() -> tuple[list[str], dict]:
         cmd = [str(driver_executable)]
         local_browsers_dir = os.path.join(os.path.dirname(str(driver_executable)), "package", ".local-browsers")
         
+    _udd = get_user_data_dir()
+    if _udd:
+        local_browsers_dir = os.path.join(_udd, "playwright-browsers")
+
     env = get_driver_env()
     env["PLAYWRIGHT_BROWSERS_PATH"] = local_browsers_dir
     return cmd, env

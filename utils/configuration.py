@@ -3,6 +3,8 @@ import copy
 import os
 from enum import StrEnum, auto
 
+from utils.user_paths import get_user_data_dir
+
 class OS(StrEnum):
     WINDOWS = auto(),
     MACOS = auto(),
@@ -34,19 +36,29 @@ _config_default = {
     }
 }
 
+def resolve_cache_path(v: str) -> str:
+    """Resolve a (possibly './'-relative) cache_path value to an absolute path.
+
+    Single source of truth for cache-path resolution. './'-relative paths are
+    resolved against the user-data dir on macOS, else the script dir; absolute
+    paths are returned as-is. Used by both config validation and the settings UI
+    so they agree on where the cache actually lives.
+    """
+    if v.startswith('./') or v.startswith('.\\'):
+        _udd = get_user_data_dir()
+        base_dir = _udd if _udd else os.path.dirname(os.path.abspath(__file__))
+        return os.path.normpath(os.path.join(base_dir, v))
+    return os.path.abspath(v)
+
+
 def _validate_cache_path(v: str) -> str:
     """
     Validate and normalize cache_path.
     Supports relative paths like './...' which are resolved relative to the script directory.
     Creates the directory if it doesn't exist.
     """
-    # Resolve relative paths from the script's directory
-    if v.startswith('./') or v.startswith('.\\'):
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        abs_path = os.path.normpath(os.path.join(base_dir, v))
-    else:
-        abs_path = os.path.abspath(v)
-    
+    abs_path = resolve_cache_path(v)
+
     # Create directory if it doesn't exist
     if not os.path.isdir(abs_path):
         try:
@@ -146,6 +158,8 @@ class Configuration:
     filename: str = "config.ini"
 
     def __init__(self) -> None:
+        _udd = get_user_data_dir()
+        self.filename = os.path.join(_udd, "config.ini") if _udd else "config.ini"
         self._config = configparser.ConfigParser()
         self._runtime = copy.deepcopy(_runtime_default)
         
