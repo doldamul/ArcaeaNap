@@ -175,3 +175,4 @@ client_secret.json
 .worktrees/
 agent_docs
 tests
+updates/

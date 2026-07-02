@@ -7,7 +7,7 @@ import os
 import uuid
 from typing import Any
 
-from utils.configuration import config
+from utils.configuration import config, get_cache_dir
 from services.client_identity import get_client_key
 
 STORE_FILENAME = "account_connections.json"
@@ -15,7 +15,7 @@ STORE_VERSION = 2
 
 
 def _store_path() -> str:
-    return os.path.join(config["general"]["cache_path"], STORE_FILENAME)
+    return os.path.join(get_cache_dir(), STORE_FILENAME)
 
 
 def _empty_store() -> dict[str, Any]:

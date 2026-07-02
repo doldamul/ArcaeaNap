@@ -1,4 +1,4 @@
-from utils.configuration import config
+from utils.configuration import config, get_cache_dir
 from utils.disrupt import block_pointer_events, restore_pointer_events
 from repositories.song_repository import (
     get_connection,
@@ -175,7 +175,7 @@ class ArcaeaOnline:
 
     @property
     def db_path(self):
-        return os.path.join(config['general']['cache_path'], 'user_scores.db')
+        return os.path.join(get_cache_dir(), 'user_scores.db')
 
     def _load_pin_updates_from_db(self):
         """Load pin update timestamps from database on startup."""
@@ -1504,7 +1504,7 @@ class ArcaeaOnline:
         Response 인터셉트 방식으로 캐싱된 이미지 사용
         """
         # 썸네일 저장 경로
-        thumbnails_dir = os.path.join(config['general']['cache_path'], 'thumbnails')
+        thumbnails_dir = os.path.join(get_cache_dir(), 'thumbnails')
         os.makedirs(thumbnails_dir, exist_ok=True)
         
         difficulty_name = DIFFICULTY_NAMES.get(difficulty, 'unknown')

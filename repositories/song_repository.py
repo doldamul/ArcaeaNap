@@ -5,7 +5,7 @@ songs/charts 테이블의 스키마 관리, 레코드 CRUD, 타이틀 해석 기
 """
 import sqlite3
 import os
-from utils.configuration import config
+from utils.configuration import config, get_cache_dir
 
 # === 상수 ===
 
@@ -45,7 +45,7 @@ TITLE_ALIAS_MAP = {
 
 def get_db_path():
     """songs.db의 절대 경로를 반환한다."""
-    return os.path.join(config['general']['cache_path'], SONGS_DB_NAME)
+    return os.path.join(get_cache_dir(), SONGS_DB_NAME)
 
 
 def get_connection():
@@ -221,7 +221,7 @@ def fill_missing_arcaea_ids_from_scores():
     """
     Backfills missing arcaea_id in songs.db using data from user_scores.db.
     """
-    scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
+    scores_db_path = os.path.join(get_cache_dir(), 'user_scores.db')
     if not os.path.exists(scores_db_path):
         return
 
@@ -274,7 +274,7 @@ def fill_song_titles_from_scores():
     user_scores.db의 title_en/title_jp 데이터를 songs.db에 역으로 채운다.
     songs.db 재생성 후 호출하여 인게임 제목 데이터를 복원한다.
     """
-    scores_db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
+    scores_db_path = os.path.join(get_cache_dir(), 'user_scores.db')
     if not os.path.exists(scores_db_path):
         return
 

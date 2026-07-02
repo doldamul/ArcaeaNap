@@ -11,7 +11,7 @@ import requests
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
-from utils.configuration import config
+from utils.configuration import config, get_cache_dir
 import gspread
 import re
 from repositories.song_repository import init_songs_db, get_connection, resolve_song_id
@@ -478,7 +478,7 @@ def send_scores_to_sheet(sheet_id=None, log_callback=None, cancellation_context=
     
     # Load local data
     songs_data = get_all_songs_with_charts()
-    best_scores = get_best_scores_per_chart(config['general']['cache_path'])
+    best_scores = get_best_scores_per_chart(get_cache_dir())
     
     # Build title -> arcaea_id lookup (case-insensitive) using canonical_title only.
     title_to_arcaea_id = {}  # lower(canonical_title) -> arcaea_id

@@ -4,7 +4,7 @@ import random
 import sqlite3
 import threading
 from datetime import datetime
-from utils.configuration import config
+from utils.configuration import config, get_cache_dir
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant, QUrl
 from utils.web_arcaeaonline import ArcaeaOnline
 from repositories.score_repository import PinRepository
@@ -153,7 +153,7 @@ class AnalysisHandler(QObject):
         result = {}
 
         try:
-            db_path = os.path.join(config['general']['cache_path'], 'user_scores.db')
+            db_path = os.path.join(get_cache_dir(), 'user_scores.db')
             if not os.path.exists(db_path):
                 return {}
 
@@ -220,7 +220,7 @@ class AnalysisHandler(QObject):
     def getRandomThumbnails(self):
         """Returns 5 random thumbnail paths if available, otherwise empty list."""
         try:
-            thumbnails_dir = os.path.join(config['general']['cache_path'], 'thumbnails')
+            thumbnails_dir = os.path.join(get_cache_dir(), 'thumbnails')
             if not os.path.exists(thumbnails_dir):
                 return []
 

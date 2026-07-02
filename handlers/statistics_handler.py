@@ -1,7 +1,7 @@
 """Statistics 탭 핸들러: QML 브릿지, UI 상태 관리."""
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, pyqtProperty, QVariant
 
-from utils.configuration import config
+from utils.configuration import config, get_cache_dir
 from models.constants import SCORE_RANKS
 from services.statistics_service import StatisticsService, FilterParams
 from handlers.statistics_list_model import StatisticsListModel
@@ -44,7 +44,7 @@ class StatisticsHandler(QObject):
         self._selected_difficulty = 2  # Default to FTR (0=PST,1=PRS,2=FTR,3=BYD,4=ETR)
 
         self._service.load_data(
-            config['general']['cache_path'],
+            get_cache_dir(),
             config['general']['song_title_language'],
         )
         self._full_rebuild('first')
@@ -456,7 +456,7 @@ class StatisticsHandler(QObject):
     @pyqtSlot()
     def refreshData(self):
         self._service.load_data(
-            config['general']['cache_path'],
+            get_cache_dir(),
             config['general']['song_title_language'],
         )
         self._on_data_refreshed()

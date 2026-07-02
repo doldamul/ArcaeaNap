@@ -8,7 +8,7 @@ import time
 import uuid
 from dataclasses import dataclass
 
-from utils.configuration import config
+from utils.configuration import config, get_cache_dir
 from services.client_identity import get_client_key
 
 SESSION_ID = uuid.uuid4().hex
@@ -28,11 +28,11 @@ class WriteConflictInfo:
 def _marker_path(target: str) -> str:
     safe_target = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in target)
     filename = f".write_activity_{safe_target}.json"
-    return os.path.join(config["general"]["cache_path"], filename)
+    return os.path.join(get_cache_dir(), filename)
 
 
 def _marker_candidates(target: str) -> list[str]:
-    directory = config["general"]["cache_path"]
+    directory = get_cache_dir()
     safe_target = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in target)
     marker_basename = f".write_activity_{safe_target}"
 

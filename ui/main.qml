@@ -125,6 +125,44 @@ ApplicationWindow {
             }
         }
 
+        // 1-b. 업데이트 알림 (브랜드 우측, available일 때만)
+        Item {
+            id: updateNotice
+            visible: !!updateHandler && updateHandler.phase === "available"
+            anchors.left: brandContainer.right
+            anchors.leftMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
+            width: noticeRow.implicitWidth
+            height: 28
+
+            Row {
+                id: noticeRow
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 6
+
+                Rectangle {
+                    width: 8; height: 8; radius: 4
+                    color: "#6A0DAD"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Text {
+                    visible: window.width >= 800
+                    text: "New update available"
+                    color: "#6A0DAD"
+                    font.bold: true
+                    font.pixelSize: 13
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: window.showAboutWindow()
+            }
+        }
+
         // 2. 탭 메뉴 컨테이너 (정중앙 고정)
         Item {
             id: menuContainer

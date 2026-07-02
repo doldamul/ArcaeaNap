@@ -4,7 +4,7 @@ import os
 
 from PyQt6.QtGui import QGuiApplication, QSurfaceFormat, QIcon, QImageReader, QPixmap
 from PyQt6.QtQml import QQmlApplicationEngine
-from PyQt6.QtCore import QUrl, QByteArray, QBuffer, QIODevice, Qt
+from PyQt6.QtCore import QUrl, QByteArray, QBuffer, QIODevice, Qt, QTimer
 
 from utils.app_fonts import register_embedded_fonts, get_app_root
 from handlers.startup_handler import StartupHandler
@@ -13,6 +13,7 @@ from handlers.stats_handler import StatsHandler
 from handlers.statistics_handler import StatisticsHandler
 from handlers.profile_handler import ProfileHandler
 from handlers.settings_handler import SettingsHandler
+from handlers.update_handler import UpdateHandler
 from services.about_service import build_about_context
 try:
     from utils.embedded_app_icon import get_embedded_app_icon
@@ -159,6 +160,9 @@ def main():
     analysis_handler.set_settings_handler(settings_handler)  # Enable connection status updates
     engine.rootContext().setContextProperty("settingsHandler", settings_handler)
 
+    update_handler = UpdateHandler()
+    engine.rootContext().setContextProperty("updateHandler", update_handler)
+
     # Refresh profile when Arcaea Online connection changes
     settings_handler.arcaeaOnlineConnectionChanged.connect(profile_handler.refreshProfile)
 
@@ -180,6 +184,9 @@ def main():
 
     # Stop browser on app exit
     app.aboutToQuit.connect(analysis_handler.stopAnalysis)
+
+    # 시작 후 3초 뒤 백그라운드 업데이트 체크(실패 시 조용히 무시).
+    QTimer.singleShot(3000, update_handler.check_on_startup)
 
     sys.exit(app.exec())
 

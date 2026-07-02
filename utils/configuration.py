@@ -3,7 +3,7 @@ import copy
 import os
 from enum import StrEnum, auto
 
-from utils.user_paths import get_user_data_dir
+from utils.user_paths import get_user_data_dir, get_app_root
 
 class OS(StrEnum):
     WINDOWS = auto(),
@@ -39,23 +39,38 @@ _config_default = {
 def resolve_cache_path(v: str) -> str:
     """Resolve a (possibly './'-relative) cache_path value to an absolute path.
 
-    Single source of truth for cache-path resolution. './'-relative paths are
-    resolved against the user-data dir on macOS, else the script dir; absolute
-    paths are returned as-is. Used by both config validation and the settings UI
-    so they agree on where the cache actually lives.
+    Single source of truth for cache-path resolution — used by config validation,
+    the settings UI (open/change folder), AND the actual data read/write sites
+    (via get_cache_dir), so they all agree on where the cache actually lives.
+
+    './'-relative paths resolve against:
+      - macOS: the user-data dir (~/Library/Application Support/ArcaeaNap) — mutable
+        data cannot live inside the .app bundle;
+      - other OS: the app root (install folder when frozen, repo root in dev) — NOT
+        the volatile CWD nor __file__ (which is lib/utils inside a frozen build).
+    Absolute paths are returned as-is (normalized).
     """
     if v.startswith('./') or v.startswith('.\\'):
         _udd = get_user_data_dir()
-        base_dir = _udd if _udd else os.path.dirname(os.path.abspath(__file__))
+        base_dir = _udd if _udd else get_app_root()
         return os.path.normpath(os.path.join(base_dir, v))
     return os.path.abspath(v)
+
+
+def get_cache_dir() -> str:
+    """Absolute, CWD-independent cache directory (single source of truth).
+
+    All actual data read/write sites must use this instead of the raw
+    config['general']['cache_path'] value (which is a './'-relative string and
+    would otherwise resolve against the volatile current working directory)."""
+    return resolve_cache_path(config['general']['cache_path'])
 
 
 def _validate_cache_path(v: str) -> str:
     """
     Validate and normalize cache_path.
-    Supports relative paths like './...' which are resolved relative to the script directory.
-    Creates the directory if it doesn't exist.
+    Supports './'-relative paths, resolved via resolve_cache_path (macOS user-data dir,
+    else the app root). Creates the resolved directory if it doesn't exist.
     """
     abs_path = resolve_cache_path(v)
 
@@ -158,8 +173,13 @@ class Configuration:
     filename: str = "config.ini"
 
     def __init__(self) -> None:
+        # config.ini lives at a stable, CWD-independent location: the user-data dir
+        # on macOS, else the app root (install folder / repo root). Previously it was
+        # a bare "config.ini" (CWD-relative), which broke when the app was launched
+        # with a different working directory (e.g. after an update relaunch).
         _udd = get_user_data_dir()
-        self.filename = os.path.join(_udd, "config.ini") if _udd else "config.ini"
+        base = _udd if _udd else get_app_root()
+        self.filename = os.path.join(base, "config.ini")
         self._config = configparser.ConfigParser()
         self._runtime = copy.deepcopy(_runtime_default)
         

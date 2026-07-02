@@ -3,7 +3,7 @@ import os
 
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant
 
-from utils.configuration import config
+from utils.configuration import config, get_cache_dir
 from models.constants import DIFFICULTY_ORDER, DIFFICULTY_NAMES, DIFFICULTY_COLORS
 from services.score_query_service import play_stats_total, play_stats_difficulty, get_top_10_most_played
 from services.thumbnail_service import ThumbnailService
@@ -23,7 +23,7 @@ class StatsHandler(QObject):
     @property
     def _thumbnails_dir(self):
         """동적으로 현재 cache_path 기반 thumbnails 디렉토리 반환."""
-        return os.path.join(config['general']['cache_path'], 'thumbnails')
+        return os.path.join(get_cache_dir(), 'thumbnails')
 
     @pyqtSlot(result=int)
     def getTotalPlayCount(self):
@@ -39,7 +39,7 @@ class StatsHandler(QObject):
 
     @pyqtSlot(result=list)
     def getMostPlayed(self):
-        cache_path = config['general']['cache_path']
+        cache_path = get_cache_dir()
         return get_top_10_most_played(
             cache_path=cache_path,
             difficulty_filter=config['profile']['difficulty_filter'],
@@ -96,7 +96,7 @@ class StatsHandler(QObject):
 
     @pyqtSlot()
     def refreshStats(self):
-        cache_path = config['general']['cache_path']
+        cache_path = get_cache_dir()
         
         diff_info = [
             (code, DIFFICULTY_NAMES[code], DIFFICULTY_COLORS[code])
