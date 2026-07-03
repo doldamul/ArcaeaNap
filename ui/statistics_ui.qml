@@ -556,7 +556,62 @@ Item {
                                                     color: "#7A6090"
                                                     visible: !parent.isStandaloneMode && rowModel.displayValue && rowModel.displayValue !== ""
                                                 }
-                                                
+
+                                                // Score of the highlighted difficulty (shown when not in score sort)
+                                                Text {
+                                                    id: highlightedScoreText
+                                                    anchors.right: parent.right
+                                                    property bool isLevelSort: statisticsHandler && statisticsHandler.sortMode === "level"
+                                                    font.pixelSize: 11
+                                                    font.bold: isLevelSort
+                                                    color: "#7A6090"
+
+                                                    property bool isSongMode: statisticsHandler && statisticsHandler.displayMode === "song"
+                                                    property bool isChartMode: statisticsHandler && statisticsHandler.displayMode === "chart"
+
+                                                    // Highlighted diff computed from rowModel directly (avoids forward ref to difficultyRow)
+                                                    property int highlightedDiff: {
+                                                        if (!statisticsHandler) return -1
+                                                        var mode = statisticsHandler.sortMode
+                                                        if (mode === "max") return rowModel.bestDiffForMax >= 0 ? rowModel.bestDiffForMax : -1
+                                                        if (mode === "recent_played") return rowModel.bestDiffForRecent >= 0 ? rowModel.bestDiffForRecent : -1
+                                                        if (mode === "level") return rowModel.bestDiffForLevel >= 0 ? rowModel.bestDiffForLevel : -1
+                                                        if (mode === "s_bp") return rowModel.bestDiffForSBp >= 0 ? rowModel.bestDiffForSBp : -1
+                                                        if (mode === "perceived_bp") return rowModel.bestDiffForPerceivedBp >= 0 ? rowModel.bestDiffForPerceivedBp : -1
+                                                        if (mode === "potential") return rowModel.bestDiffForPotential >= 0 ? rowModel.bestDiffForPotential : -1
+                                                        return -1
+                                                    }
+
+                                                    property int songModeScore: {
+                                                        if (!isSongMode || highlightedDiff < 0) return 0
+                                                        var diffs = rowModel.filteredDifficulties || []
+                                                        for (var i = 0; i < diffs.length; i++) {
+                                                            if (diffs[i].difficulty === highlightedDiff) return diffs[i].score || 0
+                                                        }
+                                                        return 0
+                                                    }
+                                                    property bool songModeHasScore: {
+                                                        if (!isSongMode || highlightedDiff < 0) return false
+                                                        var diffs = rowModel.filteredDifficulties || []
+                                                        for (var i = 0; i < diffs.length; i++) {
+                                                            if (diffs[i].difficulty === highlightedDiff) return diffs[i].hasScore || false
+                                                        }
+                                                        return false
+                                                    }
+
+                                                    text: {
+                                                        if (isSongMode) return songModeHasScore ? songModeScore.toLocaleString(Qt.locale("en_US"), 'f', 0) : "-"
+                                                        if (isChartMode) return rowModel.hasScore ? (rowModel.bestScore || 0).toLocaleString(Qt.locale("en_US"), 'f', 0) : "-"
+                                                        return ""
+                                                    }
+
+                                                    visible: {
+                                                        if (!statisticsHandler || statisticsHandler.sortMode === "score") return false
+                                                        if (isSongMode) return highlightedDiff >= 0
+                                                        return !!isChartMode
+                                                    }
+                                                }
+
                                                 // Song mode: show all difficulty levels with colors
                                                 // In standalone modes: main display (font 13), otherwise secondary info (font 11)
                                                 // In specific sort modes, only highlight the "best" difficulty
@@ -617,7 +672,7 @@ Item {
                                                                 }
                                                                 // Floating badge overlay
                                                                 Row {
-                                                                    property bool isValueAbove: !difficultyRow.isStandaloneMode && rowModel.displayValue && rowModel.displayValue !== ""
+                                                                    property bool isValueAbove: Boolean((highlightedScoreText && highlightedScoreText.visible) || (!difficultyRow.isStandaloneMode && rowModel.displayValue && rowModel.displayValue !== ""))
                                                                     property string lvlStr: String(modelData.level || "")
                                                                     z: 10
                                                                     spacing: 1
@@ -691,7 +746,7 @@ Item {
 
                                                         // Floating badge overlay
                                                         Row {
-                                                            property bool isValueAbove: !(statisticsHandler && (statisticsHandler.sortMode === "title" || statisticsHandler.sortMode === "level")) && rowModel.displayValue && rowModel.displayValue !== ""
+                                                            property bool isValueAbove: Boolean((highlightedScoreText && highlightedScoreText.visible) || (!(statisticsHandler && (statisticsHandler.sortMode === "title" || statisticsHandler.sortMode === "level")) && rowModel.displayValue && rowModel.displayValue !== ""))
                                                             property string lvlStr: String(rowModel.level || "")
                                                             z: 10
                                                             spacing: 1

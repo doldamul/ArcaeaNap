@@ -596,14 +596,17 @@ class StatisticsService:
             'displayValue': '',  # Will be set based on sort mode
         }
 
-    def _build_difficulty_summary(self, difficulty, chart_data) -> dict:
+    def _build_difficulty_summary(self, difficulty, chart_data, score_data: dict) -> dict:
         """Build lightweight difficulty summary for song list delegate."""
+        has_score = score_data.get('time_played', 0) > 0
         return {
             'difficulty': difficulty,
             'level': chart_data.get('level', ''),
             'difficultyColor': DIFFICULTY_COLORS.get(difficulty, '#888'),
             'ignoreChart': chart_data.get('ignore_chart', False),
             'skillIssues': chart_data.get('skill_issues', False),
+            'score': score_data.get('score', 0),
+            'hasScore': has_score,
         }
 
     def _build_song_item(self, song_db_id, arcaea_id, song_data, filtered_difficulties, filters: FilterParams = None) -> dict:
@@ -661,7 +664,7 @@ class StatisticsService:
             play_count = self.play_counts.get((arcaea_id, diff), 0)
             this_year_play_count = self.this_year_play_counts.get((arcaea_id, diff), 0)
 
-            diff_details.append(self._build_difficulty_summary(diff, chart_data))
+            diff_details.append(self._build_difficulty_summary(diff, chart_data, score_data))
 
             # Track best potential
             if has_score:
