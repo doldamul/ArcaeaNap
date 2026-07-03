@@ -35,7 +35,8 @@ Rectangle {
     property string rankColor: ""  // Pre-computed rank color from Python
     property string clearTypeText: ""  // Pre-computed clear type full text from Python
     property string clearTypeAbbr: ""  // Pre-computed clear type abbreviation from Python
-    
+    property int bestPotentialRank: 0
+
     signal clicked(int diff)
     
     // Filtered state: keep colors but muted, not fully gray
@@ -254,13 +255,45 @@ Rectangle {
             text: hasScore ? score : "-"
             font.bold: true; font.pixelSize: 24; color: effectiveTextColor 
         }
-        Text { 
-            text: rank !== "" ? rank : "PM"
-            font.bold: true; font.pixelSize: 14
-            color: getRankColor(rankColor)
-            opacity: rank !== "" ? 1.0 : 0.0
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.maximumWidth: Math.min(parent.width * 0.9, parent.width * 0.5 + 50)
+            spacing: 0
+
+            Text {
+                text: rank !== "" ? rank : "PM"
+                font.bold: true; font.pixelSize: 14
+                color: getRankColor(rankColor)
+                opacity: rank !== "" ? 1.0 : 0.0
+            }
+            Item { Layout.fillWidth: true }
+            Item {
+                visible: bestPotentialRank > 0 && hasScore
+                implicitWidth: bestLabel.width + rankNum.width
+                implicitHeight: rankNum.height
+                Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+
+                Text {
+                    id: bestLabel
+                    text: "BEST "
+                    font.bold: true
+                    font.pixelSize: 11
+                    color: getRankColor("#6A6A8A")
+                    anchors.baseline: rankNum.baseline
+                    anchors.right: rankNum.left
+                }
+                Text {
+                    id: rankNum
+                    text: bestPotentialRank.toString()
+                    font.bold: true
+                    font.pixelSize: 14
+                    color: getRankColor("#6A6A8A")
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                }
+            }
         }
-        
+
         Item { Layout.fillHeight: true }
         
         // Stats Grid: Pure, Far, Lost

@@ -22,6 +22,13 @@ Item {
     property int currentSongIndex: statisticsHandler ? statisticsHandler.selectedIndex : -1
     property string searchText: ""  // Search text managed at root level
     property bool suppressResponsivePopAnimation: false
+    property int bestPotentialMarkLimit: {
+        if (!settingsHandler) return 0
+        var v = settingsHandler.getBestPotentialMark()
+        if (v === "none") return 0
+        if (v === "all") return 999999
+        return parseInt(v) || 0
+    }
     readonly property var appWindow: ApplicationWindow.window
     readonly property string titleFontFamily: (appWindow && appWindow.titleFontFamily)
         ? appWindow.titleFontFamily
@@ -55,6 +62,16 @@ Item {
         }
         function onSelectedItemChanged() {
             statsRoot.currentSong = statisticsHandler.getSelectedItem()
+        }
+    }
+
+    Connections {
+        target: settingsHandler
+        function onBestPotentialMarkChanged() {
+            var v = settingsHandler ? settingsHandler.getBestPotentialMark() : "none"
+            if (v === "none") statsRoot.bestPotentialMarkLimit = 0
+            else if (v === "all") statsRoot.bestPotentialMarkLimit = 999999
+            else statsRoot.bestPotentialMarkLimit = parseInt(v) || 0
         }
     }
 
@@ -1064,6 +1081,10 @@ Item {
                                                 isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                                 isFiltered: modelData.isFiltered || false
                                                 potential: modelData.potential !== undefined ? modelData.potential : null
+                                                bestPotentialRank: {
+                                                    var r = modelData.potentialRank || 0
+                                                    return (statsRoot.bestPotentialMarkLimit > 0 && r > 0 && r <= statsRoot.bestPotentialMarkLimit) ? r : 0
+                                                }
 
                                                 onClicked: function(diff) {
                                                     if (statisticsHandler) {
@@ -1133,6 +1154,10 @@ Item {
                                             isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                             isFiltered: modelData.isFiltered || false
                                             potential: modelData.potential !== undefined ? modelData.potential : null
+                                            bestPotentialRank: {
+                                                var r = modelData.potentialRank || 0
+                                                return (statsRoot.bestPotentialMarkLimit > 0 && r > 0 && r <= statsRoot.bestPotentialMarkLimit) ? r : 0
+                                            }
 
                                             onClicked: function(diff) {
                                                 if (statisticsHandler) {
@@ -1143,7 +1168,7 @@ Item {
                                     }
                                 }
                             }
-                            
+
                             // Empty state when no song selected
                             Text {
                                 visible: !currentSong

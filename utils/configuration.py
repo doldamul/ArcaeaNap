@@ -33,7 +33,10 @@ _config_default = {
     },
     'sheet': {
         'last_synced': 0,
-    }
+    },
+    'statistics': {
+        'best_potential_mark': 'none',  # 'none' | '10' | '30' | '50' | '100' | 'all'
+    },
 }
 
 def resolve_cache_path(v: str) -> str:
@@ -112,7 +115,10 @@ _converters = {
     },
     'sheet': {
         'last_synced': float,
-    }
+    },
+    'statistics': {
+        'best_potential_mark': str,
+    },
 }
 
 # --- Runtime-only settings (not persisted to config.ini) ---

@@ -59,6 +59,9 @@ class StatisticsService:
         self.available_bps = []
         self.level_boundaries = {}
 
+        # 전역 potential 순위 맵: (arcaea_id, difficulty) → rank (1-based, 0=미플레이)
+        self._potential_rank_map: dict = {}
+
     @staticmethod
     def _normalize_level(level) -> str:
         """Normalize level text for consistent backend->QML contract."""
@@ -150,8 +153,42 @@ class StatisticsService:
         # Calculate Level/BP boundaries
         self._calculate_level_bp_boundaries()
 
+        # Compute global potential rankings across all played charts
+        self._rebuild_potential_ranks()
+
         # 데이터 원본이 바뀌었으므로 중간 캐시는 전부 무효화
         self.invalidate_caches()
+
+    def _rebuild_potential_ranks(self):
+        """전체 플레이 기록을 potential 내림차순으로 dense ranking한다."""
+        entries = []
+        for song_data in self.songs_data.values():
+            arcaea_id = song_data.get('arcaea_id', '')
+            if not arcaea_id:
+                continue
+            for diff, chart_data in song_data.get('charts', {}).items():
+                score_data = self.scores_data.get((arcaea_id, diff), {})
+                if not score_data or score_data.get('time_played', 0) <= 0:
+                    continue
+                potential = calculate_potential(
+                    chart_data.get('bp', 0),
+                    chart_data.get('note_count', 0),
+                    score_data.get('score', 0),
+                    score_data.get('shiny_perfect', 0),
+                )
+                if potential is not None:
+                    entries.append((arcaea_id, diff, potential))
+
+        entries.sort(key=lambda x: x[2], reverse=True)
+
+        self._potential_rank_map = {}
+        current_rank = 0
+        last_potential = None
+        for arcaea_id, diff, potential in entries:
+            if potential != last_potential:
+                current_rank += 1
+                last_potential = potential
+            self._potential_rank_map[(arcaea_id, diff)] = current_rank
 
     def invalidate_caches(self):
         """중간 결과 캐시를 모두 무효화한다."""
@@ -555,6 +592,7 @@ class StatisticsService:
                 score,
                 score_data.get('shiny_perfect', 0),
             ) if has_score else None,
+            'potentialRank': self._potential_rank_map.get((arcaea_id, difficulty), 0),
             'displayValue': '',  # Will be set based on sort mode
         }
 

@@ -1244,6 +1244,49 @@ Window {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
 
+                    // Statistics Section
+                    Text { text: "Statistics"; font.bold: true; color: "#333" }
+
+                    ColumnLayout {
+                        spacing: 8
+                        Text { text: "Best potential mark"; color: "#333" }
+                        RowLayout {
+                            spacing: 10
+                            RadioButton {
+                                text: "None"
+                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === 'none' : true
+                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('none')
+                            }
+                            RadioButton {
+                                text: "B10"
+                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '10' : false
+                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('10')
+                            }
+                            RadioButton {
+                                text: "B30"
+                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '30' : false
+                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('30')
+                            }
+                            RadioButton {
+                                text: "B50"
+                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '50' : false
+                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('50')
+                            }
+                            RadioButton {
+                                text: "B100"
+                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '100' : false
+                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('100')
+                            }
+                            RadioButton {
+                                text: "All"
+                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === 'all' : false
+                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('all')
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+
                     // Language
                     ColumnLayout {
                         spacing: 8

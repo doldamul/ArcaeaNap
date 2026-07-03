@@ -27,6 +27,7 @@ class SettingsHandler(QObject):
     cachePathChanged = pyqtSignal()
     cachePathApplied = pyqtSignal()
     analyzeModeChanged = pyqtSignal(bool, arguments=['enabled'])
+    bestPotentialMarkChanged = pyqtSignal()
     # Migration signals
     cacheMigrationStarting = pyqtSignal()  # Emitted before migration - QML should release file handles
     cacheMigrationFinished = pyqtSignal(str, arguments=['error'])  # Emitted after migration with error message (empty if success)
@@ -283,6 +284,20 @@ class SettingsHandler(QObject):
         self.analyzeModeChanged.emit(enabled)
         self.settingsChanged.emit()
         
+    @pyqtSlot(result=str)
+    def getBestPotentialMark(self):
+        return config['statistics']['best_potential_mark']
+
+    @pyqtSlot(str)
+    def setBestPotentialMark(self, value):
+        allowed = {'none', '10', '30', '50', '100', 'all'}
+        if value not in allowed:
+            return
+        if value == config['statistics']['best_potential_mark']:
+            return
+        config['statistics']['best_potential_mark'] = value
+        self.bestPotentialMarkChanged.emit()
+
     @pyqtSlot(result=bool)
     def isUpdatingSongDatabase(self):
         return self._is_updating_song_db
