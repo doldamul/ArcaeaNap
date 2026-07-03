@@ -239,7 +239,7 @@ class StatisticsHandler(QObject):
 
     _DIRECTION_DEPENDENT_SORT_MODES = {
         "bpm", "score", "max", "recent_played",
-        "level", "s_bp", "perceived_bp", "potential", "length",
+        "level", "s_bp", "perceived_bp", "potential", "length", "note_count",
     }
 
     def _on_sort_order_changed(self):

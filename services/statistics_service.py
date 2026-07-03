@@ -86,6 +86,24 @@ class StatisticsService:
             return min(vals) if ascending else max(vals)
         return vals[0]
 
+    @staticmethod
+    def _effective_note_count(chart_data: dict, score_data: dict) -> int:
+        """Note count for sorting/display.
+
+        Prefers the stored chart note_count; if that's missing, falls back to
+        pure+far+lost from an actual play record; otherwise 0.
+        """
+        note_count = chart_data.get('note_count', 0)
+        if note_count > 0:
+            return note_count
+        if score_data.get('time_played', 0) > 0:
+            return (
+                score_data.get('perfect', 0)
+                + score_data.get('near', 0)
+                + score_data.get('miss', 0)
+            )
+        return 0
+
     def load_data(self, cache_path: str, song_title_language: str = 'en'):
         """DB에서 데이터 로딩 + 정규화. 경계 계산 포함. song_title_language는 'en'/'jp'."""
         # Load raw data
@@ -570,7 +588,7 @@ class StatisticsService:
             'bp': chart_data.get('bp', 0),
             's_bp': chart_data.get('s_bp', 0),
             'perceived_bp': chart_data.get('perceived_bp', 0),
-            'noteCount': chart_data.get('note_count', 0),
+            'noteCount': self._effective_note_count(chart_data, score_data),
             'bestScore': score,
             'hasScore': has_score,
             'rank': rank,
@@ -622,6 +640,7 @@ class StatisticsService:
         best_bp = 0
         best_s_bp = 0
         best_perceived_bp = 0
+        best_note_count = 0
         best_score = 0
         best_rank = ""
         total_play_count = 0
@@ -640,6 +659,7 @@ class StatisticsService:
         best_diff_for_level = -1
         best_diff_for_s_bp = -1
         best_diff_for_perceived_bp = -1
+        best_diff_for_note_count = -1
         best_potential = None
         best_diff_for_potential = -1
 
@@ -699,6 +719,10 @@ class StatisticsService:
             if chart_data.get('perceived_bp', 0) > best_perceived_bp:
                 best_perceived_bp = chart_data.get('perceived_bp', 0)
                 best_diff_for_perceived_bp = diff
+            chart_note_count = self._effective_note_count(chart_data, score_data)
+            if chart_note_count > best_note_count:
+                best_note_count = chart_note_count
+                best_diff_for_note_count = diff
 
             if score > best_score:
                 best_score = score
@@ -743,6 +767,7 @@ class StatisticsService:
             'bp': best_bp,
             's_bp': best_s_bp,
             'perceived_bp': best_perceived_bp,
+            'noteCount': best_note_count,
             'bestScore': best_score,
             'hasScore': has_score,
             'rank': best_rank,
@@ -766,6 +791,7 @@ class StatisticsService:
             'bestDiffForLevel': best_diff_for_level,
             'bestDiffForSBp': best_diff_for_s_bp,
             'bestDiffForPerceivedBp': best_diff_for_perceived_bp,
+            'bestDiffForNoteCount': best_diff_for_note_count,
             'bestPotential': best_potential,
             'bestDiffForPotential': best_diff_for_potential,
         }
@@ -861,6 +887,11 @@ class StatisticsService:
             return length
         elif sort_mode == "bpm":
             return self._parse_bpm_for_sort(item.get('bpm', ''), sort_ascending)
+        elif sort_mode == "note_count":
+            note_count = item.get('noteCount', 0)
+            if not note_count or note_count <= 0:
+                return _last
+            return note_count
         return item.get('title', '').lower()
 
     def get_best_diff_for_sort(self, item, sort_mode) -> int:
@@ -883,6 +914,8 @@ class StatisticsService:
             return item.get('bestDiffForPerceivedBp', -1)
         elif sort_mode == "potential":
             return item.get('bestDiffForPotential', -1)
+        elif sort_mode == "note_count":
+            return item.get('bestDiffForNoteCount', -1)
         return -1
 
     def _format_display_value(self, item, sort_mode, display_mode) -> str:
@@ -959,6 +992,9 @@ class StatisticsService:
         elif sort_mode == "bpm":
             bpm = item.get('bpm', '')
             return str(bpm) if bpm else "?"
+        elif sort_mode == "note_count":
+            note_count = item.get('noteCount', 0)
+            return str(note_count) if note_count and note_count > 0 else "?"
         return ""
 
     def _format_time(self, timestamp) -> str:

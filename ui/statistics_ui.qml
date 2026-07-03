@@ -291,9 +291,9 @@ Item {
                                     id: sortCombo
                                     Layout.preferredWidth: 120
                                     Layout.preferredHeight: 32
-                                    model: ["Title", "Score", "Potential", "MAX", "Total Play", "This Year Play", "Recent", "Level (BP)", "S-BP", "P-BP", "BPM", "Length"]
+                                    model: ["Title", "Score", "Potential", "MAX", "Total Play", "This Year Play", "Recent", "Level (BP)", "S-BP", "P-BP", "Notes", "BPM", "Length"]
 
-                                    property var sortModes: ["title", "score", "potential", "max", "total_play_count", "this_year_play_count", "recent_played", "level", "s_bp", "perceived_bp", "bpm", "length"]
+                                    property var sortModes: ["title", "score", "potential", "max", "total_play_count", "this_year_play_count", "recent_played", "level", "s_bp", "perceived_bp", "note_count", "bpm", "length"]
                                     
                                     onCurrentIndexChanged: {
                                         if (statisticsHandler && currentIndex >= 0) {
@@ -579,6 +579,7 @@ Item {
                                                         if (mode === "s_bp") return rowModel.bestDiffForSBp >= 0 ? rowModel.bestDiffForSBp : -1
                                                         if (mode === "perceived_bp") return rowModel.bestDiffForPerceivedBp >= 0 ? rowModel.bestDiffForPerceivedBp : -1
                                                         if (mode === "potential") return rowModel.bestDiffForPotential >= 0 ? rowModel.bestDiffForPotential : -1
+                                                        if (mode === "note_count") return rowModel.bestDiffForNoteCount >= 0 ? rowModel.bestDiffForNoteCount : -1
                                                         return -1
                                                     }
 
@@ -634,6 +635,7 @@ Item {
                                                         if (mode === "s_bp" && rowModel.bestDiffForSBp >= 0) return rowModel.bestDiffForSBp
                                                         if (mode === "perceived_bp" && rowModel.bestDiffForPerceivedBp >= 0) return rowModel.bestDiffForPerceivedBp
                                                         if (mode === "potential" && rowModel.bestDiffForPotential >= 0) return rowModel.bestDiffForPotential
+                                                        if (mode === "note_count" && rowModel.bestDiffForNoteCount >= 0) return rowModel.bestDiffForNoteCount
                                                         return -1  // No highlighting for other modes (title, total_play_count, length)
                                                     }
                                                     
