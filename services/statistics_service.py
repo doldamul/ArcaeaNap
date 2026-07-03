@@ -4,8 +4,10 @@ Statistics 탭 비즈니스 로직.
 데이터 로딩, 필터링, 정렬, 아이템 빌드를 담당한다.
 PyQt6 의존 없이 순수 Python으로 구현된다.
 """
+import math
 from dataclasses import dataclass
 from datetime import datetime
+from models.potential import calculate_potential
 from services.score_query_service import (
     get_best_scores_per_chart, get_play_counts,
     get_this_year_play_counts
@@ -528,6 +530,12 @@ class StatisticsService:
             'totalPlayCount': play_count,
             'thisYearPlayCount': this_year_play_count,
             'songTotalPlayCount': song_total_play_count,
+            'potential': calculate_potential(
+                chart_data.get('bp', 0),
+                chart_data.get('note_count', 0),
+                score,
+                score_data.get('shiny_perfect', 0),
+            ) if has_score else None,
             'displayValue': '',  # Will be set based on sort mode
         }
 
@@ -566,6 +574,8 @@ class StatisticsService:
         best_diff_for_level = -1
         best_diff_for_s_bp = -1
         best_diff_for_perceived_bp = -1
+        best_potential = None
+        best_diff_for_potential = -1
 
         # Track highest difficulty for thumbnail (priority: BYD(3) > ETR(4) > FTR(2) > PRS(1) > PST(0))
         thumbnail_difficulty = -1
@@ -595,6 +605,18 @@ class StatisticsService:
             this_year_play_count = self.this_year_play_counts.get((arcaea_id, diff), 0)
 
             diff_details.append(self._build_difficulty_summary(diff, chart_data))
+
+            # Track best potential
+            if has_score:
+                p = calculate_potential(
+                    chart_data.get('bp', 0),
+                    chart_data.get('note_count', 0),
+                    score,
+                    shiny_pure,
+                )
+                if p is not None and (best_potential is None or p > best_potential):
+                    best_potential = p
+                    best_diff_for_potential = diff
 
             # Track highest difficulty for thumbnail
             if thumbnail_difficulty == -1 or THUMBNAIL_PRIORITY.get(diff, 99) < THUMBNAIL_PRIORITY.get(thumbnail_difficulty, 99):
@@ -678,6 +700,8 @@ class StatisticsService:
             'bestDiffForLevel': best_diff_for_level,
             'bestDiffForSBp': best_diff_for_s_bp,
             'bestDiffForPerceivedBp': best_diff_for_perceived_bp,
+            'bestPotential': best_potential,
+            'bestDiffForPotential': best_diff_for_potential,
         }
 
     def _build_all_difficulty_details(self, arcaea_id, song_data, filters: FilterParams) -> list:
@@ -747,6 +771,13 @@ class StatisticsService:
             return item.get('s_bp', 0)
         elif sort_mode == "perceived_bp":
             return item.get('perceived_bp', 0)
+        elif sort_mode == "potential":
+            has_score = item.get('hasScore', False)
+            # Chart 아이템은 'potential', Song 아이템은 'bestPotential'
+            potential = item.get('potential') if 'potential' in item else item.get('bestPotential')
+            if not has_score or potential is None:
+                return (0, float('-inf'))
+            return (1, potential)
         elif sort_mode == "length":
             return item.get('length', 0)
         return item.get('title', '').lower()
@@ -769,6 +800,8 @@ class StatisticsService:
             return item.get('bestDiffForSBp', -1)
         elif sort_mode == "perceived_bp":
             return item.get('bestDiffForPerceivedBp', -1)
+        elif sort_mode == "potential":
+            return item.get('bestDiffForPotential', -1)
         return -1
 
     def _format_display_value(self, item, sort_mode, display_mode) -> str:
@@ -830,6 +863,13 @@ class StatisticsService:
             if perceived_bp <= 0:
                 return "?"
             return f"{perceived_bp:.2f}"
+        elif sort_mode == "potential":
+            potential = item.get('potential') if is_chart_mode else item.get('bestPotential')
+            has_score = item.get('hasScore', False)
+            if not has_score or potential is None:
+                return "-"
+            # 4자리 버림 (round가 아닌 truncate)
+            return f"{math.floor(potential * 10000) / 10000:.4f}"
         elif sort_mode == "length":
             length = item.get('length', 0)
             if length <= 0:

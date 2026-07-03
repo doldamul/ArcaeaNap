@@ -32,6 +32,7 @@ class StatisticsListModel(QAbstractListModel):
     BestDiffForSBpRole = Qt.ItemDataRole.UserRole + 25
     BestDiffForPerceivedBpRole = Qt.ItemDataRole.UserRole + 26
     SongDbIdRole = Qt.ItemDataRole.UserRole + 27
+    BestDiffForPotentialRole = Qt.ItemDataRole.UserRole + 28
 
     _ROLE_KEY_MAP = {
         ArcaeaIdRole: "arcaeaId",
@@ -55,6 +56,7 @@ class StatisticsListModel(QAbstractListModel):
         BestDiffForSBpRole: "bestDiffForSBp",
         BestDiffForPerceivedBpRole: "bestDiffForPerceivedBp",
         SongDbIdRole: "songDbId",
+        BestDiffForPotentialRole: "bestDiffForPotential",
     }
 
     def __init__(self, parent=None):

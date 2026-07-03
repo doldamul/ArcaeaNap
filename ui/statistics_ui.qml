@@ -274,9 +274,9 @@ Item {
                                     id: sortCombo
                                     Layout.preferredWidth: 120
                                     Layout.preferredHeight: 32
-                                    model: ["Title", "Score", "MAX", "Total Play", "This Year Play", "Recent", "Level (BP)", "S-BP", "P-BP", "Length"]
-                                    
-                                    property var sortModes: ["title", "score", "max", "total_play_count", "this_year_play_count", "recent_played", "level", "s_bp", "perceived_bp", "length"]
+                                    model: ["Title", "Score", "Potential", "MAX", "Total Play", "This Year Play", "Recent", "Level (BP)", "S-BP", "P-BP", "Length"]
+
+                                    property var sortModes: ["title", "score", "potential", "max", "total_play_count", "this_year_play_count", "recent_played", "level", "s_bp", "perceived_bp", "length"]
                                     
                                     onCurrentIndexChanged: {
                                         if (statisticsHandler && currentIndex >= 0) {
@@ -561,6 +561,7 @@ Item {
                                                         if (mode === "level" && rowModel.bestDiffForLevel >= 0) return rowModel.bestDiffForLevel
                                                         if (mode === "s_bp" && rowModel.bestDiffForSBp >= 0) return rowModel.bestDiffForSBp
                                                         if (mode === "perceived_bp" && rowModel.bestDiffForPerceivedBp >= 0) return rowModel.bestDiffForPerceivedBp
+                                                        if (mode === "potential" && rowModel.bestDiffForPotential >= 0) return rowModel.bestDiffForPotential
                                                         return -1  // No highlighting for other modes (title, total_play_count, length)
                                                     }
                                                     
@@ -1062,7 +1063,8 @@ Item {
                                                 skillIssues: modelData.skillIssues || false
                                                 isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                                 isFiltered: modelData.isFiltered || false
-                                                
+                                                potential: modelData.potential !== undefined ? modelData.potential : null
+
                                                 onClicked: function(diff) {
                                                     if (statisticsHandler) {
                                                         statisticsHandler.setSelectedDifficulty(diff)
@@ -1130,7 +1132,8 @@ Item {
                                             skillIssues: modelData.skillIssues || false
                                             isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                             isFiltered: modelData.isFiltered || false
-                                            
+                                            potential: modelData.potential !== undefined ? modelData.potential : null
+
                                             onClicked: function(diff) {
                                                 if (statisticsHandler) {
                                                     statisticsHandler.setSelectedDifficulty(diff)

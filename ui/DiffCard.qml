@@ -29,6 +29,7 @@ Rectangle {
     property real shinyBp: 0
     property real perceivedBp: 0
     property bool hasScore: false  // True if this chart has been played
+    property var potential: null   // float 또는 null; null이면 "-" 표시
     property bool ignoreChart: false  // Consultant Sheet: trap flag
     property bool skillIssues: false  // Consultant Sheet: individual flag
     property string rankColor: ""  // Pre-computed rank color from Python
@@ -247,7 +248,7 @@ Rectangle {
         }
         
         Item { Layout.preferredHeight: 2 }
-        
+
         // Score + Rank
         Text { 
             text: hasScore ? score : "-"
@@ -301,6 +302,18 @@ Rectangle {
                 Layout.bottomMargin: 4
             }
             
+            // Potential Value
+            Text { text: "Potential"; color: effectiveSubTextColor; font.pixelSize: 12 }
+            Text {
+                text: (potential !== null && hasScore)
+                      ? (Math.floor(potential * 10000) / 10000).toFixed(4)
+                      : "-"
+                color: isFiltered ? effectiveSubTextColor : "#666"
+                font.bold: true
+                font.pixelSize: 12
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignRight
+            }
             // MAX Value
             Text {
                 Layout.columnSpan: 2
