@@ -756,19 +756,18 @@ class StatisticsService:
 
     def _get_sort_key(self, item, sort_mode, sort_ascending: bool = True):
         """Get the sort key based on sort mode."""
+        _last = float('inf') if sort_ascending else float('-inf')
+
         if sort_mode == "title":
             return item.get('title', '').lower()
         elif sort_mode == "score":
-            # Sort by (hasScore, bestScore) so played records (even score=0) > unplayed records
             has_score = item.get('hasScore', False)
-            return (1 if has_score else 0, item.get('bestScore', 0))
+            if not has_score:
+                return (_last, 0)
+            return (0, item.get('bestScore', 0))
         elif sort_mode == "max":
-            # Unplayed records: treat as highest MAX value (positive infinity)
             if not item.get('hasScore', False):
-                return (float('inf'), float('inf'))
-            # Primary: perfect + near + miss - shiny_perfect
-            # For MAX records (primary=0), higher BP is better
-            # For non-MAX records, lower scoreBelowMax is better
+                return (_last, _last)
             pure = item.get('pure', 0)
             shiny = item.get('shinyPure', 0)
             far = item.get('far', 0)
@@ -783,22 +782,36 @@ class StatisticsService:
         elif sort_mode == "this_year_play_count":
             return item.get('thisYearPlayCount', 0)
         elif sort_mode == "recent_played":
-            return item.get('timePlayed', 0)
+            ts = item.get('timePlayed', 0)
+            if not ts or ts <= 0:
+                return _last
+            return ts
         elif sort_mode == "level":
-            return item.get('bp', 0)
+            bp = item.get('bp', 0)
+            if not bp or bp <= 0:
+                return _last
+            return bp
         elif sort_mode == "s_bp":
-            return item.get('s_bp', 0)
+            s_bp = item.get('s_bp', 0)
+            if not s_bp or s_bp <= 0:
+                return _last
+            return s_bp
         elif sort_mode == "perceived_bp":
-            return item.get('perceived_bp', 0)
+            perceived_bp = item.get('perceived_bp', 0)
+            if not perceived_bp or perceived_bp <= 0:
+                return _last
+            return perceived_bp
         elif sort_mode == "potential":
             has_score = item.get('hasScore', False)
-            # Chart 아이템은 'potential', Song 아이템은 'bestPotential'
             potential = item.get('potential') if 'potential' in item else item.get('bestPotential')
             if not has_score or potential is None:
-                return (0, float('-inf'))
-            return (1, potential)
+                return (_last, _last)
+            return (0, potential)
         elif sort_mode == "length":
-            return item.get('length', 0)
+            length = item.get('length', 0)
+            if not length or length <= 0:
+                return _last
+            return length
         elif sort_mode == "bpm":
             return self._parse_bpm_for_sort(item.get('bpm', ''), sort_ascending)
         return item.get('title', '').lower()

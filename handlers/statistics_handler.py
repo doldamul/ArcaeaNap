@@ -235,10 +235,15 @@ class StatisticsHandler(QObject):
         self._list_model.reset_items(sorted_items)
         self._restore_selection('first')
 
+    _DIRECTION_DEPENDENT_SORT_MODES = {
+        "bpm", "score", "max", "recent_played",
+        "level", "s_bp", "perceived_bp", "potential", "length",
+    }
+
     def _on_sort_order_changed(self):
-        """정렬 방향 변경: 대부분은 reverse만 수행. 방향 의존 키 모드는 전체 재정렬."""
+        """정렬 방향 변경: 방향 의존 키 모드는 전체 재정렬, 그 외는 reverse."""
         current_items = list(self._list_model.get_items())
-        if self._sort_mode == "bpm":
+        if self._sort_mode in self._DIRECTION_DEPENDENT_SORT_MODES:
             sorted_items = self._service.sort_items(
                 current_items, self._sort_mode, self._sort_ascending
             )
