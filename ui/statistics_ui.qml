@@ -274,9 +274,9 @@ Item {
                                     id: sortCombo
                                     Layout.preferredWidth: 120
                                     Layout.preferredHeight: 32
-                                    model: ["Title", "Score", "Potential", "MAX", "Total Play", "This Year Play", "Recent", "Level (BP)", "S-BP", "P-BP", "Length"]
+                                    model: ["Title", "Score", "Potential", "MAX", "Total Play", "This Year Play", "Recent", "Level (BP)", "S-BP", "P-BP", "BPM", "Length"]
 
-                                    property var sortModes: ["title", "score", "potential", "max", "total_play_count", "this_year_play_count", "recent_played", "level", "s_bp", "perceived_bp", "length"]
+                                    property var sortModes: ["title", "score", "potential", "max", "total_play_count", "this_year_play_count", "recent_played", "level", "s_bp", "perceived_bp", "bpm", "length"]
                                     
                                     onCurrentIndexChanged: {
                                         if (statisticsHandler && currentIndex >= 0) {

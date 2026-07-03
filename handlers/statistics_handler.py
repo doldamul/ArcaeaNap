@@ -236,10 +236,19 @@ class StatisticsHandler(QObject):
         self._restore_selection('first')
 
     def _on_sort_order_changed(self):
-        """정렬 방향 변경: reverse만 수행."""
+        """정렬 방향 변경: 대부분은 reverse만 수행. 방향 의존 키 모드는 전체 재정렬."""
         current_items = list(self._list_model.get_items())
-        current_items.reverse()
-        self._list_model.reset_items(current_items)
+        if self._sort_mode == "bpm":
+            sorted_items = self._service.sort_items(
+                current_items, self._sort_mode, self._sort_ascending
+            )
+            self._service.apply_display_values(
+                sorted_items, self._sort_mode, self._display_mode
+            )
+            self._list_model.reset_items(sorted_items)
+        else:
+            current_items.reverse()
+            self._list_model.reset_items(current_items)
         self._restore_selection('first')
 
     def _on_filter_changed(self, selection_mode: str = 'adjacent_fallback'):

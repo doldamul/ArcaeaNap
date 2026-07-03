@@ -5,6 +5,7 @@ Statistics 탭 비즈니스 로직.
 PyQt6 의존 없이 순수 Python으로 구현된다.
 """
 import math
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from models.potential import calculate_potential
@@ -62,6 +63,24 @@ class StatisticsService:
     def _normalize_level(level) -> str:
         """Normalize level text for consistent backend->QML contract."""
         return str(level or "").strip()
+
+    @staticmethod
+    def _parse_bpm_for_sort(bpm, ascending: bool = True) -> float:
+        """Extract a numeric sort key from a BPM string.
+
+        - No BPM: sorts last (inf ascending, -inf descending)
+        - Range e.g. "35-400": min value ascending, max value descending
+        - Text e.g. "170?", "195✝": extracts first numeric value
+        """
+        if not bpm:
+            return float('inf') if ascending else float('-inf')
+        nums = re.findall(r'\d+(?:\.\d+)?', str(bpm))
+        if not nums:
+            return float('inf') if ascending else float('-inf')
+        vals = [float(n) for n in nums]
+        if len(vals) >= 2:
+            return min(vals) if ascending else max(vals)
+        return vals[0]
 
     def load_data(self, cache_path: str, song_title_language: str = 'en'):
         """DB에서 데이터 로딩 + 정규화. 경계 계산 포함. song_title_language는 'en'/'jp'."""
@@ -214,7 +233,7 @@ class StatisticsService:
         """정렬된 새 리스트를 반환한다. 원본 리스트는 변경하지 않는다."""
         return sorted(
             items,
-            key=lambda item: self._get_sort_key(item, sort_mode),
+            key=lambda item: self._get_sort_key(item, sort_mode, sort_ascending),
             reverse=not sort_ascending,
         )
 
@@ -735,7 +754,7 @@ class StatisticsService:
 
         return all_details
 
-    def _get_sort_key(self, item, sort_mode):
+    def _get_sort_key(self, item, sort_mode, sort_ascending: bool = True):
         """Get the sort key based on sort mode."""
         if sort_mode == "title":
             return item.get('title', '').lower()
@@ -780,6 +799,8 @@ class StatisticsService:
             return (1, potential)
         elif sort_mode == "length":
             return item.get('length', 0)
+        elif sort_mode == "bpm":
+            return self._parse_bpm_for_sort(item.get('bpm', ''), sort_ascending)
         return item.get('title', '').lower()
 
     def get_best_diff_for_sort(self, item, sort_mode) -> int:
@@ -875,6 +896,9 @@ class StatisticsService:
             if length <= 0:
                 return "?"
             return f"{length // 60}:{length % 60:02d}"
+        elif sort_mode == "bpm":
+            bpm = item.get('bpm', '')
+            return str(bpm) if bpm else "?"
         return ""
 
     def _format_time(self, timestamp) -> str:
