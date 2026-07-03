@@ -1107,7 +1107,18 @@ Item {
                             // [난이도 패널] SwipeView vs RowLayout
                             Item {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: (isNarrow || isDiffCramped) ? 360 : 330
+                                // FRAME/MAX 라인(PM 이상 성적)이 표시되는 경우, 두 라인 높이만큼 카드 영역을 더 확보해
+                                // 하단 콘텐츠(PlayDate·배지·플레이카운트)가 잘리지 않게 한다. mobile(base 360)은 여유가
+                                // 있어 소폭만, desktop(base 330)은 넉넉히 확보한다.
+                                property bool anyFrameLine: {
+                                    for (var i = 0; i < difficultiesToShow.length; i++) {
+                                        var m = difficultiesToShow[i]
+                                        if (m && m.hasScore && (m.bestScore || 0) >= 10000000) return true
+                                    }
+                                    return false
+                                }
+                                Layout.preferredHeight: ((isNarrow || isDiffCramped) ? 360 : 330)
+                                                        + (anyFrameLine ? ((isNarrow || isDiffCramped) ? 8 : 30) : 0)
                                 visible: difficultiesToShow.length > 0
                                 
                                 // [SwipeView for mobile/cramped]
@@ -1150,6 +1161,8 @@ Item {
                                                 isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                                 isFiltered: modelData.isFiltered || false
                                                 potential: modelData.potential !== undefined ? modelData.potential : null
+                                                scoreBelowMax: modelData.scoreBelowMax || 0
+                                                cut200: modelData.cut200 || 0
                                                 bestPotentialRank: {
                                                     var r = modelData.potentialRank || 0
                                                     return (statsRoot.bestPotentialMarkLimit > 0 && r > 0 && r <= statsRoot.bestPotentialMarkLimit) ? r : 0
@@ -1224,6 +1237,8 @@ Item {
                                             isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                             isFiltered: modelData.isFiltered || false
                                             potential: modelData.potential !== undefined ? modelData.potential : null
+                                            scoreBelowMax: modelData.scoreBelowMax || 0
+                                            cut200: modelData.cut200 || 0
                                             bestPotentialRank: {
                                                 var r = modelData.potentialRank || 0
                                                 return (statsRoot.bestPotentialMarkLimit > 0 && r > 0 && r <= statsRoot.bestPotentialMarkLimit) ? r : 0
@@ -1968,8 +1983,8 @@ Item {
                             width: parent.width
                             height: 60
                             
-                            // Score grades: -, D, C, B, A, AA, EX, EX+, 99.5%, 99.8%, PM, MAX
-                            property var scoreGrades: statisticsHandler ? statisticsHandler.scoreRanks : ["-", "D", "C", "B", "A", "AA", "EX", "EX+", "99.5%", "99.8%", "PM", "MAX"]
+                            // Score grades: -, D, C, B, A, AA, EX, EX+, 99.5%, 99.8%, PM, FRAME, MAX
+                            property var scoreGrades: statisticsHandler ? statisticsHandler.scoreRanks : ["-", "D", "C", "B", "A", "AA", "EX", "EX+", "99.5%", "99.8%", "PM", "FRAME", "MAX"]
                             
                             // Independent handle indices
                             property int handleAIndex: 0
@@ -1986,58 +2001,39 @@ Item {
                                 return ""
                             }
                             
-                            // Color mapping for Score Range gradient
-                            // D (0/11) = burgundy #80354A
-                            // A (4/11) = brighter purple #9B6BB5
-                            // EX (6/11) = brighter blue-gray #6A8CAA
-                            // PM (10/11) = brighter teal #4AA8A8
-                            // MAX (11/11) = sky blue #5AB8E0
+                            // Color mapping for Score Range gradient (index-based anchors)
+                            // D (idx 0) = burgundy #80354A
+                            // A (idx 4) = brighter purple #9B6BB5
+                            // EX (idx 6) = brighter blue-gray #6A8CAA
+                            // PM (idx 10) = brighter teal #4AA8A8
+                            // FRAME (idx 11) = sky blue #5AB8E0 (기존 MAX 색)
+                            // MAX (idx 12) = brighter sky blue #85D5F5
                             function getColorForScoreIndex(idx) {
                                 if (scoreGrades.length <= 1) return "#80354A"
-                                
-                                var ratio = idx / (scoreGrades.length - 1)  // 0.0 to 1.0
-                                
-                                // Key color points (positions on 0-1 scale)
-                                // D at 0 (idx 1, but we start from 0)
-                                // A at ~0.36 (idx 4)
-                                // EX at ~0.55 (idx 6)
-                                // PM at ~0.91 (idx 10)
-                                // MAX at 1.0 (idx 11)
-                                var dColor = {r: 0x80, g: 0x35, b: 0x4A}      // D - burgundy
-                                var aColor = {r: 0x9B, g: 0x6B, b: 0xB5}      // A - brighter purple
-                                var exColor = {r: 0x6A, g: 0x8C, b: 0xAA}     // EX - brighter blue-gray
-                                var pmColor = {r: 0x4A, g: 0xA8, b: 0xA8}     // PM - brighter teal
-                                var maxColor = {r: 0x5A, g: 0xB8, b: 0xE0}    // MAX - sky blue
-                                
-                                var r, g, b, t
-                                
-                                if (ratio <= 0.36) {
-                                    // D -> A gradient (0 to 0.36)
-                                    t = ratio / 0.36
-                                    r = Math.round(dColor.r + (aColor.r - dColor.r) * t)
-                                    g = Math.round(dColor.g + (aColor.g - dColor.g) * t)
-                                    b = Math.round(dColor.b + (aColor.b - dColor.b) * t)
-                                } else if (ratio <= 0.55) {
-                                    // A -> EX gradient (0.36 to 0.55)
-                                    t = (ratio - 0.36) / 0.19
-                                    r = Math.round(aColor.r + (exColor.r - aColor.r) * t)
-                                    g = Math.round(aColor.g + (exColor.g - aColor.g) * t)
-                                    b = Math.round(aColor.b + (exColor.b - aColor.b) * t)
-                                } else if (ratio <= 0.91) {
-                                    // EX -> PM gradient (0.55 to 0.91)
-                                    t = (ratio - 0.55) / 0.36
-                                    r = Math.round(exColor.r + (pmColor.r - exColor.r) * t)
-                                    g = Math.round(exColor.g + (pmColor.g - exColor.g) * t)
-                                    b = Math.round(exColor.b + (pmColor.b - exColor.b) * t)
-                                } else {
-                                    // PM -> MAX gradient (0.91 to 1.0)
-                                    t = (ratio - 0.91) / 0.09
-                                    r = Math.round(pmColor.r + (maxColor.r - pmColor.r) * t)
-                                    g = Math.round(pmColor.g + (maxColor.g - pmColor.g) * t)
-                                    b = Math.round(pmColor.b + (maxColor.b - pmColor.b) * t)
+
+                                var anchors = [
+                                    {i: 0,  r: 0x80, g: 0x35, b: 0x4A},   // D     - burgundy
+                                    {i: 4,  r: 0x9B, g: 0x6B, b: 0xB5},   // A     - brighter purple
+                                    {i: 6,  r: 0x6A, g: 0x8C, b: 0xAA},   // EX    - brighter blue-gray
+                                    {i: 10, r: 0x4A, g: 0xA8, b: 0xA8},   // PM    - brighter teal
+                                    {i: 11, r: 0x5A, g: 0xB8, b: 0xE0},   // FRAME - sky blue
+                                    {i: 12, r: 0x85, g: 0xD5, b: 0xF5}    // MAX   - brighter sky blue
+                                ]
+                                var last = anchors.length - 1
+                                if (idx <= anchors[0].i) idx = anchors[0].i
+                                if (idx >= anchors[last].i) idx = anchors[last].i
+
+                                for (var k = 0; k < last; k++) {
+                                    var a = anchors[k], b2 = anchors[k + 1]
+                                    if (idx >= a.i && idx <= b2.i) {
+                                        var t = (b2.i === a.i) ? 0 : (idx - a.i) / (b2.i - a.i)
+                                        var r = Math.round(a.r + (b2.r - a.r) * t)
+                                        var g = Math.round(a.g + (b2.g - a.g) * t)
+                                        var b = Math.round(a.b + (b2.b - a.b) * t)
+                                        return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')
+                                    }
                                 }
-                                
-                                return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')
+                                return "#80354A"
                             }
                             
                             // Track with gradient

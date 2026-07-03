@@ -35,8 +35,9 @@ ALL_DIFFICULTIES: set[int] = {0, 1, 2, 3, 4}
 # === 점수/랭크 상수 ===
 
 # Score Range 필터용 랭크 라벨 (인덱스 기반)
+# FRAME: score_below_max + cut_200 <= 0 (frame-limited max 도달). PM과 MAX 사이.
 SCORE_RANKS: list[str] = [
-    '-', 'D', 'C', 'B', 'A', 'AA', 'EX', 'EX+', '99.5%', '99.8%', 'PM', 'MAX'
+    '-', 'D', 'C', 'B', 'A', 'AA', 'EX', 'EX+', '99.5%', '99.8%', 'PM', 'FRAME', 'MAX'
 ]
 
 # 랭크 계산용 분기점 (score 기준, 내림차순)

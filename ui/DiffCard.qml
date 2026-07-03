@@ -30,6 +30,8 @@ Rectangle {
     property real perceivedBp: 0
     property bool hasScore: false  // True if this chart has been played
     property var potential: null   // float 또는 null; null이면 "-" 표시
+    property int scoreBelowMax: 0  // 이론상 MAX 대비 점수 손실 (user_scores.db)
+    property int cut200: 0         // Consultant Sheet frame-limited offset (<=0)
     property bool ignoreChart: false  // Consultant Sheet: trap flag
     property bool skillIssues: false  // Consultant Sheet: individual flag
     property bool hardBpm: false      // Consultant Sheet: hard BPM change flag
@@ -58,6 +60,10 @@ Rectangle {
     property string effectiveTextColor: isFiltered ? "#666" : "#333"
     property string effectiveDiffColor: isFiltered ? blendWithGray(diffColor, 0.35) : diffColor
     property string effectiveSubTextColor: isFiltered ? "#999" : "#888"
+
+    // Score Range 필터 강조 색상 (FRAME/MAX 도달 표시에 사용)
+    readonly property string frameHighlightColor: "#5AB8E0"  // 필터 FRAME 색
+    readonly property string maxHighlightColor: "#85D5F5"    // 필터 MAX 색 (밝은 하늘색)
     
     // Helper function for rank color (applies filter blending)
     function getRankColor(baseColor) {
@@ -90,7 +96,8 @@ Rectangle {
 
     Layout.fillWidth: true
     Layout.fillHeight: true
-    Layout.preferredHeight: 320
+    // 320(기본) + 22(FRAME 라인). 실제 높이는 부모 컨테이너가 fillHeight로 결정.
+    Layout.preferredHeight: 342
     radius: 15
     color: getBackgroundColor()
     border.color: isFiltered ? blendWithGray(diffColor, 0.5) : (isSelected ? diffColor : "#E0E0E0")
@@ -295,9 +302,7 @@ Rectangle {
             }
         }
 
-        Item { Layout.fillHeight: true }
-        
-        // Stats Grid: Pure, Far, Lost
+        // Stats Grid: Pure, Far, Lost — 상단 고정(FRAME/MAX 유무와 무관하게 통계 값 위치 동일)
         GridLayout {
             Layout.fillWidth: true
             Layout.maximumWidth: Math.min(parent.width * 0.9, parent.width * 0.5 + 50)
@@ -348,16 +353,30 @@ Rectangle {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignRight
             }
-            // MAX Value
+            // FRAME Value (frame-limited max 기준; PM 이상 성적에서만 의미 있음)
+            // FRAME 도달(FRAME-N이 아닌 FRAME)이면 필터 FRAME 색으로 bold 강조.
             Text {
+                readonly property bool framePlain: (scoreBelowMax + cut200) <= 0
                 Layout.columnSpan: 2
                 Layout.alignment: Qt.AlignRight
-                text: {
-                    if (!hasScore) return "-"
-                    var val = pure + far + lost - shinyPure
-                    return val > 0 ? "MAX-" + val : "MAX"
-                }
-                color: isFiltered ? effectiveSubTextColor : "#666"
+                visible: hasScore && score >= 10000000
+                text: framePlain ? "FRAME" : "FRAME-" + (scoreBelowMax + cut200)
+                color: framePlain ? getRankColor(frameHighlightColor)
+                                  : (isFiltered ? effectiveSubTextColor : "#666")
+                font.bold: framePlain
+                font.pixelSize: 11
+            }
+            // MAX Value (FRAME과 동일하게 PM 이상 성적에서만 표시)
+            // MAX 도달(MAX-N이 아닌 MAX)이면 필터 MAX 색으로 bold 강조.
+            Text {
+                readonly property bool maxPlain: (pure + far + lost - shinyPure) <= 0
+                Layout.columnSpan: 2
+                Layout.alignment: Qt.AlignRight
+                visible: hasScore && score >= 10000000
+                text: maxPlain ? "MAX" : "MAX-" + (pure + far + lost - shinyPure)
+                color: maxPlain ? getRankColor(maxHighlightColor)
+                                : (isFiltered ? effectiveSubTextColor : "#666")
+                font.bold: maxPlain
                 font.pixelSize: 11
             }
             // Play Date Value
@@ -369,7 +388,10 @@ Rectangle {
                 font.pixelSize: 11
             }
         }
-        
+
+        // 유동 여백: FRAME/MAX가 접힐 때 PlayDate만 위로 당겨지고, 하단 배지/플레이카운트는 바닥에 고정된다.
+        Item { Layout.fillHeight: true }
+
         // Bottom row: Consultant Sheet badges (left) + Play Count (right)
         RowLayout {
             Layout.fillWidth: true

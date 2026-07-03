@@ -341,7 +341,7 @@ def get_all_songs_with_charts():
         dict: {song_db_id: {
             'arcaea_id': str, 'canonical_title': str, 'title_en': str, 'title_jp': str,
             'artist': str, 'length': int, 'bpm': str,
-            'charts': {difficulty: {level, bp, s_bp, perceived_bp, note_count, ignore_chart, skill_issues, hard_bpm}}
+            'charts': {difficulty: {level, bp, s_bp, perceived_bp, note_count, ignore_chart, skill_issues, hard_bpm, cut_200}}
         }}
     """
     songs_db_path = get_db_path()
@@ -354,7 +354,7 @@ def get_all_songs_with_charts():
         cursor.execute("""
             SELECT s.arcaea_id, s.canonical_title, s.title_en, s.title_jp, s.artist, s.length, s.bpm,
                    c.difficulty, c.level, c.bp, c.s_bp, c.perceived_bp, c.note_count,
-                   c.ignore_chart, c.skill_issues, c.hard_bpm, s.id
+                   c.ignore_chart, c.skill_issues, c.hard_bpm, s.id, c.cut_200
             FROM songs s
             LEFT JOIN charts c ON s.id = c.song_id
             WHERE s.arcaea_id IS NOT NULL AND s.arcaea_id != ''
@@ -387,6 +387,7 @@ def get_all_songs_with_charts():
                     'ignore_chart': bool(row[13]),
                     'skill_issues': bool(row[14]),
                     'hard_bpm': bool(row[15]),
+                    'cut_200': row[17] or 0,
                 }
 
         return result

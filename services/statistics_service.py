@@ -426,6 +426,7 @@ class StatisticsService:
             item.get('bestScore', 0),
             item.get('hasScore', False),
             item.get('scoreBelowMax', None),
+            item.get('cut200', None),
         )
         if rank_idx < filters.score_min_rank or rank_idx > filters.score_max_rank:
             return False
@@ -492,19 +493,21 @@ class StatisticsService:
         time_played = score_data.get('time_played', 0) if score_data else 0
         has_score = time_played > 0
         score_below_max = score_data.get('score_below_max', None) if score_data else None
-        rank_idx = self.get_score_rank_index(score, has_score, score_below_max)
+        cut_200 = chart_data.get('cut_200', None) if chart_data else None
+        rank_idx = self.get_score_rank_index(score, has_score, score_below_max, cut_200)
         if rank_idx < filters.score_min_rank or rank_idx > filters.score_max_rank:
             return False
 
         return True
 
-    def get_score_rank_index(self, score, has_score=None, score_below_max=None) -> int:
+    def get_score_rank_index(self, score, has_score=None, score_below_max=None, cut_200=None) -> int:
         """Convert a score to its rank index in SCORE_RANKS.
 
         Args:
             score: The score value
             has_score: If True, score=0 means 'D' grade (Track Lost). If None, falls back to score > 0 check.
-            score_below_max: If 0, the score is MAX (all shiny perfects). If None, PM and MAX are not distinguished.
+            score_below_max: If 0, the score is MAX (all shiny perfects). If None, PM/FRAME/MAX are not distinguished.
+            cut_200: Frame-limited offset (<=0) from Consultant Sheet. FRAME when score_below_max + cut_200 <= 0.
         """
         # Determine if this is an actual play record
         is_played = has_score if has_score is not None else (score > 0)
@@ -530,7 +533,10 @@ class StatisticsService:
         elif score < 10000000:
             return 9  # '99.8%'
         elif score_below_max is not None and score_below_max == 0:
-            return 11  # 'MAX'
+            return 12  # 'MAX'
+        elif (score_below_max is not None and cut_200 is not None
+              and score_below_max + cut_200 <= 0):
+            return 11  # 'FRAME' (frame-limited max 도달, but not a full MAX)
         else:
             return 10  # 'PM'
 
@@ -603,6 +609,7 @@ class StatisticsService:
             'timePlayed': time_played,
             'lastPlayedDate': self._format_full_datetime(time_played),
             'scoreBelowMax': score_data.get('score_below_max', 0),
+            'cut200': chart_data.get('cut_200', 0),
             'ignoreChart': chart_data.get('ignore_chart', False),
             'skillIssues': chart_data.get('skill_issues', False),
             'hardBpm': chart_data.get('hard_bpm', False),
