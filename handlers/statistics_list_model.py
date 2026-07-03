@@ -22,6 +22,7 @@ class StatisticsListModel(QAbstractListModel):
     IgnoreChartRole = Qt.ItemDataRole.UserRole + 14
     SkillIssuesRole = Qt.ItemDataRole.UserRole + 15
     ThumbnailDifficultyRole = Qt.ItemDataRole.UserRole + 16
+    BestScoreRole = Qt.ItemDataRole.UserRole + 17
 
     # Song 모드 role
     FilteredDifficultiesRole = Qt.ItemDataRole.UserRole + 20
@@ -48,6 +49,7 @@ class StatisticsListModel(QAbstractListModel):
         IgnoreChartRole: "ignoreChart",
         SkillIssuesRole: "skillIssues",
         ThumbnailDifficultyRole: "thumbnailDifficulty",
+        BestScoreRole: "bestScore",
         FilteredDifficultiesRole: "filteredDifficulties",
         BestDiffForScoreRole: "bestDiffForScore",
         BestDiffForMaxRole: "bestDiffForMax",
