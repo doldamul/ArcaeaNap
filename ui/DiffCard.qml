@@ -32,6 +32,7 @@ Rectangle {
     property var potential: null   // float 또는 null; null이면 "-" 표시
     property bool ignoreChart: false  // Consultant Sheet: trap flag
     property bool skillIssues: false  // Consultant Sheet: individual flag
+    property bool hardBpm: false      // Consultant Sheet: hard BPM change flag
     property string rankColor: ""  // Pre-computed rank color from Python
     property string clearTypeText: ""  // Pre-computed clear type full text from Python
     property string clearTypeAbbr: ""  // Pre-computed clear type abbreviation from Python
@@ -377,7 +378,7 @@ Rectangle {
             // Consultant Sheet flag badges
             Row {
                 spacing: 4
-                visible: ignoreChart || skillIssues
+                visible: ignoreChart || skillIssues || hardBpm
                 
                 // ⛔ Trap badge
                 Text {
@@ -410,19 +411,44 @@ Rectangle {
                     font.pixelSize: 13
                     visible: skillIssues
                     opacity: isFiltered ? 0.4 : 1.0
-                    
+
                     MouseArea {
                         id: skillBadgeMouse
                         anchors.fill: parent
                         hoverEnabled: true
                     }
-                    
+
                     ToolTip {
                         visible: skillBadgeMouse.containsMouse
                         delay: 300
                         contentItem: Column {
                             spacing: 2
                             Text { text: "Individual"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                            Text { text: "Flagged in Consultant Sheet"; color: "#BBB"; font.pixelSize: 10 }
+                        }
+                        background: Rectangle { color: "#333"; radius: 6 }
+                    }
+                }
+
+                // ⏪ Hard BPM badge
+                Text {
+                    text: "⏪"
+                    font.pixelSize: 13
+                    visible: hardBpm
+                    opacity: isFiltered ? 0.4 : 1.0
+
+                    MouseArea {
+                        id: hardBpmBadgeMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                    }
+
+                    ToolTip {
+                        visible: hardBpmBadgeMouse.containsMouse
+                        delay: 300
+                        contentItem: Column {
+                            spacing: 2
+                            Text { text: "Hard BPM Change"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                             Text { text: "Flagged in Consultant Sheet"; color: "#BBB"; font.pixelSize: 10 }
                         }
                         background: Rectangle { color: "#333"; radius: 6 }

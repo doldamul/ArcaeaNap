@@ -592,7 +592,8 @@ def open_sheet():
         'note_count': '노트수',
         'cut_200': '#200 컷',
         'ignore_chart': '⛔',
-        'skill_issues': '⚠️'
+        'skill_issues': '⚠️',
+        'hard_bpm': '⏪'
     }
 
     tabs = ['_bp_load', '_song_database', '_sbp_load'] # _bp_load first as canonical source
@@ -648,7 +649,8 @@ def open_sheet():
                         'note_count': None,
                         'cut_200': None,
                         'ignore_chart': None,
-                        'skill_issues': None
+                        'skill_issues': None,
+                        'hard_bpm': None
                     }
                 
                 song = merged_data[norm_key]
@@ -788,9 +790,9 @@ def save_to_db(data):
             
             # 2. Insert/Update Chart
             cursor.execute('''
-                INSERT INTO charts 
-                (song_id, difficulty, level, bp, perceived_bp, s_bp, note_count, cut_200, ignore_chart, skill_issues)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO charts
+                (song_id, difficulty, level, bp, perceived_bp, s_bp, note_count, cut_200, ignore_chart, skill_issues, hard_bpm)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(song_id, difficulty) DO UPDATE SET
                     level=excluded.level,
                     bp=excluded.bp,
@@ -799,7 +801,8 @@ def save_to_db(data):
                     note_count=excluded.note_count,
                     cut_200=excluded.cut_200,
                     ignore_chart=excluded.ignore_chart,
-                    skill_issues=excluded.skill_issues
+                    skill_issues=excluded.skill_issues,
+                    hard_bpm=excluded.hard_bpm
             ''', (
                 song_id,
                 difficulty,
@@ -810,7 +813,8 @@ def save_to_db(data):
                 parse_int(entry['note_count']),
                 parse_int(entry['cut_200']),
                 parse_bool(entry['ignore_chart']),
-                parse_bool(entry['skill_issues'])
+                parse_bool(entry['skill_issues']),
+                parse_bool(entry['hard_bpm'])
             ))
             updated_count += 1
             

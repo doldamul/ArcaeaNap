@@ -32,6 +32,7 @@ class FilterParams:
     bp_max: float
     ignore_chart: str
     skill_issues: str
+    hard_bpm: str
     score_min_rank: int
     score_max_rank: int
     clear_types: list  # [int]
@@ -299,6 +300,7 @@ class StatisticsService:
             round(float(filters.bp_max), 4),
             str(filters.ignore_chart),
             str(filters.skill_issues),
+            str(filters.hard_bpm),
             int(filters.score_min_rank),
             int(filters.score_max_rank),
             tuple(sorted(int(v) for v in (filters.clear_types or []))),
@@ -389,6 +391,7 @@ class StatisticsService:
         for flag_name, flag_value in [
             ('ignoreChart', filters.ignore_chart),
             ('skillIssues', filters.skill_issues),
+            ('hardBpm', filters.hard_bpm),
         ]:
             item_flag = item.get(flag_name, False)
             if flag_value == "only" and not item_flag:
@@ -449,7 +452,8 @@ class StatisticsService:
         # Chart flags filter
         for flag_name, flag_value in [
             ('ignore_chart', filters.ignore_chart),
-            ('skill_issues', filters.skill_issues)
+            ('skill_issues', filters.skill_issues),
+            ('hard_bpm', filters.hard_bpm),
         ]:
             chart_flag = chart_data.get(flag_name, False)
             if flag_value == "only" and not chart_flag:
@@ -583,6 +587,7 @@ class StatisticsService:
             'scoreBelowMax': score_data.get('score_below_max', 0),
             'ignoreChart': chart_data.get('ignore_chart', False),
             'skillIssues': chart_data.get('skill_issues', False),
+            'hardBpm': chart_data.get('hard_bpm', False),
             'totalPlayCount': play_count,
             'thisYearPlayCount': this_year_play_count,
             'songTotalPlayCount': song_total_play_count,
@@ -605,6 +610,7 @@ class StatisticsService:
             'difficultyColor': DIFFICULTY_COLORS.get(difficulty, '#888'),
             'ignoreChart': chart_data.get('ignore_chart', False),
             'skillIssues': chart_data.get('skill_issues', False),
+            'hardBpm': chart_data.get('hard_bpm', False),
             'score': score_data.get('score', 0),
             'hasScore': has_score,
         }

@@ -675,24 +675,30 @@ Item {
                                                                     property bool isValueAbove: Boolean((highlightedScoreText && highlightedScoreText.visible) || (!difficultyRow.isStandaloneMode && rowModel.displayValue && rowModel.displayValue !== ""))
                                                                     property string lvlStr: String(modelData.level || "")
                                                                     z: 10
-                                                                    spacing: 1
+                                                                    spacing: -2
                                                                     anchors.horizontalCenter: parent.horizontalCenter
                                                                     anchors.horizontalCenterOffset: (lvlStr === "10" || lvlStr === "11") ? 1 : 0
                                                                     anchors.top: isValueAbove ? parent.bottom : undefined
                                                                     anchors.bottom: isValueAbove ? undefined : parent.top
                                                                     anchors.topMargin: 0
                                                                     anchors.bottomMargin: isValueAbove ? 0 : -2
-                                                                    visible: (modelData.ignoreChart || false) || (modelData.skillIssues || false)
+                                                                    visible: (modelData.ignoreChart || false) || (modelData.skillIssues || false) || (modelData.hardBpm || false)
                                                                     Text {
                                                                         text: "⛔"
-                                                                        font.pixelSize: 7
+                                                                        font.pixelSize: 6
                                                                         visible: modelData.ignoreChart || false
                                                                         opacity: isHighlighted ? 1.0 : 0.4
                                                                     }
                                                                     Text {
                                                                         text: "⚠️"
-                                                                        font.pixelSize: 7
+                                                                        font.pixelSize: 6
                                                                         visible: modelData.skillIssues || false
+                                                                        opacity: isHighlighted ? 1.0 : 0.4
+                                                                    }
+                                                                    Text {
+                                                                        text: "⏪"
+                                                                        font.pixelSize: 6
+                                                                        visible: modelData.hardBpm || false
                                                                         opacity: isHighlighted ? 1.0 : 0.4
                                                                     }
                                                                 }
@@ -749,23 +755,28 @@ Item {
                                                             property bool isValueAbove: Boolean((highlightedScoreText && highlightedScoreText.visible) || (!(statisticsHandler && (statisticsHandler.sortMode === "title" || statisticsHandler.sortMode === "level")) && rowModel.displayValue && rowModel.displayValue !== ""))
                                                             property string lvlStr: String(rowModel.level || "")
                                                             z: 10
-                                                            spacing: 1
+                                                            spacing: -2
                                                             anchors.horizontalCenter: parent.left
                                                             anchors.horizontalCenterOffset: chartLevelRow.x + chartLevelNumText.x + chartLevelNumText.width / 2 + ((lvlStr === "10" || lvlStr === "11") ? 1 : 0)
                                                             anchors.top: isValueAbove ? parent.bottom : undefined
                                                             anchors.bottom: isValueAbove ? undefined : parent.top
                                                             anchors.topMargin: isValueAbove ? 2 : 0
                                                             anchors.bottomMargin: isValueAbove ? 0 : -2
-                                                            visible: (rowModel.ignoreChart || false) || (rowModel.skillIssues || false)
+                                                            visible: (rowModel.ignoreChart || false) || (rowModel.skillIssues || false) || (rowModel.hardBpm || false)
                                                             Text {
                                                                 text: "⛔"
-                                                                font.pixelSize: 7
+                                                                font.pixelSize: 6
                                                                 visible: rowModel.ignoreChart || false
                                                             }
                                                             Text {
                                                                 text: "⚠️"
-                                                                font.pixelSize: 7
+                                                                font.pixelSize: 6
                                                                 visible: rowModel.skillIssues || false
+                                                            }
+                                                            Text {
+                                                                text: "⏪"
+                                                                font.pixelSize: 6
+                                                                visible: rowModel.hardBpm || false
                                                             }
                                                         }
                                                     }
@@ -1133,6 +1144,7 @@ Item {
                                                 hasScore: modelData.hasScore || false
                                                 ignoreChart: modelData.ignoreChart || false
                                                 skillIssues: modelData.skillIssues || false
+                                                hardBpm: modelData.hardBpm || false
                                                 isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                                 isFiltered: modelData.isFiltered || false
                                                 potential: modelData.potential !== undefined ? modelData.potential : null
@@ -1206,6 +1218,7 @@ Item {
                                             hasScore: modelData.hasScore || false
                                             ignoreChart: modelData.ignoreChart || false
                                             skillIssues: modelData.skillIssues || false
+                                            hardBpm: modelData.hardBpm || false
                                             isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
                                             isFiltered: modelData.isFiltered || false
                                             potential: modelData.potential !== undefined ? modelData.potential : null
@@ -1348,6 +1361,7 @@ Item {
                             
                             ignoreFlagSegment.selectedIndex = 1 // Show
                             skillFlagSegment.selectedIndex = 1 // Show
+                            hardBpmFlagSegment.selectedIndex = 1 // Show
                             filterPopup.updateFlagFilter()  // Apply consultant sheet flags reset to backend
                             
                             clearRangeSlider.handleAIndex = 0
@@ -2558,7 +2572,13 @@ Item {
                                 selectedIndex: 1  // Default: Show
                                 onIndexChanged: filterPopup.updateFlagFilter()
                             }
-                            
+
+                            FlagSegmentedControl {
+                                id: hardBpmFlagSegment
+                                flagName: "⏪ hard BPM"
+                                selectedIndex: 1  // Default: Show
+                                onIndexChanged: filterPopup.updateFlagFilter()
+                            }
 
                         }
                     }
@@ -2610,6 +2630,7 @@ Item {
             if (statisticsHandler) {
                 statisticsHandler.setFilter("ignore_chart", map[ignoreFlagSegment.selectedIndex])
                 statisticsHandler.setFilter("skill_issues", map[skillFlagSegment.selectedIndex])
+                statisticsHandler.setFilter("hard_bpm", map[hardBpmFlagSegment.selectedIndex])
             }
         }
 

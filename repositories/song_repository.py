@@ -89,6 +89,7 @@ def init_songs_db():
             cut_200 INTEGER,
             ignore_chart INTEGER,
             skill_issues INTEGER,
+            hard_bpm INTEGER,
             UNIQUE(song_id, difficulty),
             FOREIGN KEY(song_id) REFERENCES songs(id)
         )
@@ -113,6 +114,8 @@ def init_songs_db():
         cursor.execute("ALTER TABLE charts ADD COLUMN ignore_chart INTEGER")
     if 'skill_issues' not in columns:
         cursor.execute("ALTER TABLE charts ADD COLUMN skill_issues INTEGER")
+    if 'hard_bpm' not in columns:
+        cursor.execute("ALTER TABLE charts ADD COLUMN hard_bpm INTEGER")
 
     conn.commit()
     conn.close()
@@ -338,7 +341,7 @@ def get_all_songs_with_charts():
         dict: {song_db_id: {
             'arcaea_id': str, 'canonical_title': str, 'title_en': str, 'title_jp': str,
             'artist': str, 'length': int, 'bpm': str,
-            'charts': {difficulty: {level, bp, s_bp, perceived_bp, note_count, ignore_chart, skill_issues}}
+            'charts': {difficulty: {level, bp, s_bp, perceived_bp, note_count, ignore_chart, skill_issues, hard_bpm}}
         }}
     """
     songs_db_path = get_db_path()
@@ -351,7 +354,7 @@ def get_all_songs_with_charts():
         cursor.execute("""
             SELECT s.arcaea_id, s.canonical_title, s.title_en, s.title_jp, s.artist, s.length, s.bpm,
                    c.difficulty, c.level, c.bp, c.s_bp, c.perceived_bp, c.note_count,
-                   c.ignore_chart, c.skill_issues, s.id
+                   c.ignore_chart, c.skill_issues, c.hard_bpm, s.id
             FROM songs s
             LEFT JOIN charts c ON s.id = c.song_id
             WHERE s.arcaea_id IS NOT NULL AND s.arcaea_id != ''
@@ -360,7 +363,7 @@ def get_all_songs_with_charts():
         result = {}
         for row in cursor.fetchall():
             arcaea_id = row[0]
-            song_id = row[15]
+            song_id = row[16]
 
             if song_id not in result:
                 result[song_id] = {
@@ -383,6 +386,7 @@ def get_all_songs_with_charts():
                     'note_count': row[12] or 0,
                     'ignore_chart': bool(row[13]),
                     'skill_issues': bool(row[14]),
+                    'hard_bpm': bool(row[15]),
                 }
 
         return result
