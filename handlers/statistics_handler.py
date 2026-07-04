@@ -18,7 +18,7 @@ class StatisticsHandler(QObject):
         # UI 상태
         self._display_mode = "song"  # "song" or "chart"
         self._sort_mode = "title"
-        self._sort_ascending = True
+        self._sort_ascending = False
         self._search_text = ""
         self._selected_index = -1
 
