@@ -287,10 +287,13 @@ class StatisticsService:
 
     def sort_items(self, items: list, sort_mode: str, sort_ascending: bool) -> list:
         """정렬된 새 리스트를 반환한다. 원본 리스트는 변경하지 않는다."""
+        # MAX 정렬은 "MAX에 가까울수록 높다"는 직관에 맞추기 위해 방향을 반전한다.
+        # (미기록 항목은 방향과 무관하게 항상 하단에 유지된다.)
+        effective_ascending = not sort_ascending if sort_mode == "max" else sort_ascending
         return sorted(
             items,
-            key=lambda item: self._get_sort_key(item, sort_mode, sort_ascending),
-            reverse=not sort_ascending,
+            key=lambda item: self._get_sort_key(item, sort_mode, effective_ascending),
+            reverse=not effective_ascending,
         )
 
     def apply_display_values(self, items: list, sort_mode: str, display_mode: str):
