@@ -15,7 +15,7 @@ RowLayout {
     Text { 
         text: flagName
         color: "#333"
-        Layout.preferredWidth: 100
+        Layout.preferredWidth: 120
     }
     
     Repeater {

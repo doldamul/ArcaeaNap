@@ -2573,7 +2573,7 @@ Item {
 
                             FlagSegmentedControl {
                                 id: hardBpmFlagSegment
-                                flagName: "⏪ hard BPM"
+                                flagName: "⏪ hard speed"
                                 selectedIndex: 1  // Default: Show
                                 onIndexChanged: filterPopup.updateFlagFilter()
                             }

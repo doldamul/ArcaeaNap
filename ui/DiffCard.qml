@@ -34,7 +34,7 @@ Rectangle {
     property int cut200: 0         // Consultant Sheet frame-limited offset (<=0)
     property bool ignoreChart: false  // Consultant Sheet: trap flag
     property bool skillIssues: false  // Consultant Sheet: individual flag
-    property bool hardBpm: false      // Consultant Sheet: hard BPM change flag
+    property bool hardBpm: false      // Consultant Sheet: hard speed change flag
     property string rankColor: ""  // Pre-computed rank color from Python
     property string clearTypeText: ""  // Pre-computed clear type full text from Python
     property string clearTypeAbbr: ""  // Pre-computed clear type abbreviation from Python
@@ -452,7 +452,7 @@ Rectangle {
                     }
                 }
 
-                // ⏪ Hard BPM badge
+                // ⏪ Hard speed badge
                 Text {
                     text: "⏪"
                     font.pixelSize: 13
@@ -470,7 +470,7 @@ Rectangle {
                         delay: 300
                         contentItem: Column {
                             spacing: 2
-                            Text { text: "Hard BPM Change"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
+                            Text { text: "Hard Speed Change"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
                             Text { text: "Flagged in Consultant Sheet"; color: "#BBB"; font.pixelSize: 10 }
                         }
                         background: Rectangle { color: "#333"; radius: 6 }
