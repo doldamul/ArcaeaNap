@@ -22,7 +22,7 @@ CLIENT_DATA_JSON_PATH = os.path.join(PROJECT_ROOT, "client_secret.json")
 CONSULTANT_PATH = os.path.join(PROJECT_ROOT, "utils", "web_consultantsheet.py")
 
 APP_TITLE = "ArcaeaNap"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 BUILD_INFO_PATH = os.path.join(PROJECT_ROOT, "utils", "app_build_info.py")
 
 
