@@ -24,7 +24,7 @@ ArcaeaNap은 빠르고 편리한 Arcaea 플레이 기록 뷰어입니다. Arcaea
 - 플레이 기록 저장을 위해 구독이 활성화된 **Arcaea Online 계정**이 필요합니다.
 - 곡 정보 데이터베이스 생성을 위해 **구글 계정**이 필요합니다.
 - 곡 썸네일 및 playwright 브라우저를 위해 **1GB 이상의 여유 디스크 공간**이 필요합니다.
-- 현재는 Windows 10, 11 환경만 지원합니다.
+- Windows 10+, macOS 14+ (Apple Silicon) 환경을 지원합니다.
 
 ## 주요 기능
 
@@ -35,7 +35,19 @@ ArcaeaNap은 빠르고 편리한 Arcaea 플레이 기록 뷰어입니다. Arcaea
 ## 사용 방법
 
 1. [Releases](https://github.com/doldamul/ArcaeaNap/releases) 페이지에서 프로그램 압축 파일을 다운받습니다.
-2. 압축을 풀고 프로그램 디렉토리 내 ArcaeaNap.exe 파일을 실행합니다.
+2. 운영체제에 따라 다음 과정을 진행합니다:
+   - **Windows:** 압축을 풀고 프로그램 디렉토리 내 `ArcaeaNap.exe` 파일을 실행합니다.
+   - **macOS:** 압축을 푼 후 터미널 앱을 열어 다음을 작성합니다:
+     ```bash
+     xattr -cr 
+     ```
+     (`-cr` 뒤에 띄어쓰기가 되어있어야 합니다)
+
+     그리고 압축을 푼 `ArcaeaNap.app` 파일을 터미널 창에 놓습니다. 다음과 같은 형태가 될 것입니다:
+     ```bash
+     xattr -cr /Users/username/Downloads/ArcaeaNap.app
+     ```
+     엔터 키를 누른 후, 작업이 완료되면 해당 앱을 `/Applications` 폴더로 옮기고 실행합니다.
 3. 구글 계정에 로그인하고 곡 정보 데이터베이스를 생성합니다.
 4. 설정에서 데이터 분석용 브라우저를 다운받습니다.
 5. 설정에서 Arcaea Online에 로그인하고 구독이 활성화되어 있는지 확인합니다.
@@ -62,10 +74,16 @@ ArcaeaNap은 빠르고 편리한 Arcaea 플레이 기록 뷰어입니다. Arcaea
 python main.py
 ```
 
-이 프로젝트는 `cx_Freeze`를 사용하여 독립 실행 파일을 빌드합니다:
+이 프로젝트는 `cx_Freeze`를 사용하여 독립 실행 파일을 빌드합니다.
 
+Windows 빌드:
 ```bash
 python setup.py build
+```
+
+macOS 앱 빌드:
+```bash
+python setup.py bdist_mac
 ```
 
 실행 및 빌드시 프로젝트 루트 디렉토리에 유효한 `client_secret.json` (Google Cloud API 인증 정보) 파일이 필요합니다.

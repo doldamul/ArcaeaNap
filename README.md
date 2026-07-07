@@ -24,7 +24,7 @@ ArcaeaNap is a fast and convenient Arcaea play record viewer. It saves Arcaea On
 - An active **Arcaea Online subscription** is required to save your play records.
 - A **Google account** is required to generate the song information database.
 - **1GB+ of free disk space** is required for caching song thumbnails and the Playwright browser.
-- Currently, only Windows 10 and 11 environments are supported.
+- Windows 10+ and macOS 14+ (Apple Silicon) environments are supported.
 
 ## Features
 
@@ -35,7 +35,19 @@ ArcaeaNap is a fast and convenient Arcaea play record viewer. It saves Arcaea On
 ## Usage
 
 1. Download the program archive from the [Releases](https://github.com/doldamul/ArcaeaNap/releases) page.
-2. Extract the archive and run the `ArcaeaNap.exe` file inside the program directory.
+2. The execution method depends on your operating system:
+   - **Windows:** Extract the archive and run the `ArcaeaNap.exe` file inside the program directory.
+   - **macOS:** After extracting the archive, open the Terminal app and type the following:
+     ```bash
+     xattr -cr 
+     ```
+     (There must be a space after `-cr`)
+
+     Then drag and drop the extracted `ArcaeaNap.app` file into the terminal window. It will look something like this:
+     ```bash
+     xattr -cr /Users/username/Downloads/ArcaeaNap.app
+     ```
+     Press Enter. Once the process is complete, move the app to the `/Applications` folder and run it.
 3. Log in with your Google account and generate the song information database.
 4. Download the browser for data analysis from the Settings.
 5. In Settings, log in to Arcaea Online and ensure your subscription is active.
@@ -62,10 +74,16 @@ To run the application from the source code, run `main.py`:
 python main.py
 ```
 
-This project uses `cx_Freeze` to build the standalone executable:
+This project uses `cx_Freeze` to build the standalone executable.
 
+For Windows:
 ```bash
 python setup.py build
+```
+
+For macOS:
+```bash
+python setup.py bdist_mac
 ```
 
 A valid `client_secret.json` (Google Cloud API credentials) is required in the project root directory when running or building the application.
