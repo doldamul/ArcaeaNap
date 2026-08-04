@@ -124,7 +124,7 @@ Item {
                         Layout.preferredWidth: isNarrow ? -1 : 420
                         Layout.fillWidth: isNarrow 
                         Layout.fillHeight: true
-                        color: "#FFFFFF"; radius: 20
+                        color: Theme.bgCard; radius: 20
 
                         // Independent Scrollbar in Padding Area
                         Basic.ScrollBar {
@@ -161,7 +161,7 @@ Item {
                             background: Rectangle { color: "transparent" }
                             contentItem: Rectangle {
                                 implicitWidth: 6; implicitHeight: 100; radius: 3
-                                color: "#B090D0"
+                                color: Theme.scrollbar
                                 opacity: listVerticalBar.pressed ? 1.0 : (listVerticalBar.hovered ? 1.0 : 0.6)
                             }
                         }
@@ -172,14 +172,14 @@ Item {
                             
                             // Search Bar
                             Rectangle {
-                                Layout.fillWidth: true; height: 40; radius: 10; color: "#F5F5F5"
+                                Layout.fillWidth: true; height: 40; radius: 10; color: Theme.bgInput
                                 RowLayout {
                                     anchors.fill: parent; anchors.margins: 10
-                                    Text { text: "🔍"; color: "#AAA" }
+                                    Text { text: "🔍"; color: Theme.textFaint }
                                     TextInput { 
                                         id: searchInput
                                         text: statsRoot.searchText
-                                        color: "#333"; font.pixelSize: 14
+                                        color: Theme.textPrimary; font.pixelSize: 14
                                         selectByMouse: true; Layout.fillWidth: true
                                         clip: true
                                         onTextChanged: {
@@ -191,7 +191,7 @@ Item {
                                         Text {
                                             anchors.fill: parent
                                             text: "Search songs..."
-                                            color: "#999"
+                                            color: Theme.textLight
                                             font.pixelSize: 14
                                             visible: !searchInput.text && !searchInput.activeFocus
                                         }
@@ -209,7 +209,7 @@ Item {
                                     Layout.preferredWidth: 110
                                     Layout.preferredHeight: 32
                                     radius: 6
-                                    color: "#F0F0F0"
+                                    color: Theme.bgButton
                                     
                                     RowLayout {
                                         anchors.fill: parent
@@ -219,14 +219,14 @@ Item {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
                                             radius: 6
-                                            color: statisticsHandler && statisticsHandler.displayMode === "song" ? "#6A0DAD" : (songMouse.containsMouse ? "#E0E0E0" : "transparent")
+                                            color: statisticsHandler && statisticsHandler.displayMode === "song" ? Theme.accent : (songMouse.containsMouse ? Theme.bgHover : "transparent")
                                             
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: "Song"
                                                 font.pixelSize: 12
                                                 font.bold: statisticsHandler && statisticsHandler.displayMode === "song"
-                                                color: statisticsHandler && statisticsHandler.displayMode === "song" ? "white" : "#666"
+                                                color: statisticsHandler && statisticsHandler.displayMode === "song" ? "white" : Theme.textSecondary
                                             }
                                             
                                             MouseArea {
@@ -242,14 +242,14 @@ Item {
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
                                             radius: 6
-                                            color: statisticsHandler && statisticsHandler.displayMode === "chart" ? "#6A0DAD" : (chartMouse.containsMouse ? "#E0E0E0" : "transparent")
+                                            color: statisticsHandler && statisticsHandler.displayMode === "chart" ? Theme.accent : (chartMouse.containsMouse ? Theme.bgHover : "transparent")
                                             
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: "Chart"
                                                 font.pixelSize: 12
                                                 font.bold: statisticsHandler && statisticsHandler.displayMode === "chart"
-                                                color: statisticsHandler && statisticsHandler.displayMode === "chart" ? "white" : "#666"
+                                                color: statisticsHandler && statisticsHandler.displayMode === "chart" ? "white" : Theme.textSecondary
                                             }
                                             
                                             MouseArea {
@@ -269,9 +269,9 @@ Item {
                                 Rectangle {
                                     Layout.preferredWidth: 60; Layout.preferredHeight: 32
                                     radius: 6
-                                    color: filterMouse.containsMouse ? "#E0E0E0" : "#F0F0F0"
+                                    color: filterMouse.containsMouse ? Theme.bgHover : Theme.bgButton
                                     
-                                    Text { anchors.centerIn: parent; text: "Filters"; font.pixelSize: 12; color: "#666"; font.bold: true }
+                                    Text { anchors.centerIn: parent; text: "Filters"; font.pixelSize: 12; color: Theme.textSecondary; font.bold: true }
                                     
                                     MouseArea {
                                         id: filterMouse
@@ -303,14 +303,14 @@ Item {
 
                                     // Custom Styling
                                     background: Rectangle {
-                                        color: parent.hovered ? "#E0E0E0" : "#F0F0F0"
+                                        color: parent.hovered ? Theme.bgHover : Theme.bgButton
                                         radius: 6
                                     }
                                     
                                     contentItem: Text {
                                         text: parent.displayText
                                         font.pixelSize: 12
-                                        color: "#666"
+                                        color: Theme.textSecondary
                                         verticalAlignment: Text.AlignVCenter
                                         elide: Text.ElideRight
                                         leftPadding: 10
@@ -321,7 +321,7 @@ Item {
                                         x: parent.width - width - 8
                                         y: (parent.height - height) / 2
                                         text: "▼"
-                                        color: "#666"
+                                        color: Theme.textSecondary
                                         font.pixelSize: 10
                                     }
 
@@ -331,7 +331,7 @@ Item {
                                         
                                         contentItem: Text {
                                             text: modelData
-                                            color: "#333"
+                                            color: Theme.textPrimary
                                             font.pixelSize: 12
                                             elide: Text.ElideRight
                                             verticalAlignment: Text.AlignVCenter
@@ -343,7 +343,7 @@ Item {
                                             anchors.fill: parent
                                             anchors.leftMargin: 4
                                             anchors.rightMargin: 4
-                                            color: parent.hovered || parent.highlighted ? "#F5F0FA" : "transparent" // Soft purple tint
+                                            color: parent.hovered || parent.highlighted ? Theme.bgSelected : "transparent" // Soft purple tint
                                             radius: 4
                                         }
                                     }
@@ -371,8 +371,8 @@ Item {
                                         }
                                         
                                         background: Rectangle {
-                                            color: "white"
-                                            border.color: "#E0E0E0"
+                                            color: Theme.bgCard
+                                            border.color: Theme.borderCard
                                             border.width: 1
                                             radius: 8
                                         }
@@ -385,14 +385,14 @@ Item {
                                 Rectangle {
                                     Layout.preferredWidth: 32; Layout.preferredHeight: 32
                                     radius: 6
-                                    color: sortOrderMouse.containsMouse ? "#E0E0E0" : "#F0F0F0"
+                                    color: sortOrderMouse.containsMouse ? Theme.bgHover : Theme.bgButton
                                     
                                     Text {
                                         anchors.centerIn: parent
                                         text: statisticsHandler && statisticsHandler.sortAscending ? "↑" : "↓"
                                         font.pixelSize: 16
                                         font.bold: true
-                                        color: "#6A0DAD"
+                                        color: Theme.accent
                                     }
                                     
                                     MouseArea {
@@ -409,7 +409,7 @@ Item {
                             Text {
                                 text: songListView.count + " items"
                                 font.pixelSize: 11
-                                color: "#999"
+                                color: Theme.textLight
                             }
                             
                             // Song/Chart ListView Wrapper
@@ -461,10 +461,10 @@ Item {
                                     Rectangle {
                                         width: ListView.view.width
                                         height: 70
-                                        color: (!isNarrow && index === currentSongIndex) ? "#F8F0FF" : (delegateMouse.containsMouse ? "#FAFAFA" : "transparent")
+                                        color: (!isNarrow && index === currentSongIndex) ? Theme.bgSelected : (delegateMouse.containsMouse ? Theme.bgItemHover : "transparent")
                                         radius: 10
                                         border.width: (!isNarrow && index === currentSongIndex) ? 1 : 0
-                                        border.color: "#D0A0FF"
+                                        border.color: Theme.borderSelected
                                         property var rowModel: model
                                         
                                         RowLayout {
@@ -479,7 +479,7 @@ Item {
                                             Text {
                                                 text: index + 1
                                                 font.pixelSize: 11
-                                                color: "#888"
+                                                color: Theme.textMuted
                                                 Layout.preferredWidth: 22
                                                 horizontalAlignment: Text.AlignRight
                                             }
@@ -488,7 +488,7 @@ Item {
                                             Rectangle { 
                                                 id: thumbRect
                                                 width: 48; height: 48; radius: 6
-                                                color: rowModel.difficultyColor || "#E0E0E0"
+                                                color: Theme.getDiffColor(rowModel.thumbnailDifficulty !== undefined ? rowModel.thumbnailDifficulty : rowModel.difficulty)
                                                 clip: true
                                                 
                                                 Image {
@@ -510,7 +510,7 @@ Item {
                                                     text: rowModel.difficultyName || ""
                                                     font.pixelSize: 14
                                                     font.bold: true
-                                                    color: "white"
+                                                    color: Theme.bgCard
                                                     visible: thumbImage.status !== Image.Ready
                                                 }
                                             }
@@ -522,7 +522,7 @@ Item {
                                                     text: rowModel.title || ""
                                                     font.family: statsRoot.titleFontFamily
                                                     font.bold: true
-                                                    color: "#333"
+                                                    color: Theme.textPrimary
                                                     elide: Text.ElideRight
                                                     width: parent.width
                                                 }
@@ -530,7 +530,7 @@ Item {
                                                     text: rowModel.artist || ""
                                                     font.family: statsRoot.titleFontFamily
                                                     font.pixelSize: 11
-                                                    color: "#888"
+                                                    color: Theme.textMuted
                                                     elide: Text.ElideRight
                                                     width: parent.width
                                                 }
@@ -553,7 +553,7 @@ Item {
                                                     text: rowModel.displayValue || ""
                                                     font.bold: true
                                                     font.pixelSize: 13
-                                                    color: "#7A6090"
+                                                    color: Theme.listValue
                                                     visible: !parent.isStandaloneMode && rowModel.displayValue && rowModel.displayValue !== ""
                                                 }
 
@@ -564,7 +564,7 @@ Item {
                                                     property bool isLevelSort: statisticsHandler && statisticsHandler.sortMode === "level"
                                                     font.pixelSize: 11
                                                     font.bold: isLevelSort
-                                                    color: "#7A6090"
+                                                    color: Theme.listValue
 
                                                     property bool isSongMode: statisticsHandler && statisticsHandler.displayMode === "song"
                                                     property bool isChartMode: statisticsHandler && statisticsHandler.displayMode === "chart"
@@ -658,7 +658,7 @@ Item {
                                                             Text {
                                                                 text: " / "
                                                                 font.pixelSize: difficultyRow.isStandaloneMode ? 13 : 11
-                                                                color: "#AAA"
+                                                                color: Theme.textFaint
                                                                 visible: index > 0
                                                             }
                                                             // Level with difficulty color (or gray if not highlighted)
@@ -670,7 +670,7 @@ Item {
                                                                     text: String(modelData.level || "")
                                                                     font.bold: true
                                                                     font.pixelSize: difficultyRow.isStandaloneMode ? 13 : 11
-                                                                    color: isHighlighted ? (modelData.difficultyColor || "#888") : "#BBB"
+                                                                    color: isHighlighted ? Theme.getDiffColor(modelData.difficulty) : Theme.textDimmed
                                                                 }
                                                                 // Floating badge overlay
                                                                 Row {
@@ -713,7 +713,7 @@ Item {
                                                         text: " (" + (rowModel.bp ? rowModel.bp.toFixed(1) : "0.0") + ")"
                                                         font.bold: true
                                                         font.pixelSize: 13
-                                                        color: "#7A6090"
+                                                        color: Theme.listValue
                                                         visible: difficultyRow.isLevelSort
                                                     }
                                                 }
@@ -741,14 +741,14 @@ Item {
                                                                 text: (rowModel.difficultyName ? rowModel.difficultyName + " " : "")
                                                                 font.bold: true
                                                                 font.pixelSize: parent.parent.isStandaloneMode ? 13 : 11
-                                                                color: rowModel.difficultyColor || "#888"
+                                                                color: Theme.getDiffColor(rowModel.difficulty)
                                                             }
                                                             Text {
                                                                 id: chartLevelNumText
                                                                 text: String(rowModel.level || "")
                                                                 font.bold: true
                                                                 font.pixelSize: parent.parent.isStandaloneMode ? 13 : 11
-                                                                color: rowModel.difficultyColor || "#888"
+                                                                color: Theme.getDiffColor(rowModel.difficulty)
                                                             }
                                                         }
 
@@ -788,7 +788,7 @@ Item {
                                                         text: " (" + (rowModel.bp ? rowModel.bp.toFixed(1) : "0.0") + ")"
                                                         font.bold: true
                                                         font.pixelSize: 13
-                                                        color: "#7A6090"
+                                                        color: Theme.listValue
                                                         visible: parent.isLevelSort
                                                         anchors.bottom: parent.bottom
                                                     }
@@ -815,7 +815,7 @@ Item {
                                 Text {
                                     anchors.centerIn: parent
                                     text: "No songs found"
-                                    color: "#999"
+                                    color: Theme.textLight
                                     font.pixelSize: 14
                                     visible: songListView.count === 0
                                 }
@@ -843,7 +843,7 @@ Item {
         id: detailPageComponent
 
         Rectangle {
-            color: isNarrow ? "#F3F4F8" : "#FFFFFF" 
+            color: isNarrow ? Theme.bgWindow : Theme.bgCard 
             radius: isNarrow ? 0 : 20
             clip: true
             
@@ -864,14 +864,14 @@ Item {
 
                 // [Mobile Header]
                 Rectangle {
-                    Layout.fillWidth: true; height: 60; visible: isNarrow; color: "white"
+                    Layout.fillWidth: true; height: 60; visible: isNarrow; color: Theme.bgCard
                     RowLayout {
                         anchors.fill: parent; anchors.margins: 15
-                        Text { text: "❮ Back"; font.bold: true; color: "#6A0DAD"; font.pixelSize: 16 
+                        Text { text: "❮ Back"; font.bold: true; color: Theme.accent; font.pixelSize: 16 
                             MouseArea { anchors.fill: parent; onClicked: mobileStack.pop() }
                         }
                         Item { Layout.fillWidth: true }
-                        Text { text: "Song Detail"; font.bold: true; color: "#333"; font.pixelSize: 16 }
+                        Text { text: "Song Detail"; font.bold: true; color: Theme.textPrimary; font.pixelSize: 16 }
                         Item { Layout.fillWidth: true }
                         Item { width: 40 }
                     }
@@ -908,7 +908,7 @@ Item {
                                     Rectangle {
                                         anchors.fill: parent
                                         radius: isNarrow ? 0 : 20
-                                        color: "black"
+                                        color: Theme.textTitle
                                         antialiasing: true
                                         smooth: true
                                     }
@@ -933,7 +933,7 @@ Item {
                                     // Fallback Background
                                     Rectangle {
                                         anchors.fill: parent
-                                        color: "#2A1040"
+                                        color: Theme.bannerFallback
                                     }
 
                                     // Blurred Background Image
@@ -957,8 +957,7 @@ Item {
                                     // Dimming Overlay
                                     Rectangle {
                                         anchors.fill: parent
-                                        color: "black"
-                                        opacity: 0.5
+                                        color: Theme.overlay
                                     }
                                 }
                             }
@@ -980,9 +979,9 @@ Item {
                                         anchors.verticalCenterOffset: 6
                                         
                                         // Properties for efficient shadow updates
-                                        property var arcaeaId: statsHandler && currentSong ? (currentSong.arcaeaId || "") : ""
                                         property int diff: statsHandler && currentSong ? (currentSong.thumbnailDifficulty !== undefined ? currentSong.thumbnailDifficulty : currentSong.difficulty) : 0
-                                        property string shadowColorString: statsHandler ? statsHandler.getThumbnailColor(arcaeaId, diff) : "#FFFFFF"
+                                        property var arcaeaId: statsHandler && currentSong ? (currentSong.arcaeaId || "") : ""
+                                        property string shadowColorString: statsHandler ? statsHandler.getThumbnailColor(arcaeaId, diff) : Theme.bgCard
                                         property color shadowColor: shadowColorString
                                         
                                         layer.enabled: true
@@ -1007,8 +1006,8 @@ Item {
                                         id: mainThumbRect
                                         anchors.fill: parent
                                         radius: 15
-                                        color: currentSong ? (currentSong.difficultyColor || "#6A0DAD") : "#6A0DAD"
-                                        border.color: "white"; border.width: 2
+                                        color: currentSong ? Theme.getDiffColor(currentSong.thumbnailDifficulty !== undefined ? currentSong.thumbnailDifficulty : currentSong.difficulty) : Theme.accent
+                                        border.color: Theme.bgCard; border.width: 2
                                         clip: true
                                         
                                         Image {
@@ -1035,12 +1034,12 @@ Item {
                                             Layout.preferredWidth: bpmText.width + 16
                                             Layout.preferredHeight: 24
                                             radius: 12
-                                            color: "#6A0DAD"
+                                            color: Theme.accent
                                             Text {
                                                 id: bpmText
                                                 anchors.centerIn: parent
                                                 text: Boolean(currentSong) && Boolean(currentSong.bpm) ? ("BPM: " + currentSong.bpm) : ""
-                                                color: "white"; font.pixelSize: 11
+                                                color: Theme.bgCard; font.pixelSize: 11
                                             }
                                         }
                                         
@@ -1049,7 +1048,7 @@ Item {
                                             Layout.preferredWidth: lengthText.width + 16
                                             Layout.preferredHeight: 24
                                             radius: 12
-                                            color: "#4A90E2"
+                                            color: Theme.badgeLen
                                             Text {
                                                 id: lengthText
                                                 anchors.centerIn: parent
@@ -1058,7 +1057,7 @@ Item {
                                                     var len = currentSong.length
                                                     return "Length: " + Math.floor(len / 60) + ":" + (len % 60).toString().padStart(2, '0')
                                                 }
-                                                color: "white"; font.pixelSize: 11
+                                                color: Theme.bgCard; font.pixelSize: 11
                                             }
                                         }
                                     }
@@ -1066,7 +1065,7 @@ Item {
                                     Text { 
                                         text: currentSong ? currentSong.title : "Select a song"
                                         font.family: statsRoot.titleFontFamily
-                                        color: "white"; font.bold: true
+                                        color: Theme.detailHeaderTitle; font.bold: true
                                         font.pixelSize: isNarrow ? 24 : 36
                                         elide: Text.ElideRight
                                         width: parent.width 
@@ -1074,7 +1073,7 @@ Item {
                                     Text { 
                                         text: currentSong ? currentSong.artist : ""
                                         font.family: statsRoot.titleFontFamily
-                                        color: "#CCC"; font.pixelSize: 16 
+                                        color: Theme.detailHeaderArtist; font.pixelSize: 16
                                     }
                                 }
                             }
@@ -1086,7 +1085,7 @@ Item {
                                     if (!count || count <= 0) return "Never played"
                                     return count + " plays"
                                 }
-                                color: "#CCC"
+                                color: Theme.detailHeaderPlayCount
                                 font.pixelSize: 13
                                 font.bold: true
                                 anchors.right: parent.right
@@ -1118,7 +1117,9 @@ Item {
                                     return false
                                 }
                                 Layout.preferredHeight: ((isNarrow || isDiffCramped) ? 360 : 330)
-                                                        + (anyFrameLine ? ((isNarrow || isDiffCramped) ? 8 : 30) : 0)
+                                                        + (anyFrameLine ? 36 : 0)
+                                Layout.minimumHeight: ((isNarrow || isDiffCramped) ? 360 : 330)
+                                                       + (anyFrameLine ? 36 : 0)
                                 visible: difficultiesToShow.length > 0
                                 
                                 // [SwipeView for mobile/cramped]
@@ -1137,10 +1138,8 @@ Item {
                                             DiffCard {
                                                 diffName: modelData.difficultyName || ""
                                                 diffLevel: modelData.level || ""
-                                                diffColor: modelData.difficultyColor || "#888"
                                                 score: modelData.bestScore || 0
                                                 rank: modelData.rank || ""
-                                                rankColor: modelData.rankColor || "#666"
                                                 clearTypeText: modelData.clearTypeText || ""
                                                 clearTypeAbbr: modelData.clearTypeAbbr || ""
                                                 pure: modelData.pure || 0
@@ -1185,7 +1184,7 @@ Item {
                                     currentIndex: diffSwipe.currentIndex
                                     anchors.bottom: parent.bottom
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    delegate: Rectangle { width: 8; height: 8; radius: 4; color: index === diffSwipe.currentIndex ? "#6A0DAD" : "#DDD" }
+                                    delegate: Rectangle { width: 8; height: 8; radius: 4; color: index === diffSwipe.currentIndex ? Theme.accent : Theme.borderDivider }
                                 }
 
                                 // [Desktop] RowLayout
@@ -1213,10 +1212,8 @@ Item {
                                             Layout.maximumWidth: desktopRow.cardMaxWidth
                                             diffName: modelData.difficultyName || ""
                                             diffLevel: modelData.level || ""
-                                            diffColor: modelData.difficultyColor || "#888"
                                             score: modelData.bestScore || 0
                                             rank: modelData.rank || ""
-                                            rankColor: modelData.rankColor || "#666"
                                             clearTypeText: modelData.clearTypeText || ""
                                             clearTypeAbbr: modelData.clearTypeAbbr || ""
                                             pure: modelData.pure || 0
@@ -1258,7 +1255,7 @@ Item {
                             Text {
                                 visible: !currentSong
                                 text: "Select a song from the list to view details"
-                                color: "#999"
+                                color: Theme.textLight
                                 font.pixelSize: 16
                                 Layout.alignment: Qt.AlignHCenter
                             }
@@ -1291,9 +1288,9 @@ Item {
         }
         
         background: Rectangle {
-            color: "#FFFFFF"
+            color: Theme.bgCard
             radius: 15
-            border.color: "#E0E0E0"
+            border.color: Theme.borderCard
             border.width: 1
             
             layer.enabled: true
@@ -1302,7 +1299,7 @@ Item {
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 4
                 shadowBlur: 1.0 // Normalized value roughly corresponding to radius
-                shadowColor: "#40000000"
+                shadowColor: Theme.shadowLight
             }
         }
         
@@ -1310,7 +1307,7 @@ Item {
         Rectangle {
             id: closeButton
             width: 40; height: 40; radius: 20
-            color: closeButtonMouse.containsMouse ? "#F0F0F0" : "#E8E8E8"
+            color: closeButtonMouse.containsMouse ? Theme.bgButton : Theme.bgHover
             z: 100  // Above all content
             
             // Position so the center is at the popup's top-right corner
@@ -1323,7 +1320,7 @@ Item {
                 anchors.centerIn: parent
                 text: "✕"
                 font.pixelSize: 18
-                color: "#666"
+                color: Theme.textSecondary
             }
             
             MouseArea {
@@ -1343,13 +1340,13 @@ Item {
             // Header
             RowLayout {
                 Layout.fillWidth: true
-                Text { text: "Filters"; font.pixelSize: 20; font.bold: true; color: "#333" }
+                Text { text: "Filters"; font.pixelSize: 20; font.bold: true; color: Theme.textPrimary }
                 Item { Layout.fillWidth: true }
                 Text { 
                     text: "↺"
                     font.pixelSize: 26
                     font.bold: true
-                    color: "#6A0DAD"
+                    color: Theme.accent
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
@@ -1389,12 +1386,18 @@ Item {
                 }
             }
             
-            ScrollView {
+            Item {
+                id: filterScrollArea
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                contentWidth: availableWidth
-                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                clip: true
+
+                ScrollView {
+                    id: filterScrollView
+                    anchors.fill: parent
+                    contentWidth: availableWidth
+                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                    ScrollBar.vertical.policy: ScrollBar.AlwaysOff
+                    clip: true
                 
                 ColumnLayout {
                     width: parent.width - 24  // Right padding for scroll indicator
@@ -1405,7 +1408,7 @@ Item {
                         spacing: 10
                         Layout.fillWidth: true
                         
-                        Text { text: "Difficulties"; font.pixelSize: 14; font.bold: true; color: "#333" }
+                        Text { text: "Difficulties"; font.pixelSize: 14; font.bold: true; color: Theme.textPrimary }
                         
                         RowLayout {
                             spacing: 20
@@ -1415,35 +1418,35 @@ Item {
                             DiffFilterCheckbox {
                                 id: pstCheck
                                 text: "PST"
-                                diffColor: "#00A0E9"
+                                diffColor: Theme.diffPst
                                 checked: true
                                 onCheckedChanged: filterPopup.updateDifficultyFilter()
                             }
                             DiffFilterCheckbox {
                                 id: prsCheck
                                 text: "PRS"
-                                diffColor: "#50C050"
+                                diffColor: Theme.diffPrs
                                 checked: true
                                 onCheckedChanged: filterPopup.updateDifficultyFilter()
                             }
                             DiffFilterCheckbox {
                                 id: ftrCheck
                                 text: "FTR"
-                                diffColor: "#A060FF"
+                                diffColor: Theme.diffFtr
                                 checked: true
                                 onCheckedChanged: filterPopup.updateDifficultyFilter()
                             }
                             DiffFilterCheckbox {
                                 id: etrCheck
                                 text: "ETR"
-                                diffColor: "#808080"  // Gray for ETR
+                                diffColor: Theme.diffEtr  // Gray for ETR
                                 checked: true
                                 onCheckedChanged: filterPopup.updateDifficultyFilter()
                             }
                             DiffFilterCheckbox {
                                 id: bydCheck
                                 text: "BYD"
-                                diffColor: "#E04040"
+                                diffColor: Theme.diffByd
                                 checked: true
                                 onCheckedChanged: filterPopup.updateDifficultyFilter()
                             }
@@ -1459,7 +1462,7 @@ Item {
                         RowLayout {
                             width: parent.width
                             
-                            Text { text: rangeSlider.bpMode ? "BP Range" : "Level Range"; font.pixelSize: 14; font.bold: true; color: "#333" }
+                            Text { text: rangeSlider.bpMode ? "BP Range" : "Level Range"; font.pixelSize: 14; font.bold: true; color: Theme.textPrimary }
                             
                             Item { Layout.fillWidth: true }
                             
@@ -1482,7 +1485,7 @@ Item {
                                             text: "Level"
                                             font.pixelSize: 13
                                             font.bold: !rangeSlider.bpMode
-                                            color: !rangeSlider.bpMode ? "#6A0DAD" : "#9E9E9E"
+                                            color: !rangeSlider.bpMode ? Theme.accent : Theme.textMuted
                                         }
                                     }
                                 }
@@ -1502,7 +1505,7 @@ Item {
                                             text: "BP"
                                             font.pixelSize: 13
                                             font.bold: rangeSlider.bpMode
-                                            color: rangeSlider.bpMode ? "#6A0DAD" : "#9E9E9E"
+                                            color: rangeSlider.bpMode ? Theme.accent : Theme.textMuted
                                         }
                                     }
                                 }
@@ -1661,7 +1664,7 @@ Item {
                                 var r, g, b, t
                                 
                                 if (level <= 1) {
-                                    return "#00A0E9"  // PST
+                                    return Theme.diffPst  // PST
                                 } else if (level <= 5) {
                                     // PST -> PRS gradient (Level 1-5)
                                     t = (level - 1) / 4
@@ -1693,7 +1696,7 @@ Item {
                                     g = Math.round(ftr.g + (byd.g - ftr.g) * t)
                                     b = Math.round(ftr.b + (byd.b - ftr.b) * t)
                                 } else {
-                                    return "#E04040"  // BYD
+                                    return Theme.diffByd  // BYD
                                 }
                                 
                                 return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')
@@ -1706,7 +1709,7 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 anchors.verticalCenterOffset: -10
                                 height: 6; radius: 3
-                                color: "#E0E0E0"
+                                color: Theme.borderCard
                                 
                                 // Tick marks
                                 Repeater {
@@ -1720,7 +1723,7 @@ Item {
                                         y: -3
                                         width: 2; height: 12
                                         radius: 1
-                                        color: "#C0C0C0"
+                                        color: Theme.textDisabled
                                     }
                                 }
                                 
@@ -1852,7 +1855,7 @@ Item {
                                 width: 20; height: 20; radius: 10
                                 property string baseColor: rangeSlider.getColorForLevel(rangeSlider.getLevelValue(rangeSlider.handleAIndex))
                                 color: handleAMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
-                                border.color: "white"; border.width: 2
+                                border.color: Theme.bgCard; border.width: 2
                                 x: rangeSlider.currentList.length > 1 ? 
                                     (rangeSlider.handleAIndex / (rangeSlider.currentList.length - 1)) * (track.width - width) : 0
                                 anchors.verticalCenter: track.verticalCenter
@@ -1866,7 +1869,7 @@ Item {
                                     property bool showAbove: tooClose && isRightHandle
                                     y: showAbove ? -height - 4 : parent.height + 4
                                     text: rangeSlider.getDisplayValue(rangeSlider.handleAIndex)
-                                    font.pixelSize: 10; font.bold: true; color: "#333"
+                                    font.pixelSize: 10; font.bold: true; color: Theme.textPrimary
                                 }
                                 
                                 MouseArea {
@@ -1913,7 +1916,7 @@ Item {
                                 width: 20; height: 20; radius: 10
                                 property string baseColor: rangeSlider.getColorForLevel(rangeSlider.getLevelValue(rangeSlider.handleBIndex))
                                 color: handleBMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
-                                border.color: "white"; border.width: 2
+                                border.color: Theme.bgCard; border.width: 2
                                 x: rangeSlider.currentList.length > 1 ? 
                                     (rangeSlider.handleBIndex / (rangeSlider.currentList.length - 1)) * (track.width - width) : track.width - width
                                 anchors.verticalCenter: track.verticalCenter
@@ -1927,7 +1930,7 @@ Item {
                                     property bool showAbove: tooClose && isRightHandle
                                     y: showAbove ? -height - 4 : parent.height + 4
                                     text: rangeSlider.getDisplayValue(rangeSlider.handleBIndex)
-                                    font.pixelSize: 10; font.bold: true; color: "#333"
+                                    font.pixelSize: 10; font.bold: true; color: Theme.textPrimary
                                 }
                                 
                                 MouseArea {
@@ -1968,14 +1971,14 @@ Item {
                         }
                     }
                     
-                    Rectangle { height: 1; Layout.fillWidth: true; color: "#E0E0E0" }
+                    Rectangle { height: 1; Layout.fillWidth: true; color: Theme.borderCard }
                     
                     // Score Range Filter
                     Column {
                         spacing: 10
                         Layout.fillWidth: true
                         
-                        Text { text: "Score Range"; font.pixelSize: 14; font.bold: true; color: "#333" }
+                        Text { text: "Score Range"; font.pixelSize: 14; font.bold: true; color: Theme.textPrimary }
                         
                         // Score Range Slider
                         Item {
@@ -2009,7 +2012,7 @@ Item {
                             // FRAME (idx 11) = sky blue #5AB8E0 (기존 MAX 색)
                             // MAX (idx 12) = brighter sky blue #85D5F5
                             function getColorForScoreIndex(idx) {
-                                if (scoreGrades.length <= 1) return "#80354A"
+                                if (scoreGrades.length <= 1) return Theme.scoreLost
 
                                 var anchors = [
                                     {i: 0,  r: 0x80, g: 0x35, b: 0x4A},   // D     - burgundy
@@ -2033,7 +2036,7 @@ Item {
                                         return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')
                                     }
                                 }
-                                return "#80354A"
+                                return Theme.scoreLost
                             }
                             
                             // Track with gradient
@@ -2043,7 +2046,7 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 anchors.verticalCenterOffset: -10
                                 height: 6; radius: 3
-                                color: "#E0E0E0"
+                                color: Theme.borderCard
                                 
                                 // Tick marks for each grade
                                 Repeater {
@@ -2055,7 +2058,7 @@ Item {
                                         y: -3
                                         width: 2; height: 12
                                         radius: 1
-                                        color: "#C0C0C0"
+                                        color: Theme.textDisabled
                                     }
                                 }
                                 
@@ -2134,7 +2137,7 @@ Item {
                                 width: 20; height: 20; radius: 10
                                 property string baseColor: scoreRangeSlider.getColorForScoreIndex(scoreRangeSlider.handleAIndex)
                                 color: scoreHandleAMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
-                                border.color: "white"; border.width: 2
+                                border.color: Theme.bgCard; border.width: 2
                                 x: scoreRangeSlider.scoreGrades.length > 1 ? 
                                     (scoreRangeSlider.handleAIndex / (scoreRangeSlider.scoreGrades.length - 1)) * (scoreTrack.width - width) : 0
                                 anchors.verticalCenter: scoreTrack.verticalCenter
@@ -2147,7 +2150,7 @@ Item {
                                     property bool showAbove: tooClose && isRightHandle
                                     y: showAbove ? -height - 4 : parent.height + 4
                                     text: scoreRangeSlider.getDisplayValue(scoreRangeSlider.handleAIndex)
-                                    font.pixelSize: 10; font.bold: true; color: "#333"
+                                    font.pixelSize: 10; font.bold: true; color: Theme.textPrimary
                                 }
                                 
                                 MouseArea {
@@ -2191,7 +2194,7 @@ Item {
                                 width: 20; height: 20; radius: 10
                                 property string baseColor: scoreRangeSlider.getColorForScoreIndex(scoreRangeSlider.handleBIndex)
                                 color: scoreHandleBMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
-                                border.color: "white"; border.width: 2
+                                border.color: Theme.bgCard; border.width: 2
                                 x: scoreRangeSlider.scoreGrades.length > 1 ? 
                                     (scoreRangeSlider.handleBIndex / (scoreRangeSlider.scoreGrades.length - 1)) * (scoreTrack.width - width) : scoreTrack.width - width
                                 anchors.verticalCenter: scoreTrack.verticalCenter
@@ -2204,7 +2207,7 @@ Item {
                                     property bool showAbove: tooClose && isRightHandle
                                     y: showAbove ? -height - 4 : parent.height + 4
                                     text: scoreRangeSlider.getDisplayValue(scoreRangeSlider.handleBIndex)
-                                    font.pixelSize: 10; font.bold: true; color: "#333"
+                                    font.pixelSize: 10; font.bold: true; color: Theme.textPrimary
                                 }
                                 
                                 MouseArea {
@@ -2244,14 +2247,14 @@ Item {
                         }
                     }
                     
-                    Rectangle { height: 1; Layout.fillWidth: true; color: "#E0E0E0" }
+                    Rectangle { height: 1; Layout.fillWidth: true; color: Theme.borderCard }
                     
                     // Clear Type Filter
                     Column {
                         spacing: 10
                         Layout.fillWidth: true
                         
-                        Text { text: "Clear Range"; font.pixelSize: 14; font.bold: true; color: "#333" }
+                        Text { text: "Clear Range"; font.pixelSize: 14; font.bold: true; color: Theme.textPrimary }
                         
                         Item {
                             id: clearRangeSlider
@@ -2260,12 +2263,12 @@ Item {
                             
                             // Display order: Track Lost -> Easy Clear -> Track Complete -> Hard Clear -> Full Recall -> Pure Memory
                             property var clearTypeItems: [
-                                { id: 0, label: "Track Lost", color: "#80354A" },
-                                { id: 4, label: "Easy Clear", color: "#50C050" },
-                                { id: 1, label: "Track Complete", color: "#a18fa7" },
-                                { id: 5, label: "Hard Clear", color: "#C2185B" },
-                                { id: 2, label: "Full Recall", color: "#F48FB1" },
-                                { id: 3, label: "Pure Memory", color: "#4AA8A8" }
+                                { id: 0, label: "Track Lost", color: Theme.clearLost },
+                                { id: 4, label: "Easy Clear", color: Theme.clearEasy },
+                                { id: 1, label: "Track Complete", color: Theme.clearComplete },
+                                { id: 5, label: "Hard Clear", color: Theme.clearHard },
+                                { id: 2, label: "Full Recall", color: Theme.clearFullRecall },
+                                { id: 3, label: "Pure Memory", color: Theme.clearPureMemory }
                             ]
                             
                             property int handleAIndex: 0
@@ -2285,8 +2288,19 @@ Item {
                                 return label
                             }
                             
-                            function hexToRgb(hex) {
-                                var clean = hex.replace("#", "")
+                            function colorToRgb(value) {
+                                // QML color properties arrive as QColor-like objects,
+                                // not JavaScript strings. Keep a string fallback for
+                                // any future data source that supplies a hex value.
+                                if (value && typeof value.r === "number") {
+                                    return {
+                                        r: Math.round(value.r * 255),
+                                        g: Math.round(value.g * 255),
+                                        b: Math.round(value.b * 255)
+                                    }
+                                }
+
+                                var clean = String(value).replace("#", "")
                                 return {
                                     r: parseInt(clean.substring(0, 2), 16),
                                     g: parseInt(clean.substring(2, 4), 16),
@@ -2299,8 +2313,8 @@ Item {
                             }
                             
                             function interpolateColor(colorA, colorB, t) {
-                                var a = hexToRgb(colorA)
-                                var b = hexToRgb(colorB)
+                                var a = colorToRgb(colorA)
+                                var b = colorToRgb(colorB)
                                 var r = Math.round(a.r + (b.r - a.r) * t)
                                 var g = Math.round(a.g + (b.g - a.g) * t)
                                 var bl = Math.round(a.b + (b.b - a.b) * t)
@@ -2309,7 +2323,7 @@ Item {
                             
                             function getColorForClearIndex(idx) {
                                 var n = clearTypeItems.length
-                                if (n <= 1) return "#7A7A7A"
+                                if (n <= 1) return Theme.rankSilver
 
                                 var bounded = Math.max(0, Math.min(idx, n - 1))
                                 var i0 = Math.floor(bounded)
@@ -2320,7 +2334,7 @@ Item {
                             
                             function getColorForIndex(idx) {
                                 if (idx >= 0 && idx < clearTypeItems.length) return getColorForClearIndex(idx)
-                                return "#7A7A7A"
+                                return Theme.rankSilver
                             }
                             
                             function getSelectedTypes() {
@@ -2339,7 +2353,7 @@ Item {
                                 anchors.verticalCenterOffset: -10
                                 height: 6
                                 radius: 3
-                                color: "#E0E0E0"
+                                color: Theme.borderCard
                                 
                                 Repeater {
                                     model: clearRangeSlider.clearTypeItems.length
@@ -2351,7 +2365,7 @@ Item {
                                         width: 2
                                         height: 12
                                         radius: 1
-                                        color: "#C0C0C0"
+                                        color: Theme.textDisabled
                                     }
                                 }
                                 
@@ -2425,7 +2439,7 @@ Item {
                                 radius: 10
                                 property string baseColor: clearRangeSlider.getColorForIndex(clearRangeSlider.handleAIndex)
                                 color: clearHandleAMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
-                                border.color: "white"
+                                border.color: Theme.bgCard
                                 border.width: 2
                                 x: clearRangeSlider.clearTypeItems.length > 1 ?
                                     (clearRangeSlider.handleAIndex / (clearRangeSlider.clearTypeItems.length - 1)) * (clearTrack.width - width) : 0
@@ -2440,7 +2454,7 @@ Item {
                                     text: clearRangeSlider.getHandleLabel(clearRangeSlider.handleAIndex)
                                     font.pixelSize: 10
                                     font.bold: true
-                                    color: "#333"
+                                    color: Theme.textPrimary
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                                 
@@ -2485,7 +2499,7 @@ Item {
                                 radius: 10
                                 property string baseColor: clearRangeSlider.getColorForIndex(clearRangeSlider.handleBIndex)
                                 color: clearHandleBMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
-                                border.color: "white"
+                                border.color: Theme.bgCard
                                 border.width: 2
                                 x: clearRangeSlider.clearTypeItems.length > 1 ?
                                     (clearRangeSlider.handleBIndex / (clearRangeSlider.clearTypeItems.length - 1)) * (clearTrack.width - width) : clearTrack.width - width
@@ -2500,7 +2514,7 @@ Item {
                                     text: clearRangeSlider.getHandleLabel(clearRangeSlider.handleBIndex)
                                     font.pixelSize: 10
                                     font.bold: true
-                                    color: "#333"
+                                    color: Theme.textPrimary
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                                 
@@ -2540,14 +2554,14 @@ Item {
                         }
                     }
                     
-                    Rectangle { height: 1; Layout.fillWidth: true; color: "#E0E0E0" }
+                    Rectangle { height: 1; Layout.fillWidth: true; color: Theme.borderCard }
                     
                     // Chart Flags
                     Column {
                         spacing: 10
                         Layout.fillWidth: true
                         
-                        Text { text: "Consultant Sheet Flags"; font.pixelSize: 14; font.bold: true; color: "#333" }
+                        Text { text: "Consultant Sheet Flags"; font.pixelSize: 14; font.bold: true; color: Theme.textPrimary }
                         
                         // Flag filter helper component
                         // (Moved to root)
@@ -2579,6 +2593,58 @@ Item {
                             }
 
                         }
+                    }
+                }
+            }
+
+                Basic.ScrollBar {
+                    id: filterVerticalBar
+                    z: 10
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.right: parent.right
+                    anchors.rightMargin: 4
+                    width: 10
+
+                    policy: ScrollBar.AlwaysOn
+                    size: filterScrollView.contentItem ? filterScrollView.contentItem.visibleArea.heightRatio : 1
+                    position: filterScrollView.contentItem ? filterScrollView.contentItem.visibleArea.yPosition : 0
+
+                    onPositionChanged: {
+                        if (pressed && filterScrollView.contentItem)
+                            filterScrollView.contentItem.contentY = position * filterScrollView.contentItem.contentHeight
+                    }
+
+                    property bool showScrollbar: (filterScrollView.contentItem && filterScrollView.contentItem.moving)
+                                                  || filterHideTimer.running
+                                                  || filterVerticalBar.hovered
+                                                  || filterVerticalBar.pressed
+                    hoverEnabled: true
+                    active: true
+
+                    Timer { id: filterHideTimer; interval: 1000 }
+                    Connections {
+                        target: filterScrollView.contentItem
+                        function onMovingChanged() {
+                            if (!filterScrollView.contentItem.moving)
+                                filterHideTimer.restart()
+                        }
+                    }
+                    onPressedChanged: {
+                        if (!pressed && filterScrollView.contentItem && !filterScrollView.contentItem.moving)
+                            filterHideTimer.restart()
+                    }
+
+                    opacity: showScrollbar ? 1.0 : 0.0
+                    Behavior on opacity { NumberAnimation { duration: 200 } }
+
+                    background: Rectangle { color: "transparent" }
+                    contentItem: Rectangle {
+                        implicitWidth: 6
+                        implicitHeight: 100
+                        radius: 3
+                        color: Theme.scrollbar
+                        opacity: filterVerticalBar.pressed ? 1.0 : (filterVerticalBar.hovered ? 1.0 : 0.6)
                     }
                 }
             }

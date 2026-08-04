@@ -11,7 +11,7 @@ ApplicationWindow {
     height: 900
     visible: true
     title: "ArcaeaNap"
-    color: "#F3F4F8"
+    color: Theme.bgWindow
     
     minimumWidth: 1280
     minimumHeight: 900
@@ -62,6 +62,7 @@ ApplicationWindow {
         aboutWindow.privacyPolicyUrl = (typeof privacyPolicyUrl === "string") ? privacyPolicyUrl : ""
         aboutWindow.termsOfServiceUrl = (typeof termsOfServiceUrl === "string") ? termsOfServiceUrl : ""
         showWindow(aboutWindow)
+        aboutWindow.lockInitialWindowSize()
     }
 
     function showOssLicensesWindow() {
@@ -77,7 +78,7 @@ ApplicationWindow {
         id: navBar
         width: parent.width
         height: 70
-        color: "#FFFFFF"
+        color: Theme.bgCard
         z: 10
 
         // [수정] RowLayout 제거 -> 앵커(Anchors) 기반의 독립 배치로 변경
@@ -112,7 +113,7 @@ ApplicationWindow {
                     text: "ArcaeaNap"
                     font.pixelSize: 20
                     font.bold: true
-                    color: "#1A1A1A"
+                    color: Theme.textTitle
                     anchors.verticalCenter: parent.verticalCenter
                 }
             }
@@ -142,13 +143,13 @@ ApplicationWindow {
 
                 Rectangle {
                     width: 8; height: 8; radius: 4
-                    color: "#6A0DAD"
+                    color: Theme.accent
                     anchors.verticalCenter: parent.verticalCenter
                 }
                 Text {
                     visible: window.width >= 800
                     text: "New update available"
-                    color: "#6A0DAD"
+                    color: Theme.accent
                     font.bold: true
                     font.pixelSize: 13
                     anchors.verticalCenter: parent.verticalCenter
@@ -227,7 +228,7 @@ ApplicationWindow {
                                 anchors.centerIn: parent
                                 anchors.verticalCenterOffset: parent.isActive ? -2 : 0
                                 scale: parent.isActive ? 1.15 : 1.0
-                                color: parent.isActive ? "#6A0DAD" : (tabMouse.containsMouse ? "#9D70C9" : "#888888")
+                                color: parent.isActive ? Theme.accent : (tabMouse.containsMouse ? Theme.accentHover : Theme.textMuted)
                                 font.bold: true 
                                 font.pixelSize: 16
 
@@ -244,7 +245,7 @@ ApplicationWindow {
                     height: 3
                     width: 40
                     radius: 2
-                    color: "#6A0DAD"
+                    color: Theme.accent
                     y: 50 
                     
                     property Item activeItem: tabRepeater.itemAt(window.currentTab)
@@ -272,7 +273,7 @@ ApplicationWindow {
             Rectangle {
                 anchors.fill: parent
                 radius: 8 
-                color: "#E0E0E0" 
+                color: Theme.borderCard 
                 opacity: settingsMouse.containsMouse ? 1.0 : 0.0
                 Behavior on opacity { NumberAnimation { duration: 200 } }
             }
@@ -282,7 +283,7 @@ ApplicationWindow {
                 text: "⚙️"
                 font.pixelSize: 22
                 anchors.centerIn: parent
-                color: settingsMouse.containsMouse ? "#333333" : "#888888"
+                color: settingsMouse.containsMouse ? Theme.textPrimary : Theme.textMuted
                 Behavior on color { ColorAnimation { duration: 200 } }
             }
 
@@ -459,7 +460,7 @@ ApplicationWindow {
         maximumWidth: 350
         minimumHeight: 160
         maximumHeight: 160
-        color: "#F3F4F8"
+        color: Theme.bgWindow
         visible: false
 
         Column {
@@ -475,14 +476,14 @@ ApplicationWindow {
                 text: "Updating song database..."
                 font.pixelSize: 15
                 font.bold: true
-                color: "#333"
+                color: Theme.textPrimary
                 anchors.horizontalCenter: parent.horizontalCenter
             }
 
             Text {
                 text: "This may take a minute."
                 font.pixelSize: 12
-                color: "#888"
+                color: Theme.textMuted
                 anchors.horizontalCenter: parent.horizontalCenter
             }
         }
@@ -500,9 +501,9 @@ ApplicationWindow {
         z: 1001
 
         background: Rectangle {
-            color: "#FFFFFF"
+            color: Theme.bgCard
             radius: 12
-            border.color: "#E53935"
+            border.color: Theme.statusOff
             border.width: 2
         }
 
@@ -516,21 +517,27 @@ ApplicationWindow {
                 text: "Update Failed"
                 font.bold: true
                 font.pixelSize: 16
-                color: "#E53935"
+                color: Theme.statusOff
             }
 
             Text {
                 id: songDbErrorText
                 wrapMode: Text.WordWrap
                 width: parent.width
-                color: "#333"
+                color: Theme.textPrimary
             }
 
             Basic.Button {
                 text: "OK"
                 anchors.right: parent.right
                 onClicked: songDbErrorPopup.close()
-                background: Rectangle { color: "#F0F0F0"; radius: 6 }
+                background: Rectangle { color: Theme.bgButton; radius: 6 }
+                contentItem: Text {
+                    text: parent.text
+                    color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
             }
         }
     }
@@ -555,9 +562,9 @@ ApplicationWindow {
         onOpened: refreshGoogleConnectionState()
 
         background: Rectangle {
-            color: "#FFFFFF"
+            color: Theme.bgCard
             radius: 12
-            border.color: "#E0E0E0"
+            border.color: Theme.borderCard
             border.width: 1
         }
 
@@ -572,7 +579,7 @@ ApplicationWindow {
                 text: "Song Database Missing"
                 font.bold: true
                 font.pixelSize: 18
-                color: "#333333"
+                color: Theme.textPrimary
                 horizontalAlignment: Text.AlignHCenter
             }
 
@@ -580,7 +587,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 text: "Google Account login is required to build the initial songs.db."
                 wrapMode: Text.WordWrap
-                color: "#666666"
+                color: Theme.textSecondary
                 horizontalAlignment: Text.AlignHCenter
             }
 
@@ -592,8 +599,8 @@ ApplicationWindow {
                 Layout.maximumWidth: 360
                 Layout.preferredHeight: 86
                 radius: 10
-                color: isConnected ? "#E8F5E9" : "#F7F7F7"
-                border.color: isConnected ? "#4CAF50" : "#E0E0E0"
+                color: isConnected ? Theme.googleBg : Theme.bgInput
+                border.color: isConnected ? Theme.browserDesc : Theme.borderCard
                 border.width: 1
 
                 property bool isConnected: settingsHandler ? settingsHandler.isGoogleSheetConnected() : false
@@ -621,20 +628,20 @@ ApplicationWindow {
                             text: "Google Sheet"
                             font.bold: true
                             font.pixelSize: 13
-                            color: popupGoogleButton.isConnected ? "#2E7D32" : "#424242"
+                            color: popupGoogleButton.isConnected ? Theme.googleTitle : Theme.titleOff
                         }
 
                         Text {
                             text: popupGoogleButton.isConnected ? "Connected" : "Not Connected"
                             font.pixelSize: 11
-                            color: popupGoogleButton.isConnected ? "#2E7D32" : "#E53935"
+                            color: popupGoogleButton.isConnected ? Theme.googleTitle : Theme.statusOff
                         }
 
                         Text {
                             visible: popupGoogleButton.isConnected && popupGoogleButton.connectionText.length > 0
                             text: popupGoogleButton.connectionText
                             font.pixelSize: 10
-                            color: "#757575"
+                            color: Theme.settingsTextMuted
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
                         }
@@ -655,8 +662,14 @@ ApplicationWindow {
                             }
                         }
                         background: Rectangle {
-                            color: "#E0E0E0"
+                            color: Theme.borderCard
                             radius: 6
+                        }
+                        contentItem: Text {
+                            text: parent.text
+                            color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
                         }
                     }
                 }
@@ -669,7 +682,7 @@ ApplicationWindow {
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
-                color: "#444444"
+                color: Theme.textSecondary
             }
 
             RowLayout {
@@ -699,13 +712,19 @@ ApplicationWindow {
                                 startupHandler.startInitialLoad()
                             }
                         }
-                        background: Rectangle { color: generateNowBtn.enabled ? "#F0F0F0" : "#FAFAFA"; radius: 8 }
+                        background: Rectangle { color: generateNowBtn.enabled ? Theme.bgButton : Theme.bgItemHover; radius: 8 }
+                        contentItem: Text {
+                            text: parent.text
+                            color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
                     }
 
                     Text {
                         text: "Requires Google login"
                         font.pixelSize: 10
-                        color: "#E65100"
+                        color: Theme.browserBtnBg
                         horizontalAlignment: Text.AlignHCenter
                         Layout.fillWidth: true
                         visible: !generateNowBtn.enabled
@@ -732,7 +751,13 @@ ApplicationWindow {
                             dbMissingPopup.close()
                             window.isLoading = false
                         }
-                        background: Rectangle { color: "#F0F0F0"; radius: 8 }
+                        background: Rectangle { color: Theme.bgButton; radius: 8 }
+                        contentItem: Text {
+                            text: parent.text
+                            color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
                     }
                     
                     // 빈 공간 채우기 용도
@@ -802,7 +827,7 @@ ApplicationWindow {
         width: toastText.implicitWidth + 40
         height: toastText.implicitHeight + 24
         radius: 20
-        color: "#E0333333"
+        color: Theme.overlayDark
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
@@ -816,7 +841,7 @@ ApplicationWindow {
         Text {
             id: toastText
             anchors.centerIn: parent
-            color: "#FFFFFF"
+            color: Theme.overlayText
             font.pixelSize: 14
             font.bold: true
             text: ""
@@ -824,12 +849,14 @@ ApplicationWindow {
 
         // 말풍선 꼬리 (하단 중앙 삼각형)
         Canvas {
+            property color fillColor: Theme.overlayDark
             width: 16; height: 8
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.top: parent.bottom
+            onFillColorChanged: requestPaint()
             onPaint: {
                 var ctx = getContext("2d")
-                ctx.fillStyle = "#E0333333"
+                ctx.fillStyle = fillColor
                 ctx.beginPath()
                 ctx.moveTo(0, 0)
                 ctx.lineTo(8, 8)
@@ -883,7 +910,7 @@ ApplicationWindow {
     Rectangle {
         id: loadingOverlay
         anchors.fill: parent
-        color: "#80000000" // Semi-transparent black
+        color: Theme.shadowNormal // Semi-transparent black
         z: 999
         visible: window.isLoading
         
@@ -902,7 +929,7 @@ ApplicationWindow {
                     implicitWidth: 64
                     implicitHeight: 64
                     color: "transparent"
-                    border.color: "#FFFFFF"
+                    border.color: Theme.overlayText
                     border.width: 4
                     radius: 32
                     
@@ -910,7 +937,7 @@ ApplicationWindow {
                         width: 12
                         height: 12
                         radius: 6
-                        color: "#FFFFFF"
+                        color: Theme.overlayText
                         x: 26
                         y: 4
                         
@@ -933,12 +960,12 @@ ApplicationWindow {
             
             Text {
                 text: "Loading song data..."
-                color: "#FFFFFF"
+                color: Theme.overlayText
                 font.pixelSize: 24
                 font.bold: true
                 Layout.alignment: Qt.AlignHCenter
                 style: Text.Outline
-                styleColor: "#000000"
+                styleColor: Theme.overlayDarker
             }
         }
     }

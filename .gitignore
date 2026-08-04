@@ -176,3 +176,5 @@ client_secret.json
 agent_docs
 tests
 updates/
+AGENT.md
+CLAUDE.md

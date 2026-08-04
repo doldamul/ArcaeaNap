@@ -1,6 +1,9 @@
 import configparser
 import copy
 import os
+import tempfile
+import threading
+import time
 from enum import StrEnum, auto
 
 from utils.user_paths import get_user_data_dir, get_app_root
@@ -12,10 +15,21 @@ class OS(StrEnum):
 
 config = None
 
+_SAVE_RETRY_DELAYS = (0.05, 0.1, 0.2, 0.4)
+
+
+class _ReplacePermissionError(PermissionError):
+    """PermissionError raised specifically by the atomic destination replace."""
+
+    def __init__(self, original):
+        self.original = original
+        super().__init__(*original.args)
+
 _config_default = {
     'general': {
         'cache_path': './arcaea_nap_data/',
         'song_title_language': 'en',  # 'en' or 'jp'
+        'theme_mode': 'system',  # 'system', 'light', or 'dark'
     },
     'profile': {
         'show_friend_code': True,
@@ -94,10 +108,18 @@ def _validate_song_title_language(v: str) -> str:
         raise ValueError("song_title_language must be 'en' or 'jp'")
     return value
 
+
+def _validate_theme_mode(v: str) -> str:
+    value = str(v).strip().lower()
+    if value not in ('system', 'light', 'dark'):
+        raise ValueError("theme_mode must be 'system', 'light', or 'dark'")
+    return value
+
 _converters = {
     'general': {
         'cache_path': _validate_cache_path,
         'song_title_language': _validate_song_title_language,
+        'theme_mode': _validate_theme_mode,
     },
     'profile': {
         'show_friend_code': lambda v: v.lower() == 'true',
@@ -168,10 +190,30 @@ class SectionWrapper:
         # Runtime keys: store in memory only (no file save)
         if self._is_runtime_key(key):
             self.parent.set_runtime(self.section_name, key, value)
-            return
+            return True
 
-        self.section_proxy[key] = str(value)
-        self.parent.save()
+        with self.parent._save_lock:
+            parser = self.parent._config
+            serialized_value = str(value)
+            had_raw_option = parser.has_option(self.section_name, key)
+            previous_raw_value = (
+                parser.get(self.section_name, key, raw=True)
+                if had_raw_option
+                else None
+            )
+            if had_raw_option and previous_raw_value == serialized_value:
+                return False
+
+            self.section_proxy[key] = serialized_value
+            try:
+                self.parent.save()
+            except Exception:
+                if had_raw_option:
+                    parser.set(self.section_name, key, previous_raw_value)
+                else:
+                    parser.remove_option(self.section_name, key)
+                raise
+            return True
 
 @singleton
 class Configuration:
@@ -188,6 +230,7 @@ class Configuration:
         self.filename = os.path.join(base, "config.ini")
         self._config = configparser.ConfigParser()
         self._runtime = copy.deepcopy(_runtime_default)
+        self._save_lock = threading.RLock()
         
         if not os.path.exists(self.filename):
             # create config file as default
@@ -276,10 +319,50 @@ class Configuration:
                     return False
         return True
 
+    def _save_once(self, destination_dir):
+        temp_path = None
+        temp_file = None
+        try:
+            temp_file = tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=destination_dir,
+                prefix=".config-",
+                suffix=".tmp",
+                delete=False,
+            )
+            temp_path = temp_file.name
+            self._config.write(temp_file)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+            temp_file.close()
+            temp_file = None
+            try:
+                os.replace(temp_path, self.filename)
+            except PermissionError as error:
+                raise _ReplacePermissionError(error) from error
+            temp_path = None
+        finally:
+            if temp_file is not None:
+                temp_file.close()
+            if temp_path is not None:
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+
     def save(self):
-        # Always save to the root directory (consistent location)
-        with open(self.filename, 'w', encoding='utf-8') as f:
-            self._config.write(f)
+        """Atomically persist config, tolerating brief external file locks."""
+        destination_dir = os.path.dirname(os.path.abspath(self.filename)) or os.curdir
+        with self._save_lock:
+            for attempt, delay in enumerate((*_SAVE_RETRY_DELAYS, None)):
+                try:
+                    self._save_once(destination_dir)
+                    return
+                except _ReplacePermissionError as error:
+                    if delay is None:
+                        raise error.original.with_traceback(error.original.__traceback__)
+                    time.sleep(delay)
 
 config = Configuration()
 

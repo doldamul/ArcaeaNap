@@ -8,7 +8,7 @@ Column {
     id: diffCheckRoot
     property bool checked: true
     property string text: ""
-    property color diffColor: "#000000"
+    property color diffColor: Theme.textTitle
     
     spacing: 8
     
@@ -51,6 +51,6 @@ Column {
         text: diffCheckRoot.text
         font.bold: true
         font.pixelSize: 12
-        color: diffCheckRoot.checked ? diffCheckRoot.diffColor : "#AAA"
+        color: diffCheckRoot.checked ? diffCheckRoot.diffColor : Theme.textFaint
     }
 }

@@ -16,8 +16,8 @@ from services.score_query_service import (
 from repositories.song_repository import get_all_songs_with_charts
 from models.constants import (
     calculate_rank,
-    DIFFICULTY_ORDER, DIFFICULTY_NAMES, DIFFICULTY_COLORS, SCORE_RANKS,
-    RANK_COLORS, DEFAULT_RANK_COLOR, CLEAR_TYPE_TEXTS, CLEAR_TYPE_ABBREVIATIONS
+    DIFFICULTY_ORDER, DIFFICULTY_NAMES, SCORE_RANKS,
+    CLEAR_TYPE_TEXTS, CLEAR_TYPE_ABBREVIATIONS
 )
 
 
@@ -592,7 +592,6 @@ class StatisticsService:
             'bpm': song_data['bpm'],
             'difficulty': difficulty,
             'difficultyName': DIFFICULTY_NAMES.get(difficulty, ''),
-            'difficultyColor': DIFFICULTY_COLORS.get(difficulty, '#888'),
             'level': chart_data.get('level', ''),
             'bp': chart_data.get('bp', 0),
             's_bp': chart_data.get('s_bp', 0),
@@ -601,7 +600,6 @@ class StatisticsService:
             'bestScore': score,
             'hasScore': has_score,
             'rank': rank,
-            'rankColor': RANK_COLORS.get(rank, DEFAULT_RANK_COLOR) if rank else DEFAULT_RANK_COLOR,
             'clearTypeText': CLEAR_TYPE_TEXTS.get(best_clear_type, '') if has_score else '',
             'clearTypeAbbr': CLEAR_TYPE_ABBREVIATIONS.get(best_clear_type, '') if has_score else '',
             'pure': score_data.get('perfect', 0),
@@ -635,7 +633,6 @@ class StatisticsService:
         return {
             'difficulty': difficulty,
             'level': chart_data.get('level', ''),
-            'difficultyColor': DIFFICULTY_COLORS.get(difficulty, '#888'),
             'ignoreChart': chart_data.get('ignore_chart', False),
             'skillIssues': chart_data.get('skill_issues', False),
             'hardBpm': chart_data.get('hard_bpm', False),

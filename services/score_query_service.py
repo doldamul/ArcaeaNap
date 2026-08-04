@@ -9,7 +9,7 @@ import sqlite3
 from datetime import datetime
 
 from models.constants import (
-    DIFFICULTY_CODE_TO_INT, DIFFICULTY_NAMES, DIFFICULTY_COLORS,
+    DIFFICULTY_CODE_TO_INT, DIFFICULTY_NAMES,
     ALL_DIFFICULTIES
 )
 from repositories.song_repository import get_db_path
@@ -265,8 +265,8 @@ def get_top_10_most_played(
         song_title_language: 'en' or 'jp'
 
     Returns:
-        list of dict: by song: [{'title', 'artist', 'playCount', 'arcaeaId', 'colorCode'}, ...]
-                      by chart: same + 'difficulty' (int), 'difficultyName', 'difficultyColor'
+        list of dict: by song: [{'title', 'artist', 'playCount', 'arcaeaId'}, ...]
+                      by chart: same + 'difficulty' (int), 'difficultyName'
     """
     scores_db_path = _get_scores_db_path(cache_path)
     songs_db_path = get_db_path()
@@ -325,11 +325,9 @@ def get_top_10_most_played(
                     'playCount': play_count,
                     'songDbId': meta['song_id'],
                     'arcaeaId': meta['arcaea_id'] or '',
-                    'colorCode': '#FFFFFF',
                     'difficulty': difficulty,
                     'thumbnailDifficulty': difficulty,
                     'difficultyName': DIFFICULTY_NAMES.get(difficulty, ''),
-                    'difficultyColor': DIFFICULTY_COLORS.get(difficulty, '#888'),
                 })
             return results
 
@@ -371,11 +369,9 @@ def get_top_10_most_played(
                 'playCount': info['playCount'],
                 'songDbId': sid,
                 'arcaeaId': info['arcaeaId'],
-                'colorCode': '#FFFFFF',
                 'difficulty': -1,
                 'thumbnailDifficulty': info['thumbnailDifficulty'],
                 'difficultyName': '',
-                'difficultyColor': '#888',
             })
         return results
     except Exception as e:

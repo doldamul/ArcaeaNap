@@ -17,7 +17,6 @@ class StatisticsListModel(QAbstractListModel):
     # Chart 모드 role
     DifficultyRole = Qt.ItemDataRole.UserRole + 10
     DifficultyNameRole = Qt.ItemDataRole.UserRole + 11
-    DifficultyColorRole = Qt.ItemDataRole.UserRole + 12
     LevelRole = Qt.ItemDataRole.UserRole + 13
     IgnoreChartRole = Qt.ItemDataRole.UserRole + 14
     SkillIssuesRole = Qt.ItemDataRole.UserRole + 15
@@ -44,7 +43,6 @@ class StatisticsListModel(QAbstractListModel):
         BpRole: "bp",
         DifficultyRole: "difficulty",
         DifficultyNameRole: "difficultyName",
-        DifficultyColorRole: "difficultyColor",
         LevelRole: "level",
         IgnoreChartRole: "ignoreChart",
         SkillIssuesRole: "skillIssues",

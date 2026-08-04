@@ -32,13 +32,25 @@ class AnalysisHandler(QObject):
     writeConflictDetected = pyqtSignal(str, arguments=['message'])
     browserNotInstalled = pyqtSignal()  # Emitted when browser is not found
 
-    def __init__(self):
+    def __init__(self, theme_handler=None):
         super().__init__()
-        self.analyzer = ArcaeaOnline()  # Create on init to load pin_updates from DB
+        self._theme_handler = theme_handler
+        self.analyzer = ArcaeaOnline(dark_mode=bool(theme_handler.isDarkMode) if theme_handler else False)  # Create on init to load pin_updates from DB
         self.thread = None
         self._settings_handler = None  # Reference to SettingsHandler
         self._pin_repo = PinRepository()
         self._force_start_once = False
+        if theme_handler:
+            theme_handler.isDarkModeChanged.connect(self._handle_dark_mode_changed)
+
+    def _handle_dark_mode_changed(self, is_dark_mode):
+        if self.analyzer:
+            self.analyzer.set_dark_mode(is_dark_mode)
+
+    def _current_browser_dark_mode(self):
+        if not self._theme_handler:
+            return False
+        return bool(self._theme_handler.isDarkMode)
 
     def set_settings_handler(self, settings_handler):
         """Set reference to SettingsHandler for connection status updates."""
@@ -74,7 +86,7 @@ class AnalysisHandler(QObject):
         print("Starting analysis thread...")
         # Reuse existing analyzer or create new one
         if not self.analyzer:
-            self.analyzer = ArcaeaOnline()
+            self.analyzer = ArcaeaOnline(dark_mode=self._current_browser_dark_mode())
         self.analyzer.set_log_callback(self.emit_log)
         self.analyzer.set_data_changed_callback(self.emit_data_updated)
         self.analyzer.set_pin_changed_callback(self.emit_pin_updated)

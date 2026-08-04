@@ -4,7 +4,7 @@ import os
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant
 
 from utils.configuration import config, get_cache_dir
-from models.constants import DIFFICULTY_ORDER, DIFFICULTY_NAMES, DIFFICULTY_COLORS
+from models.constants import DIFFICULTY_ORDER, DIFFICULTY_NAMES
 from services.score_query_service import play_stats_total, play_stats_difficulty, get_top_10_most_played
 from services.thumbnail_service import ThumbnailService
 
@@ -99,7 +99,7 @@ class StatsHandler(QObject):
         cache_path = get_cache_dir()
         
         diff_info = [
-            (code, DIFFICULTY_NAMES[code], DIFFICULTY_COLORS[code])
+            (code, DIFFICULTY_NAMES[code])
             for code in DIFFICULTY_ORDER
         ]
 
@@ -120,7 +120,7 @@ class StatsHandler(QObject):
             filter_set = set(DIFFICULTY_CODE_TO_INT.get(d) for d in diff_filter_str.split(',') if d in DIFFICULTY_CODE_TO_INT)
             is_off = False
 
-        for code, name, color in diff_info:
+        for code, name in diff_info:
             diff_count, diff_seconds = play_stats_difficulty(cache_path, code)
             
             # If off, we compute total but don't append to stats list
@@ -135,7 +135,7 @@ class StatsHandler(QObject):
                     diff_minutes = (diff_seconds % 3600) // 60
                     stats.append({
                         'name': name,
-                        'color': color,
+                        'difficulty': code,
                         'count': diff_count,
                         'time': f"{diff_hours}.{diff_minutes:02d}"
                     })

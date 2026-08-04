@@ -34,9 +34,9 @@ Item {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         background: Rectangle {
-            color: "#FFFFFF"
+            color: Theme.bgCard
             radius: 12
-            border.color: "#FB8C00"
+            border.color: Theme.browserBtnBg
             border.width: 2
         }
 
@@ -50,30 +50,44 @@ Item {
                 text: "⚠ Concurrent Write Risk Detected"
                 font.bold: true
                 font.pixelSize: 16
-                color: "#E65100"
+                color: Theme.browserBtnBg
             }
 
             Text {
                 text: analyzeRoot.writeConflictMessage
                 width: parent.width
                 wrapMode: Text.WordWrap
-                color: "#333333"
+                color: Theme.textPrimary
             }
 
             Row {
                 anchors.right: parent.right
                 spacing: 8
 
-                Button {
+                Basic.Button {
                     text: "Cancel"
                     onClicked: writeConflictPopup.close()
+                    background: Rectangle { color: Theme.bgButton; radius: 6 }
+                    contentItem: Text {
+                        text: parent.text
+                        color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
 
-                Button {
+                Basic.Button {
                     text: "Force Start"
                     onClicked: {
                         writeConflictPopup.close()
                         analysisHandler.startAnalysisForce()
+                    }
+                    background: Rectangle { color: Theme.bgButton; radius: 6 }
+                    contentItem: Text {
+                        text: parent.text
+                        color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                 }
             }
@@ -90,9 +104,9 @@ Item {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         background: Rectangle {
-            color: "#FFFFFF"
+            color: Theme.bgCard
             radius: 12
-            border.color: "#E65100"
+            border.color: Theme.browserBtnBg
             border.width: 2
         }
 
@@ -106,26 +120,33 @@ Item {
                 text: "⚠ Browser Not Installed"
                 font.bold: true
                 font.pixelSize: 16
-                color: "#E65100"
+                color: Theme.browserBtnBg
             }
 
             Text {
                 text: "Playwright Chromium browser is required for analysis.\nPlease install it from the Settings tab before starting."
                 width: parent.width
                 wrapMode: Text.WordWrap
-                color: "#333333"
+                color: Theme.textPrimary
             }
 
             Row {
                 anchors.right: parent.right
                 spacing: 8
 
-                Button {
+                Basic.Button {
                     text: "Close"
                     onClicked: browserNotInstalledPopup.close()
+                    background: Rectangle { color: Theme.bgButton; radius: 6 }
+                    contentItem: Text {
+                        text: parent.text
+                        color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
 
-                Button {
+                Basic.Button {
                     text: "Go to Settings"
                     onClicked: {
                         browserNotInstalledPopup.close()
@@ -134,6 +155,13 @@ Item {
                             analyzeRoot.appWindow.settingsWindow.raise()
                             analyzeRoot.appWindow.settingsWindow.requestActivate()
                         }
+                    }
+                    background: Rectangle { color: Theme.bgButton; radius: 6 }
+                    contentItem: Text {
+                        text: parent.text
+                        color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                 }
             }
@@ -150,9 +178,9 @@ Item {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         background: Rectangle {
-            color: "#FFFFFF"
+            color: Theme.bgCard
             radius: 12
-            border.color: "#E65100"
+            border.color: Theme.browserBtnBg
             border.width: 2
         }
 
@@ -166,26 +194,33 @@ Item {
                 text: "⚠ Database Missing"
                 font.bold: true
                 font.pixelSize: 16
-                color: "#E65100"
+                color: Theme.browserBtnBg
             }
 
             Text {
                 text: "songs.db is required for analysis.\nPlease generate it from the Settings."
                 width: parent.width
                 wrapMode: Text.WordWrap
-                color: "#333333"
+                color: Theme.textPrimary
             }
 
             Row {
                 anchors.right: parent.right
                 spacing: 8
 
-                Button {
+                Basic.Button {
                     text: "Close"
                     onClicked: dbMissingAnalyzePopup.close()
+                    background: Rectangle { color: Theme.bgButton; radius: 6 }
+                    contentItem: Text {
+                        text: parent.text
+                        color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
 
-                Button {
+                Basic.Button {
                     text: "Go to Settings"
                     onClicked: {
                         dbMissingAnalyzePopup.close()
@@ -194,6 +229,13 @@ Item {
                             analyzeRoot.appWindow.settingsWindow.raise()
                             analyzeRoot.appWindow.settingsWindow.requestActivate()
                         }
+                    }
+                    background: Rectangle { color: Theme.bgButton; radius: 6 }
+                    contentItem: Text {
+                        text: parent.text
+                        color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                 }
             }
@@ -239,9 +281,9 @@ Item {
                 Layout.preferredWidth: 6 
                 Layout.preferredHeight: mainGrid.isNarrow ? 600 : -1
                 
-                color: "#FFFFFF"
+                color: Theme.bgCard
                 radius: 30
-                border.color: "#E0E0E0"
+                border.color: Theme.borderCard
                 border.width: 1
                 clip: true 
 
@@ -260,13 +302,13 @@ Item {
                             text: "Data\nSynchronization"
                             font.pixelSize: 36
                             font.bold: true
-                            color: "#1A1A1A"
+                            color: Theme.textTitle
                             lineHeight: 1.1
                         }
 
                         Text {
                             text: "Connect to Arcaea Online to retrieve latest scores"
-                            color: "#888888"
+                            color: Theme.textMuted
                             font.pixelSize: 14
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true 
@@ -279,14 +321,14 @@ Item {
                             width: 220; height: 60
                             radius: 30
                             gradient: Gradient {
-                                GradientStop { position: 0.0; color: "#BC00FF" }
-                                GradientStop { position: 1.0; color: "#D000FF" }
+                                GradientStop { position: 0.0; color: Theme.accent }
+                                GradientStop { position: 1.0; color: Theme.accentHover }
                             }
                             Row {
                                 anchors.centerIn: parent
                                 spacing: 10
-                                Text { text: "▶"; color: "white"; font.pixelSize: 18 }
-                                Text { text: "Start Analysis"; color: "white"; font.bold: true; font.pixelSize: 18 }
+                                Text { text: "▶"; color: Theme.bgCard; font.pixelSize: 18 }
+                                Text { text: "Start Analysis"; color: Theme.bgCard; font.bold: true; font.pixelSize: 18 }
                             }
                             MouseArea {
                                 anchors.fill: parent
@@ -304,8 +346,8 @@ Item {
                             implicitWidth: analyzeModeRow.implicitWidth + 32
                             height: 46
                             radius: 23
-                            color: "#F8F8F8"
-                            border.color: "#E0E0E0"
+                            color: Theme.bgCapsule
+                            border.color: Theme.borderCard
                             border.width: 1
 
                             RowLayout {
@@ -321,13 +363,13 @@ Item {
                                     Text { 
                                         text: "Play Count Analyze Mode"
                                         font.bold: true
-                                        color: "#333" 
+                                        color: Theme.textPrimary 
                                     }
                                     
                                     Text {
                                         text: "ⓘ"
                                         font.pixelSize: 14
-                                        color: analyzeModeHelpMouse.containsMouse ? "#6A0DAD" : "#999"
+                                        color: analyzeModeHelpMouse.containsMouse ? Theme.accent : Theme.textLight
                                         
                                         MouseArea {
                                             id: analyzeModeHelpMouse
@@ -347,12 +389,12 @@ Item {
                                                       "Normally, the analyzer updates play count of a record only when a new score is found, for ensuring record consistency and preventing server strain. Enable this mode to temporarily bypass limits and update play counts for ALL songs.\n" +
                                                       "This is useful for archiving your complete yearly statistics before the reset."
                                                 font.pixelSize: 12
-                                                color: "#FFFFFF"
+                                                color: Theme.bgCard
                                                 wrapMode: Text.WordWrap
                                             }
                                             
                                             background: Rectangle {
-                                                color: "#333333"
+                                                color: Theme.textPrimary
                                                 radius: 6
                                                 opacity: 0.95
                                             }
@@ -379,8 +421,8 @@ Item {
                                         id: toggleTrack_analyze
                                         anchors.fill: parent
                                         radius: 13
-                                        color: analyzeModeToggle_analyze.checked ? "#6A0DAD" : "#E0E0E0"
-                                        border.color: analyzeModeToggle_analyze.checked ? "#6A0DAD" : "#CCCCCC"
+                                        color: analyzeModeToggle_analyze.checked ? Theme.accent : Theme.borderCard
+                                        border.color: analyzeModeToggle_analyze.checked ? Theme.accent : Theme.toggleBorderOff
                                         Behavior on color { ColorAnimation { duration: 200 } }
                                         Behavior on border.color { ColorAnimation { duration: 200 } }
 
@@ -388,7 +430,7 @@ Item {
                                             width: 22; height: 22; radius: 11
                                             anchors.verticalCenter: parent.verticalCenter
                                             x: analyzeModeToggle_analyze.checked ? parent.width - width - 2 : 2
-                                            color: "white"
+                                            color: Theme.bgCard
                                             
                                             Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutCubic } }
                                         }
@@ -411,7 +453,7 @@ Item {
                             id: statusBar
                             Layout.preferredWidth: 400
                             Layout.preferredHeight: 60
-                            color: "#F8F8F8"
+                            color: Theme.bgCapsule
                             radius: 15
                             
                             // Status property - updated via signal
@@ -438,49 +480,49 @@ Item {
                                     spacing: 8
                                     Rectangle { 
                                         width: 12; height: 12; radius: 6
-                                        color: statusBar.analysisStatus === "closed" ? "#FF6B6B" : "#CCCCCC"
+                                        color: statusBar.analysisStatus === "closed" ? Theme.dotClosed : Theme.toggleBorderOff
                                         anchors.verticalCenter: parent.verticalCenter
                                     }
                                     Text { 
                                         text: "Browser Closed"
-                                        color: statusBar.analysisStatus === "closed" ? "#333" : "#AAA"
+                                        color: statusBar.analysisStatus === "closed" ? Theme.textPrimary : Theme.textFaint
                                         font.pixelSize: 12
                                         font.bold: statusBar.analysisStatus === "closed"
                                         anchors.verticalCenter: parent.verticalCenter
                                     }
                                 }
-                                Rectangle { width: 1; height: 15; color: "#DDD" }
+                                Rectangle { width: 1; height: 15; color: Theme.borderDivider }
                                 
                                 // Analyzing indicator (active for 'login' and 'analyzing' states)
                                 Row { 
                                     spacing: 8
                                     Rectangle { 
                                         width: 12; height: 12; radius: 6
-                                        color: statusBar.analysisStatus === "login" || statusBar.analysisStatus === "analyzing" ? "#FFB74D" : "#CCCCCC"
+                                        color: statusBar.analysisStatus === "login" || statusBar.analysisStatus === "analyzing" ? Theme.dotAnalyzing : Theme.toggleBorderOff
                                         anchors.verticalCenter: parent.verticalCenter
                                     }
                                     Text { 
                                         // Show "Logging In" during login, otherwise "Analyzing..."
                                         text: statusBar.analysisStatus === "login" ? "Logging In" : "Analyzing..."
-                                        color: statusBar.analysisStatus === "login" || statusBar.analysisStatus === "analyzing" ? "#333" : "#AAA"
+                                        color: statusBar.analysisStatus === "login" || statusBar.analysisStatus === "analyzing" ? Theme.textPrimary : Theme.textFaint
                                         font.pixelSize: 12
                                         font.bold: statusBar.analysisStatus === "login" || statusBar.analysisStatus === "analyzing"
                                         anchors.verticalCenter: parent.verticalCenter
                                     }
                                 }
-                                Rectangle { width: 1; height: 15; color: "#DDD" }
+                                Rectangle { width: 1; height: 15; color: Theme.borderDivider }
 
                                 // Ready indicator
                                 Row { 
                                     spacing: 8
                                     Rectangle { 
                                         width: 12; height: 12; radius: 6
-                                        color: statusBar.analysisStatus === "ready" ? "#00FF00" : "#CCCCCC"
+                                        color: statusBar.analysisStatus === "ready" ? Theme.dotReady : Theme.toggleBorderOff
                                         anchors.verticalCenter: parent.verticalCenter
                                     }
                                     Text { 
                                         text: "Ready"
-                                        color: statusBar.analysisStatus === "ready" ? "#333" : "#AAA"
+                                        color: statusBar.analysisStatus === "ready" ? Theme.textPrimary : Theme.textFaint
                                         font.pixelSize: 12
                                         font.bold: statusBar.analysisStatus === "ready"
                                         anchors.verticalCenter: parent.verticalCenter
@@ -516,7 +558,7 @@ Item {
                             
                             Rectangle {
                                 anchors.fill: parent
-                                color: "#D0A0FF"
+                                color: Theme.borderSelected
                                 opacity: 0.5
                                 visible: decorationContainer.decorationImages.length < 5
                                 rotation: 15
@@ -543,7 +585,7 @@ Item {
                             
                             Rectangle {
                                 anchors.fill: parent
-                                color: "#FF80AB"
+                                color: Theme.accent
                                 opacity: 0.6
                                 visible: decorationContainer.decorationImages.length < 5
                                 rotation: -10
@@ -570,7 +612,7 @@ Item {
                             
                             Rectangle {
                                 anchors.fill: parent
-                                color: "#6A0DAD"
+                                color: Theme.accent
                                 opacity: 0.8
                                 visible: decorationContainer.decorationImages.length < 5
                                 rotation: -5
@@ -597,7 +639,7 @@ Item {
                             
                             Rectangle {
                                 anchors.fill: parent
-                                color: "#80D8FF"
+                                color: Theme.accentHover
                                 opacity: 0.6
                                 visible: decorationContainer.decorationImages.length < 5
                                 rotation: 25
@@ -624,7 +666,7 @@ Item {
                             
                             Rectangle {
                                 anchors.fill: parent
-                                color: "#A0E0FF"
+                                color: Theme.badgeLen
                                 opacity: 0.7
                                 visible: decorationContainer.decorationImages.length < 5
                                 rotation: -20
@@ -657,9 +699,9 @@ Item {
                 Layout.preferredWidth: 4 
                 Layout.preferredHeight: mainGrid.isNarrow ? 600 : -1
 
-                color: "#FFFFFF"
+                color: Theme.bgCard
                 radius: 30
-                border.color: "#E0E0E0"
+                border.color: Theme.borderCard
                 border.width: 1
                 clip: true
 
@@ -673,7 +715,7 @@ Item {
                         text: "Synchronization Status" 
                         font.pixelSize: 20
                         font.bold: true
-                        color: "#1A1A1A" 
+                        color: Theme.textTitle 
                     }
 
 
@@ -741,7 +783,7 @@ Item {
                                 Text {
                                     text: "last played"
                                     font.pixelSize: 10
-                                    color: "#999"
+                                    color: Theme.textLight
                                     Layout.preferredWidth: 120
                                     Layout.leftMargin: 12
                                     Layout.rightMargin: 24
@@ -751,7 +793,7 @@ Item {
                                 Text {
                                     text: "last synced"
                                     font.pixelSize: 10
-                                    color: "#999"
+                                    color: Theme.textLight
                                     Layout.fillWidth: true
                                 }
                             }
@@ -759,11 +801,11 @@ Item {
                         
                         Repeater {
                             model: [
-                                { label: "PST", color: "#00A0E9", code: 0 },
-                                { label: "PRS", color: "#50C050", code: 1 },
-                                { label: "FTR", color: "#A060FF", code: 2 },
-                                { label: "ETR", color: "#808080", code: 4 },
-                                { label: "BYD", color: "#E04040", code: 3 }
+                                { label: "PST", color: Theme.diffPst, code: 0 },
+                                { label: "PRS", color: Theme.diffPrs, code: 1 },
+                                { label: "FTR", color: Theme.diffFtr, code: 2 },
+                                { label: "ETR", color: Theme.diffEtr, code: 4 },
+                                { label: "BYD", color: Theme.diffByd, code: 3 }
                             ]
                             
                             delegate: Item {
@@ -775,7 +817,7 @@ Item {
                                 Rectangle {
                                     anchors.bottom: parent.bottom
                                     width: parent.width; height: 1
-                                    color: "#F0F0F0"
+                                    color: Theme.bgButton
                                     visible: index < 4
                                 }
                                 
@@ -965,7 +1007,7 @@ Item {
                                             text: modelData.label
                                             font.pixelSize: 11
                                             font.bold: true
-                                            color: "white"
+                                            color: Theme.bgCard
                                         }
                                     }
                                     
@@ -1036,15 +1078,15 @@ Item {
                                                 text: titleTip.text
                                                 font.family: analyzeRoot.titleFontFamily
                                                 font.pixelSize: 12
-                                                color: "#FFFFFF"
+                                                color: Theme.bgCard
                                                 horizontalAlignment: Text.AlignHCenter
                                             }
                                             
                                             background: Rectangle {
-                                                color: "#E6222222"
+                                                color: Theme.overlayDarker
                                                 radius: 6
                                                 border.width: 1
-                                                border.color: "#33FFFFFF"
+                                                border.color: Theme.borderOverlay
                                             }
                                             
                                             y: parent.height + 6
@@ -1100,7 +1142,7 @@ Item {
                                                 text: displayPinData.formatted_time_played || "-"
                                                 font.pixelSize: 12
                                                 font.bold: true
-                                                color: "#333"
+                                                color: Theme.textPrimary
                                                 Layout.preferredWidth: 120
                                                 verticalAlignment: Text.AlignVCenter
                                             }
@@ -1112,7 +1154,7 @@ Item {
                                                 text: displayPinData.formatted_updated_at || "-"
                                                 font.pixelSize: 12
                                                 font.bold: true
-                                                color: "#333"
+                                                color: Theme.textPrimary
                                                 elide: Text.ElideRight
                                             }
                                         }
@@ -1129,7 +1171,7 @@ Item {
                                                 Layout.fillWidth: true
                                                 height: 6
                                                 radius: 3
-                                                color: "#E0E0E0"
+                                                color: Theme.borderCard
                                                 clip: true
                                                 
                                                 // Bar Indicator
@@ -1168,7 +1210,7 @@ Item {
                                                 }
                                                 font.pixelSize: 11
                                                 font.weight: progressContainer.isCountModeCompleted ? Font.Bold : Font.Normal
-                                                color: progressContainer.isCountModeCompleted ? "#2E7D32" : "black"
+                                                color: progressContainer.isCountModeCompleted ? Theme.googleTitle : "black"
                                                 Layout.minimumWidth: 20
                                                 horizontalAlignment: Text.AlignRight
                                             }
@@ -1198,7 +1240,7 @@ Item {
                                         Text {
                                             anchors.centerIn: parent
                                             text: "✓"
-                                            color: "white"
+                                            color: Theme.bgCard
                                             font.pixelSize: 18
                                             font.bold: true
                                         }
@@ -1284,42 +1326,32 @@ Item {
                         id: logModel
                     }
 
-                    function formatLogHtml(message) {
+                    function parseLogMessage(message) {
                         var regex = /^\[([\d:]+)\](?:\[([A-Z]+)\])?\s+([\s\S]*)$/
                         var match = message.match(regex)
                         
-                        var timestampColor = "#AAA"
-                        var messageColor = "#666"
-                        var diffColors = {
-                            "PST": "#00A0E9",
-                            "PRS": "#50C050",
-                            "FTR": "#A060FF",
-                            "BYD": "#E04040",
-                            "ETR": "#808080"
-                        }
-                        
                         if (match) {
-                            var timestamp = match[1]
-                            var diffTag = match[2]
-                            var content = match[3]
-                            
-                            var html = "<span style='color:" + timestampColor + ";'>[" + timestamp + "]</span> "
-                            if (diffTag) {
-                                var dColor = diffColors[diffTag] || "#888"
-                                html += "<span style='color:" + dColor + "; font-weight:bold;'>[" + diffTag + "]</span> "
+                            return {
+                                "isStructured": true,
+                                "timestamp": match[1],
+                                "diffTag": match[2] || "",
+                                "content": match[3]
                             }
-                            html += "<span style='color:" + messageColor + ";'>" + content + "</span>"
-                            return html
                         }
                         
-                        return "<span style='color:" + messageColor + ";'>" + message + "</span>"
+                        return {
+                            "isStructured": false,
+                            "timestamp": "",
+                            "diffTag": "",
+                            "content": message
+                        }
                     }
 
                     Connections {
                         target: analysisHandler
                         function onLogAdded(message) {
-                            var html = lastSavedInfoContent.formatLogHtml(message)
-                            logModel.append({ "logHtml": html })
+                            var parsed = lastSavedInfoContent.parseLogMessage(message)
+                            logModel.append(parsed)
                             if (logView.count > 0) {
                                 logView.positionViewAtEnd()
                             }
@@ -1328,7 +1360,7 @@ Item {
 
                     Text {
                         text: "LIVE LOGS"
-                        color: "#888"
+                        color: Theme.textMuted
                         font.bold: true
                         font.pixelSize: 11
                     }
@@ -1337,9 +1369,9 @@ Item {
                         Layout.fillWidth: true
                         Layout.fillHeight: true 
                         
-                        color: "#F8F8F8"
+                        color: Theme.bgCapsule
                         radius: 12
-                        border.color: "#EEEEEE"
+                        border.color: Theme.borderSubtle
 
                         ListView {
                             id: logView
@@ -1352,7 +1384,24 @@ Item {
                             delegate: Text {
                                 width: ListView.view.width
                                 textFormat: Text.RichText
-                                text: logHtml
+                                text: {
+                                    if (isStructured) {
+                                        var html = "<span style='color:" + Theme.textFaint + ";'>[" + timestamp + "]</span> "
+                                        if (diffTag !== "") {
+                                            var dColor = Theme.textMuted
+                                            if (diffTag === "PST") dColor = Theme.diffPst
+                                            else if (diffTag === "PRS") dColor = Theme.diffPrs
+                                            else if (diffTag === "FTR") dColor = Theme.diffFtr
+                                            else if (diffTag === "BYD") dColor = Theme.diffByd
+                                            else if (diffTag === "ETR") dColor = Theme.diffEtr
+                                            html += "<span style='color:" + dColor + "; font-weight:bold;'>[" + diffTag + "]</span> "
+                                        }
+                                        html += "<span style='color:" + Theme.textSecondary + ";'>" + content + "</span>"
+                                        return html
+                                    } else {
+                                        return "<span style='color:" + Theme.textSecondary + ";'>" + content + "</span>"
+                                    }
+                                }
                                 font.family: "Consolas, monospace"
                                 font.pixelSize: 11
                                 wrapMode: Text.Wrap

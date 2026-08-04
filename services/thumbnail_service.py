@@ -1,10 +1,10 @@
 """
-썸네일 서비스: 경로 검색, 대표 색상 추출.
+썸네일 서비스: 경로 검색.
 
 썸네일 파일 시스템 접근과 이미지 처리를 담당한다.
 """
 import os
-from PyQt6.QtCore import QUrl
+from PyQt6.QtCore import QUrl, Qt
 from PyQt6.QtGui import QImage, QColor
 
 
@@ -16,7 +16,7 @@ THUMBNAIL_PRIORITY = ['ftr', 'byd', 'etr', 'prs', 'pst']
 
 
 class ThumbnailService:
-    """썸네일 경로 검색 및 대표 색상 추출 서비스."""
+    """썸네일 경로 검색 서비스."""
 
     def __init__(self, thumbnails_dir: str):
         self._thumbnails_dir = thumbnails_dir
@@ -69,10 +69,7 @@ class ThumbnailService:
         return self.find_by_priority(arcaea_id)
 
     def get_representative_color(self, arcaea_id: str, difficulty: int) -> str:
-        """
-        썸네일의 대표 색상 계산.
-        Returns: hex color string (e.g. "#FF0000"). 기본값 "#FFFFFF".
-        """
+        """선택된 썸네일에서 추출한 대표 색상을 반환한다."""
         path_url = self.get_path_for_difficulty(arcaea_id, difficulty)
         if not path_url:
             return "#FFFFFF"
@@ -80,7 +77,6 @@ class ThumbnailService:
         local_path = QUrl(path_url).toLocalFile()
         if not local_path:
             local_path = path_url
-
         if not os.path.exists(local_path):
             return "#FFFFFF"
 
@@ -89,10 +85,14 @@ class ThumbnailService:
             if image.isNull():
                 return "#FFFFFF"
 
-            pixel = image.scaled(1, 1).pixel(0, 0)
+            pixel = image.scaled(
+                1,
+                1,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            ).pixel(0, 0)
             color = QColor(pixel)
-
-            h, s, v, a = color.getHsv()
+            h, s, v, _ = color.getHsv()
             v = max(v, 220)
             if s > 20:
                 s = max(s, 180)

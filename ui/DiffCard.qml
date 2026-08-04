@@ -12,7 +12,6 @@ Rectangle {
 
     property string diffName: "FTR"
     property string diffLevel: "11"
-    property string diffColor: "#A060FF"
     property int score: 0
     property string rank: ""
     property int pure: 0
@@ -35,72 +34,24 @@ Rectangle {
     property bool ignoreChart: false  // Consultant Sheet: trap flag
     property bool skillIssues: false  // Consultant Sheet: individual flag
     property bool hardBpm: false      // Consultant Sheet: hard speed change flag
-    property string rankColor: ""  // Pre-computed rank color from Python
     property string clearTypeText: ""  // Pre-computed clear type full text from Python
     property string clearTypeAbbr: ""  // Pre-computed clear type abbreviation from Python
     property int bestPotentialRank: 0
+    // PM/MAX records render FRAME and MAX as two additional rows.
+    property int frameLineCount: hasScore && score >= 10000000 ? 2 : 0
 
     signal clicked(int diff)
     
-    // Filtered state: keep colors but muted, not fully gray
-    // Blend original color with gray for a desaturated look
-    function blendWithGray(hexColor, amount) {
-        // amount: 0 = original, 1 = full gray
-        var r = parseInt(hexColor.substring(1, 3), 16)
-        var g = parseInt(hexColor.substring(3, 5), 16)
-        var b = parseInt(hexColor.substring(5, 7), 16)
-        var grayVal = 160  // Target gray
-        r = Math.round(r + (grayVal - r) * amount)
-        g = Math.round(g + (grayVal - g) * amount)
-        b = Math.round(b + (grayVal - b) * amount)
-        return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')
-    }
-    
-    // Computed colors: filtered = slight desaturation (30%), not full gray
-    property string effectiveTextColor: isFiltered ? "#666" : "#333"
-    property string effectiveDiffColor: isFiltered ? blendWithGray(diffColor, 0.35) : diffColor
-    property string effectiveSubTextColor: isFiltered ? "#999" : "#888"
-
-    // Score Range 필터 강조 색상 (FRAME/MAX 도달 표시에 사용)
-    readonly property string frameHighlightColor: "#5AB8E0"  // 필터 FRAME 색
-    readonly property string maxHighlightColor: "#85D5F5"    // 필터 MAX 색 (밝은 하늘색)
-    
-    // Helper function for rank color (applies filter blending)
-    function getRankColor(baseColor) {
-        if (isFiltered) return blendWithGray(baseColor, 0.4)
-        return baseColor
-    }
-    
-    // Background color based on state - filtered keeps tint but muted
-    function getBackgroundColor() {
-        if (isFiltered) {
-            switch(diffName) {
-                case "PST": return "#F8FAFA"  // Very light blue-gray
-                case "PRS": return "#F8FAF8"  // Very light green-gray
-                case "FTR": return "#FAF8FC"  // Very light purple-gray
-                case "BYD": return "#FAF8F8"  // Very light red-gray
-                case "ETR": return "#F8F8F8"  // Light gray
-                default: return "#FAF8F8"    // Very light red-gray
-            }
-        }
-        if (isSelected) return "#FFFFFF"
-        switch(diffName) {
-            case "PST": return "#F5FCFF"
-            case "PRS": return "#F0FFF0"
-            case "FTR": return "#F8F0FF" // Light purple for Future
-            case "BYD": return "#FFF5F5" // Light red for Beyond
-            case "ETR": return "#F5F0F5"
-            default: return "#FFF5F5"
-        }
-    }
-
     Layout.fillWidth: true
     Layout.fillHeight: true
-    // 320(기본) + 22(FRAME 라인). 실제 높이는 부모 컨테이너가 fillHeight로 결정.
-    Layout.preferredHeight: 342
+    // Keep the two PM rows inside the card even when the parent only honors
+    // the preferred size. minimumHeight prevents the bottom row from being
+    // compressed away by the surrounding RowLayout.
+    Layout.preferredHeight: 342 + frameLineCount * 18
+    Layout.minimumHeight: 342 + frameLineCount * 18
     radius: 15
-    color: getBackgroundColor()
-    border.color: isFiltered ? blendWithGray(diffColor, 0.5) : (isSelected ? diffColor : "#E0E0E0")
+    color: Theme.getDiffCardBackground(difficulty, isSelected, isFiltered)
+    border.color: isFiltered ? Theme.getFilteredDiffCardBorder(difficulty) : (isSelected ? Theme.getDiffColor(difficulty) : Theme.borderCard)
     border.width: (isSelected && !isFiltered) ? 2 : 1
     clip: true  // Prevent content from overflowing card boundaries
     
@@ -114,13 +65,19 @@ Rectangle {
     
     // Diagonal stripes overlay for filtered state (subtle disabled indicator)
     Canvas {
+        id: filteredPattern
+        property color stripeColor: Theme.filteredCardStripe
         anchors.fill: parent
         visible: isFiltered
-        opacity: 0.03
+        opacity: Theme.filteredCardStripeOpacity
+        onStripeColorChanged: requestPaint()
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+        onVisibleChanged: if (visible) requestPaint()
         onPaint: {
             var ctx = getContext("2d")
             ctx.reset()
-            ctx.strokeStyle = "#000000"
+            ctx.strokeStyle = stripeColor
             ctx.lineWidth = 1
             var spacing = 12
             for (var i = -height; i < width + height; i += spacing) {
@@ -137,6 +94,7 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: 20
         spacing: 8
+        opacity: isFiltered ? Theme.filteredCardContentOpacity : 1.0
         
         // Header: Difficulty Name + Level
         RowLayout {
@@ -148,7 +106,7 @@ Rectangle {
             Text { 
                 id: diffTitleText
                 text: diffName + " " + diffLevel
-                color: effectiveDiffColor; font.bold: true; font.pixelSize: 18
+                color: Theme.getDiffColor(difficulty); font.bold: true; font.pixelSize: 18
                 
                 Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
                 // Allow shrinking to prevent layout blowout, ensuring proper width reporting
@@ -180,7 +138,7 @@ Rectangle {
                 property bool performAbbreviation: (titleMetrics.width + safetyPadding + clearTextMeasure.width) > headerRow.width
                 
                 text: performAbbreviation ? clearTypeAbbr : clearTypeText
-                color: effectiveSubTextColor; font.pixelSize: 10
+                color: Theme.textSecondary; font.pixelSize: 10
                 visible: hasScore 
                 
                 Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
@@ -203,12 +161,12 @@ Rectangle {
                     spacing: 0
                     Text { 
                         text: shinyBp > 0 ? (Math.round(shinyBp * 100) % 10 === 0 ? shinyBp.toFixed(1) : shinyBp.toFixed(2)) : "-"
-                        font.bold: true; font.pixelSize: 12; color: effectiveTextColor
+                        font.bold: true; font.pixelSize: 12; color: Theme.textPrimary
                         anchors.horizontalCenter: parent.horizontalCenter
                     }
                     Text { 
                         text: shinyWrapper.width < 50 ? "S-BP" : "Shiny"
-                        font.pixelSize: 10; color: effectiveSubTextColor
+                        font.pixelSize: 10; color: Theme.textSecondary
                         anchors.horizontalCenter: parent.horizontalCenter
                     }
                 }
@@ -223,12 +181,12 @@ Rectangle {
                     spacing: 0
                     Text { 
                         text: bp > 0 ? bp.toFixed(1) : "-"
-                        font.bold: true; font.pixelSize: 12; color: effectiveTextColor
+                        font.bold: true; font.pixelSize: 12; color: Theme.textPrimary
                         anchors.horizontalCenter: parent.horizontalCenter
                     }
                     Text { 
                         text: "BP"
-                        font.pixelSize: 10; color: effectiveSubTextColor
+                        font.pixelSize: 10; color: Theme.textSecondary
                         anchors.horizontalCenter: parent.horizontalCenter
                     }
                 }
@@ -244,12 +202,12 @@ Rectangle {
                     spacing: 0
                     Text { 
                         text: perceivedBp > 0 ? (Math.round(perceivedBp * 100) % 10 === 0 ? perceivedBp.toFixed(1) : perceivedBp.toFixed(2)) : "-"
-                        font.bold: true; font.pixelSize: 12; color: effectiveTextColor
+                        font.bold: true; font.pixelSize: 12; color: Theme.textPrimary
                         anchors.horizontalCenter: parent.horizontalCenter
                     }
                     Text { 
                         text: perceivedWrapper.width < 50 ? "P-BP" : "Perceived"
-                        font.pixelSize: 10; color: effectiveSubTextColor
+                        font.pixelSize: 10; color: Theme.textSecondary
                         anchors.horizontalCenter: parent.horizontalCenter
                     }
                 }
@@ -261,7 +219,7 @@ Rectangle {
         // Score + Rank
         Text { 
             text: hasScore ? score : "-"
-            font.bold: true; font.pixelSize: 24; color: effectiveTextColor 
+            font.bold: true; font.pixelSize: 24; color: Theme.textTitle 
         }
         RowLayout {
             Layout.fillWidth: true
@@ -271,7 +229,7 @@ Rectangle {
             Text {
                 text: rank !== "" ? rank : "PM"
                 font.bold: true; font.pixelSize: 14
-                color: getRankColor(rankColor)
+                color: Theme.getRankColor(rank)
                 opacity: rank !== "" ? 1.0 : 0.0
             }
             Item { Layout.fillWidth: true }
@@ -286,7 +244,7 @@ Rectangle {
                     text: "BEST "
                     font.bold: true
                     font.pixelSize: 11
-                    color: getRankColor("#6A6A8A")
+                    color: Theme.bestPotentialMark
                     anchors.baseline: rankNum.baseline
                     anchors.right: rankNum.left
                 }
@@ -295,7 +253,7 @@ Rectangle {
                     text: bestPotentialRank.toString()
                     font.bold: true
                     font.pixelSize: 14
-                    color: getRankColor("#6A6A8A")
+                    color: Theme.bestPotentialMark
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                 }
@@ -310,24 +268,24 @@ Rectangle {
             rowSpacing: 6
             columnSpacing: 10
             
-            Text { text: "Pure"; color: effectiveSubTextColor; font.pixelSize: 12 }
+            Text { text: "Pure"; color: Theme.textSecondary; font.pixelSize: 12 }
             Text { 
                 text: hasScore ? pure + (shinyPure > 0 ? " (" + shinyPure + ")" : "") : "-"
-                color: effectiveTextColor; font.bold: true; font.pixelSize: 12
+                color: Theme.textPrimary; font.bold: true; font.pixelSize: 12
                 Layout.fillWidth: true; horizontalAlignment: Text.AlignRight
             }
             
-            Text { text: "Far"; color: effectiveSubTextColor; font.pixelSize: 12 }
+            Text { text: "Far"; color: Theme.textSecondary; font.pixelSize: 12 }
             Text { 
                 text: hasScore ? far.toString() : "-"
-                color: isFiltered ? "#C0A060" : "#E0A000"; font.bold: true; font.pixelSize: 12
+                color: Theme.scoreFar; font.bold: true; font.pixelSize: 12
                 Layout.fillWidth: true; horizontalAlignment: Text.AlignRight
             }
             
-            Text { text: "Lost"; color: effectiveSubTextColor; font.pixelSize: 12 }
+            Text { text: "Lost"; color: Theme.textSecondary; font.pixelSize: 12 }
             Text { 
                 text: hasScore ? lost.toString() : "-"
-                color: isFiltered ? "#C08080" : "#E04040"; font.bold: true; font.pixelSize: 12
+                color: Theme.scoreLost; font.bold: true; font.pixelSize: 12
                 Layout.fillWidth: true; horizontalAlignment: Text.AlignRight
             }
             
@@ -336,18 +294,18 @@ Rectangle {
                 Layout.columnSpan: 2
                 Layout.fillWidth: true
                 height: 1
-                color: isFiltered ? "#EFEFEF" : "#E0E0E0"
+                color: Theme.borderDivider
                 Layout.topMargin: 4
                 Layout.bottomMargin: 4
             }
             
             // Potential Value
-            Text { text: "Potential"; color: effectiveSubTextColor; font.pixelSize: 12 }
+            Text { text: "Potential"; color: Theme.textSecondary; font.pixelSize: 12 }
             Text {
                 text: (potential !== null && hasScore)
                       ? (Math.floor(potential * 10000) / 10000).toFixed(4)
                       : "-"
-                color: isFiltered ? effectiveSubTextColor : "#666"
+                color: Theme.textPrimary
                 font.bold: true
                 font.pixelSize: 12
                 Layout.fillWidth: true
@@ -359,10 +317,9 @@ Rectangle {
                 readonly property bool framePlain: (scoreBelowMax + cut200) <= 0
                 Layout.columnSpan: 2
                 Layout.alignment: Qt.AlignRight
-                visible: hasScore && score >= 10000000
+                visible: frameLineCount > 0
                 text: framePlain ? "FRAME" : "FRAME-" + (scoreBelowMax + cut200)
-                color: framePlain ? getRankColor(frameHighlightColor)
-                                  : (isFiltered ? effectiveSubTextColor : "#666")
+                color: framePlain ? Theme.frameHighlight : Theme.textSecondary
                 font.bold: framePlain
                 font.pixelSize: 11
             }
@@ -372,10 +329,9 @@ Rectangle {
                 readonly property bool maxPlain: (pure + far + lost - shinyPure) <= 0
                 Layout.columnSpan: 2
                 Layout.alignment: Qt.AlignRight
-                visible: hasScore && score >= 10000000
+                visible: frameLineCount > 0
                 text: maxPlain ? "MAX" : "MAX-" + (pure + far + lost - shinyPure)
-                color: maxPlain ? getRankColor(maxHighlightColor)
-                                : (isFiltered ? effectiveSubTextColor : "#666")
+                color: maxPlain ? Theme.maxHighlight : Theme.textSecondary
                 font.bold: maxPlain
                 font.pixelSize: 11
             }
@@ -384,7 +340,7 @@ Rectangle {
                 Layout.columnSpan: 2
                 Layout.alignment: Qt.AlignRight
                 text: hasScore ? lastPlayedDate : "-"
-                color: isFiltered ? effectiveSubTextColor : "#666"
+                color: Theme.textSecondary
                 font.pixelSize: 11
             }
         }
@@ -407,7 +363,6 @@ Rectangle {
                     text: "⛔"
                     font.pixelSize: 13
                     visible: ignoreChart
-                    opacity: isFiltered ? 0.4 : 1.0
                     
                     MouseArea {
                         id: trapBadgeMouse
@@ -420,10 +375,10 @@ Rectangle {
                         delay: 300
                         contentItem: Column {
                             spacing: 2
-                            Text { text: "Trap"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
-                            Text { text: "Flagged in Consultant Sheet"; color: "#BBB"; font.pixelSize: 10 }
+                            Text { text: "Trap"; color: Theme.textTitle; font.bold: true; font.pixelSize: 12 }
+                            Text { text: "Flagged in Consultant Sheet"; color: Theme.textSecondary; font.pixelSize: 10 }
                         }
-                        background: Rectangle { color: "#333"; radius: 6 }
+                        background: Rectangle { color: Theme.bgHover; radius: 6 }
                     }
                 }
                 
@@ -432,7 +387,6 @@ Rectangle {
                     text: "⚠️"
                     font.pixelSize: 13
                     visible: skillIssues
-                    opacity: isFiltered ? 0.4 : 1.0
 
                     MouseArea {
                         id: skillBadgeMouse
@@ -445,10 +399,10 @@ Rectangle {
                         delay: 300
                         contentItem: Column {
                             spacing: 2
-                            Text { text: "Individual"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
-                            Text { text: "Flagged in Consultant Sheet"; color: "#BBB"; font.pixelSize: 10 }
+                            Text { text: "Individual"; color: Theme.textTitle; font.bold: true; font.pixelSize: 12 }
+                            Text { text: "Flagged in Consultant Sheet"; color: Theme.textSecondary; font.pixelSize: 10 }
                         }
-                        background: Rectangle { color: "#333"; radius: 6 }
+                        background: Rectangle { color: Theme.bgHover; radius: 6 }
                     }
                 }
 
@@ -457,7 +411,6 @@ Rectangle {
                     text: "⏪"
                     font.pixelSize: 13
                     visible: hardBpm
-                    opacity: isFiltered ? 0.4 : 1.0
 
                     MouseArea {
                         id: hardBpmBadgeMouse
@@ -470,10 +423,10 @@ Rectangle {
                         delay: 300
                         contentItem: Column {
                             spacing: 2
-                            Text { text: "Hard Speed Change"; color: "#FFF"; font.bold: true; font.pixelSize: 12 }
-                            Text { text: "Flagged in Consultant Sheet"; color: "#BBB"; font.pixelSize: 10 }
+                            Text { text: "Hard Speed Change"; color: Theme.textTitle; font.bold: true; font.pixelSize: 12 }
+                            Text { text: "Flagged in Consultant Sheet"; color: Theme.textSecondary; font.pixelSize: 10 }
                         }
-                        background: Rectangle { color: "#333"; radius: 6 }
+                        background: Rectangle { color: Theme.bgHover; radius: 6 }
                     }
                 }
             }
@@ -486,7 +439,7 @@ Rectangle {
                     if (playCount <= 0) return "-"
                     return playCount + " plays"
                 }
-                color: isFiltered ? effectiveSubTextColor : "#666"
+                color: Theme.textSecondary
                 font.pixelSize: 12
                 font.bold: true
             }

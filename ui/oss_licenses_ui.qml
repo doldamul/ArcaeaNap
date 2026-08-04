@@ -10,7 +10,7 @@ Window {
     minimumWidth: 880
     minimumHeight: 680
     title: "Open Source Licenses"
-    color: "#F3F4F8"
+    color: Theme.bgWindow
     transientParent: null
 
     property var openSourceItems: []
@@ -25,8 +25,8 @@ Window {
         anchors.fill: parent
         anchors.margins: 14
         radius: 12
-        color: "#FFFFFF"
-        border.color: "#D9DCE5"
+        color: Theme.bgCard
+        border.color: Theme.borderCard
 
         RowLayout {
             anchors.fill: parent
@@ -36,8 +36,8 @@ Window {
             Rectangle {
                 Layout.preferredWidth: 280
                 Layout.fillHeight: true
-                color: "#F0F2F7"
-                border.color: "#D3D8E5"
+                color: Theme.bgWindow
+                border.color: Theme.borderCard
 
                 ListView {
                     id: ossList
@@ -52,9 +52,9 @@ Window {
 
                         width: ossList.width
                         height: 44
-                        color: index === ossWindow.selectedIndex ? "#1499C4" : "#E7E9EE"
+                        color: index === ossWindow.selectedIndex ? Theme.accent : Theme.bgHover
                         border.width: 1
-                        border.color: index === ossWindow.selectedIndex ? "#0E7FA5" : "#D7DAE2"
+                        border.color: index === ossWindow.selectedIndex ? Theme.accentHover : Theme.borderCard
 
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
@@ -63,7 +63,7 @@ Window {
                             width: parent.width - 20
                             elide: Text.ElideRight
                             text: modelData.name || ""
-                            color: index === ossWindow.selectedIndex ? "#FFFFFF" : "#2E2E2E"
+                            color: index === ossWindow.selectedIndex ? Theme.bgCard : Theme.textPrimary
                             font.pixelSize: 18
                         }
 
@@ -84,8 +84,8 @@ Window {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    color: "#FCFCFD"
-                    border.color: "#D7DAE2"
+                    color: Theme.bgCard
+                    border.color: Theme.borderCard
 
                     ScrollView {
                         id: licenseScroll
@@ -102,7 +102,7 @@ Window {
                             font.pixelSize: 15
                             lineHeightMode: Text.FixedHeight
                             lineHeight: 21
-                            color: "#222"
+                            color: Theme.textPrimary
                         }
                     }
                 }
@@ -110,8 +110,8 @@ Window {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 90
-                    color: "#F8F9FC"
-                    border.color: "#D7DAE2"
+                    color: Theme.bgInput
+                    border.color: Theme.borderCard
 
                     Column {
                         anchors.fill: parent
@@ -122,7 +122,8 @@ Window {
                             width: parent.width
                             text: "Copyright Owner: " + (ossWindow.selectedItem ? (ossWindow.selectedItem.copyright || "") : "")
                             font.pixelSize: 16
-                            color: "#333"
+                            color: Theme.textPrimary
+                            linkColor: Theme.accent
                             elide: Text.ElideRight
                         }
 
@@ -134,7 +135,7 @@ Window {
                                 return "Library Link: <a href=\"" + link + "\">" + link + "</a>"
                             }
                             font.pixelSize: 16
-                            color: "#333"
+                            color: Theme.textPrimary
                             elide: Text.ElideRight
                             onLinkActivated: link => Qt.openUrlExternally(link)
                         }

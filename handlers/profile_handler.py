@@ -1,6 +1,6 @@
 """Profile 핸들러: account_connections.json에서 프로필 데이터 로드."""
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant
-from models.constants import POTENTIAL_GRADES, DEFAULT_POTENTIAL_COLOR
+from models.constants import POTENTIAL_GRADES
 from services.connection_store import load_client_connections
 
 
@@ -18,22 +18,13 @@ class ProfileHandler(QObject):
             print(f"[ProfileHandler] Error loading connections: {e}")
             return {}
 
-    @staticmethod
-    def _get_potential_color(rating) -> str:
-        """포텐셜 값 → 색상 코드. POTENTIAL_GRADES 상수 참조."""
-        if rating is None or rating < 0:
-            return DEFAULT_POTENTIAL_COLOR
-        for threshold, color, _, _ in POTENTIAL_GRADES:
-            if rating >= threshold:
-                return color
-        return DEFAULT_POTENTIAL_COLOR
 
     @staticmethod
     def _get_potential_badge(rating) -> str:
         """포텐셜 값 → 뱃지 텍스트. POTENTIAL_GRADES 상수 참조."""
         if rating is None:
             return ""
-        for threshold, _, badge, _ in POTENTIAL_GRADES:
+        for threshold, badge, _ in POTENTIAL_GRADES:
             if rating >= threshold:
                 return badge
         return ""
@@ -43,7 +34,7 @@ class ProfileHandler(QObject):
         """포텐셜 값 → 별 개수 (0-3). POTENTIAL_GRADES 상수 참조."""
         if rating is None:
             return 0
-        for threshold, _, _, stars in POTENTIAL_GRADES:
+        for threshold, _, stars in POTENTIAL_GRADES:
             if rating >= threshold:
                 return stars
         return 0
@@ -76,7 +67,6 @@ class ProfileHandler(QObject):
             'rating': rating,
             'join_date': ao_info.get('join_date'),
             # 계산된 포텐셜 표시 값
-            'potentialColor': self._get_potential_color(rating),
             'potentialBadge': self._get_potential_badge(rating),
             'potentialStars': self._get_potential_stars(rating),
             'formattedUserCode': self._format_user_code(user_code),

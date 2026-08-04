@@ -16,7 +16,11 @@ import threading
 import sys
 from datetime import datetime, timezone
 from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext, TimeoutError as PlaywrightTimeout
-from utils.browser_utils import get_browser
+from utils.browser_utils import (
+    apply_browser_window_theme,
+    get_browser,
+    get_context_theme_options,
+)
 from enum import IntEnum
 from dataclasses import dataclass, field
 from collections import deque
@@ -119,7 +123,7 @@ class ThumbnailCollector:
 
 
 class ArcaeaOnline:
-    def __init__(self):
+    def __init__(self, dark_mode=False):
         self.status = AnalysisStatus()
         self.playwright = None
         self.browser: Optional[Browser] = None
@@ -153,6 +157,11 @@ class ArcaeaOnline:
         # Network state flags
         self._is_api_fetching = False
         self._wake_event = threading.Event()
+        self._theme_lock = threading.Lock()
+        self._requested_dark_mode = bool(dark_mode)
+        self._browser_dark_mode = None
+        self._browser_page_dark_mode = None
+        self._browser_window_dark_mode = None
         # 콘솔 이벤트 단일 진실 소스 (유실 방지: maxlen 없음)
         # append=디스패처 greenlet / popleft=메인 루프, 동일 OS 스레드 교대 실행이라 락 불필요
         self._console_events: deque = deque()
@@ -210,6 +219,272 @@ class ArcaeaOnline:
     
     def set_login_completed_callback(self, callback):
         self.login_completed_callback = callback
+
+    def set_dark_mode(self, is_dark_mode: bool) -> None:
+        """Request a browser color scheme update from another thread."""
+        with self._theme_lock:
+            self._requested_dark_mode = bool(is_dark_mode)
+        self._wake_event.set()
+
+    def _get_requested_dark_mode(self) -> bool:
+        """Return the requested browser color scheme under the theme lock."""
+        with self._theme_lock:
+            return self._requested_dark_mode
+
+    def initialize_browser(self, viewport: Dict[str, int]) -> None:
+        """Start one themed Playwright browser session and create its page."""
+        dark_mode = self._get_requested_dark_mode()
+        self._browser_pid = None
+        try:
+            self.playwright = sync_playwright().start()
+            self.browser = get_browser(
+                self.playwright,
+                headless=False,
+                is_dark_mode=dark_mode,
+            )
+            self.context = self.browser.new_context(
+                viewport=viewport,
+                **get_context_theme_options(dark_mode),
+            )
+            if dark_mode:
+                css_content = (
+                    "html, body, #app, .player-site-content { background-color: #1e1e1e !important; background: #1e1e1e !important; color: #e0e0e0 !important; }\n"
+                    ".loading-screen { background-color: #1e1e1e !important; }\n"
+                    "#app > section > div:nth-child(3) > div.content > span { background: transparent !important; }\n"
+                    ".banner.castle-banner, .castle-banner { background-color: rgba(0,0,0,0.4) !important; background-blend-mode: darken !important; filter: none !important; }\n"
+                    ".castle-banner:after { background: linear-gradient(0deg, #1e1e1e 0%, rgba(30, 30, 30, 0.2) 60%, rgba(30, 30, 30, 0) 100%) !important; border: none !important; }\n"
+                    "header .logo-arc, header .menu-hexagon { filter: none !important; opacity: 1 !important; }\n"
+                    ".hexagon-title { background-color: #282828 !important; }\n"
+                    "#app > section > div:nth-child(3) > div.content > span > div > div > img, .hexagon-title .line-title img, .page-playersite > img { filter: invert(0.95) brightness(1.3) !important; }\n"
+                    "div.menu-friend > span:nth-child(2) > div svg path[fill=\"#FFFFFF\"], .btn-hexagon svg path[fill=\"#FFFFFF\"], .btn-hexagon svg path[fill=\"#ffffff\"], .btn-hexagon svg path[fill=\"#fff\"] { fill: #1e1e1e !important; }\n"
+                    "div.menu-friend > span:nth-child(2) > div svg path[fill=\"#CCCCCC\"], .btn-hexagon svg path[fill=\"#CCCCCC\"], .btn-hexagon svg path[fill=\"#cccccc\"], .btn-hexagon svg path[fill=\"#ccc\"] { fill: #333333 !important; }\n"
+                    "div.menu-friend > span:nth-child(2) > div span svg line, .btn-hexagon svg line { stroke: #e0e0e0 !important; }\n"
+                    ".btn-hexagon, .btn-hexagon p, .btn-hexagon span, .btn-hexagon div { color: #e0e0e0 !important; }\n"
+                    "#select-difficulty > div > div > div, .difficulty-diamond, .difficulty-selector { background: transparent !important; border: none !important; box-shadow: none !important; }\n"
+                    ".difficulty-diamond:not(.active) img { filter: brightness(0.3) opacity(0.6) !important; }\n"
+                    ".difficulty-diamond:not(.active) .label { color: #888888 !important; }\n"
+                    ".difficulty-diamond.active .label { color: #ffffff !important; }\n"
+                    ".card-container, .card, .content-bg-white { background-color: #1e1e1e !important; border: none !important; color: #e0e0e0 !important; }\n"
+                    ".user, .main-card, .cardfriend { color: #e0e0e0 !important; }\n"
+                    ".subhead, .subhead * { background-color: transparent !important; color: #444444 !important; text-shadow: none !important; }\n"
+                    ".ao-dark-bg-fixed { background-image: none !important; background-color: transparent !important; filter: drop-shadow(0 3px 8px rgba(0,0,0,0.5)) !important; }\n"
+                    ".ao-dark-bg-fixed::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-image: var(--bg-img) !important; background-size: var(--bg-size) !important; background-position: var(--bg-pos) !important; background-repeat: var(--bg-rep) !important; filter: invert(0.88) brightness(1.2) hue-rotate(180deg) url(#ao-remove-shadow) !important; z-index: -1; pointer-events: none; border-radius: inherit; }\n"
+                    ".profile-image .diamond { -webkit-mask-image: radial-gradient(closest-side, black 75%, transparent 100%); mask-image: radial-gradient(closest-side, black 75%, transparent 100%); }\n"
+                    "div.album-data > div.score > div > div > div > div, .cleartype-diamond .content { background: transparent !important; border: none !important; }\n"
+                    ".card .album-data .score { border-top: 1px solid #333333 !important; }\n"
+                    "#app > section > div:nth-child(3) > div.content > div.list-card > div > img, .card-container .line, img.line { filter: invert(0.85) brightness(1.5) !important; opacity: 0.65 !important; }\n"
+                    ".card .album-profile .album-art, .card .album-data.loading span.no-overflow, .card .album-data.loading .experince .ex-main { background-color: #2a2a2a !important; color: transparent !important; background-image: none !important; }\n"
+                    ".search-box { background-color: #1e1e1e !important; border: none !important; border-bottom: 1px solid #444444 !important; border-radius: 0 !important; }\n"
+                    ".search-box:focus-within { border-bottom-color: #e0e0e0 !important; }\n"
+                    ".search-box input { color: #e0e0e0 !important; background: transparent !important; border: none !important; outline: none !important; }\n"
+                    ".search-box input::placeholder { color: #777777 !important; transition: color 0.2s ease; }\n"
+                    ".search-box input:focus::placeholder { color: #cccccc !important; }\n"
+                    ".search-icon, .li-dropdown .button svg path { filter: invert(0.9) brightness(1.2) !important; }\n"
+                    ".dropdown { background-color: #1e1e1e !important; color: #e0e0e0 !important; }\n"
+                    ".dropdown .group-dropdown { background-color: #1e1e1e !important; color: #e0e0e0 !important; }\n"
+                    ".dropdown .line { border-top: 1px solid #333333 !important; }\n"
+                    ".li-dropdown { background-color: transparent !important; border-color: #333333 !important; color: #e0e0e0 !important; }\n"
+                    ".mask, .modal-mask, .overlay-navigation { background-color: rgba(0, 0, 0, 0.65) !important; }\n"
+                    "nav, nav.expand, nav .sidebar, .sidebar { background: #1e1e1e !important; color: #e0e0e0 !important; }\n"
+                    ".link-sidebar, nav .sidebar .navlink a { color: #e0e0e0 !important; }\n"
+                    ".link-sidebar img:not([alt='memories']):not([alt='logo-arc']):not([alt='subscription']) { filter: invert(0.9) brightness(1.2) !important; }\n"
+                    "nav.expand .button, .sidebar .close { filter: invert(0.9) brightness(1.2) !important; }\n"
+                    ".p-pure { color: #b17aff !important; }\n"
+                    ".p-far { color: #ffb84d !important; }\n"
+                    ".p-lost { color: #ff5588 !important; }\n"
+                    "h1:not(.profile-banner__title), h2:not(.partner-character h2), h3:not(.sub-mult), h4, h5, h6, label, .header-ta label { color: #aaaaaa !important; }\n"
+                    ".title .no-overflow, .artist .no-overflow, .count, .obtained { color: #ffffff !important; }\n"
+                    "img.album-jacket { filter: none !important; opacity: 0.95; }\n"
+                    "#app > section > div:nth-child(3) > footer, footer.footer { background-color: #1e1e1e !important; color: #888888 !important; border-top: 1px solid #2a2a2a !important; }\n"
+                    "footer.footer .textlink, footer.footer span { color: #888888 !important; }\n"
+                    "footer.footer a img { filter: brightness(0) invert(1) !important; }\n"
+                    ".modal-container { background-color: #1e1e1e !important; color: #e0e0e0 !important; border: 1px solid #333333 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important; }\n"
+                    ".modal-header, .modal-action { border-color: #333333 !important; }\n"
+                    ".modal-playersite { color: #e0e0e0 !important; }\n"
+                    ".body-modal span { color: #aaaaaa !important; }\n"
+                    ".input-modal-playersite { background-color: #2a2a2a !important; color: #e0e0e0 !important; border: 1px solid #444444 !important; }\n"
+                    ".input-modal-playersite:focus { border-color: #888888 !important; outline: none !important; }\n"
+                    ".modal-container .close { color: #888888 !important; text-shadow: none !important; }\n"
+                    ".modal-container .close:hover { color: #ffffff !important; }\n"
+                    ".modal-container .divider hr { border-color: #333333 !important; }\n"
+                    ".cardfriend .numtext { color: #aaaaaa !important; }\n"
+                    "img.remove { filter: invert(0.85) brightness(1.5) !important; opacity: 0.8 !important; }\n"
+                    ".add-friends p { color: #e0e0e0 !important; }\n"
+                    ".add-friends svg line { stroke: #e0e0e0 !important; }"
+                )
+                css_escaped = css_content.replace("\\", "\\\\").replace("`", "\\`")
+                self.context.add_init_script(f"""
+                    (() => {{
+                        const cssText = `{css_escaped}`;
+                        
+                        const fixBackgrounds = () => {{
+                            document.querySelectorAll('.main-card:not(.ao-dark-bg-fixed):not(.ao-dark-bg-skip), .default:not(.ao-dark-bg-fixed):not(.ao-dark-bg-skip), .cardfriend:not(.ao-dark-bg-fixed):not(.ao-dark-bg-skip), .user:not(.ao-dark-bg-fixed):not(.ao-dark-bg-skip), .btn-hexagon:not(.ao-dark-bg-fixed):not(.ao-dark-bg-skip)').forEach(el => {{
+                                const comp = window.getComputedStyle(el);
+                                const bgImg = comp.backgroundImage;
+                                
+                                let isWhite = false;
+                                if (comp.backgroundColor === 'rgb(255, 255, 255)' || comp.backgroundColor === 'rgba(255, 255, 255, 1)') isWhite = true;
+                                if (bgImg && bgImg.toLowerCase().includes('white')) isWhite = true;
+                                
+                                if (el.classList.contains('btn-hexagon') && !isWhite) {{
+                                    el.classList.add('ao-dark-bg-skip');
+                                    return;
+                                }}
+                                
+                                if (bgImg && bgImg !== 'none') {{
+                                    el.style.setProperty('--bg-img', bgImg);
+                                    el.style.setProperty('--bg-size', comp.backgroundSize);
+                                    el.style.setProperty('--bg-pos', comp.backgroundPosition);
+                                    el.style.setProperty('--bg-rep', comp.backgroundRepeat);
+                                    if (comp.position === 'static') el.style.setProperty('position', 'relative', 'important');
+                                    if (comp.zIndex === 'auto') el.style.setProperty('z-index', '0', 'important');
+                                    el.classList.add('ao-dark-bg-fixed');
+                                }} else {{
+                                    el.classList.add('ao-dark-bg-skip');
+                                }}
+                            }});
+                            
+                            document.querySelectorAll('img.mutual:not(.ao-dark-fixed)').forEach(img => {{
+                                let src = img.getAttribute('src');
+                                if (src && src.startsWith('data:image/svg+xml')) {{
+                                    let newSrc = src.replace(/%23fff/gi, '%231e1e1e')
+                                                    .replace(/%2334333e/gi, '%23e0e0e0')
+                                                    .replace(/flood-opacity=&#39;0.161&#39;/g, "flood-opacity=&#39;0.5&#39;");
+                                    img.setAttribute('src', newSrc);
+                                }}
+                                img.classList.add('ao-dark-fixed');
+                            }});
+                        }};
+
+                        const injectStyle = () => {{
+                            fixBackgrounds();
+                            if (document.getElementById('arcaea-dark-theme')) return true;
+                            const target = document.head || document.documentElement;
+                            if (!target) return false;
+                            
+                            if (!document.getElementById('ao-remove-shadow-container')) {{
+                                const div = document.createElement('div');
+                                div.id = 'ao-remove-shadow-container';
+                                div.innerHTML = `
+                                    <svg width="0" height="0" style="position:absolute; width:0; height:0; pointer-events:none;">
+                                      <filter id="ao-remove-shadow">
+                                        <feComponentTransfer>
+                                          <feFuncA type="linear" slope="4" intercept="-1.2"/>
+                                        </feComponentTransfer>
+                                      </filter>
+                                    </svg>
+                                `;
+                                target.appendChild(div);
+                            }}
+                            
+                            if (document.documentElement) {{
+                                document.documentElement.style.setProperty('background-color', '#1e1e1e', 'important');
+                            }}
+                            
+                            const style = document.createElement('style');
+                            style.id = 'arcaea-dark-theme';
+                            style.textContent = cssText;
+                            target.appendChild(style);
+                            return true;
+                        }};
+                        
+                        if (!injectStyle()) {{
+                            const observer = new MutationObserver((mutations, obs) => {{
+                                fixBackgrounds();
+                                if (injectStyle()) {{
+                                    // Don't disconnect! Keep observing to fix backgrounds dynamically.
+                                }}
+                            }});
+                            observer.observe(document, {{ childList: true, subtree: true }});
+                        }} else {{
+                            const observer = new MutationObserver(() => fixBackgrounds());
+                            observer.observe(document, {{ childList: true, subtree: true }});
+                        }}
+                        
+                        if (document.readyState === 'loading') {{
+                            document.addEventListener('DOMContentLoaded', () => {{
+                                injectStyle();
+                            }});
+                        }}
+                    }})();
+                """)
+            
+            # 기기/환경에 따른 잠재력 다이아몬드 소수점 렌더링 틀어짐(Baseline Skew) 전역 수정
+            self.context.add_init_script("""
+                (() => {
+                    const cssText = `
+                        .main-card .profile-image .diamond {
+                            display: grid !important;
+                            grid-auto-flow: column !important;
+                            align-items: baseline !important;
+                            align-content: center !important;
+                            justify-content: center !important;
+                        }
+                        .main-card .profile-image .diamond span.fixed {
+                            padding-top: 0 !important;
+                        }
+                    `;
+                    const injectLayoutFix = () => {
+                        if (document.getElementById('ao-layout-fix')) return true;
+                        const target = document.head || document.documentElement;
+                        if (!target) return false;
+                        const style = document.createElement('style');
+                        style.id = 'ao-layout-fix';
+                        style.textContent = cssText;
+                        target.appendChild(style);
+                        return true;
+                    };
+                    if (!injectLayoutFix()) {
+                        const observer = new MutationObserver(() => injectLayoutFix());
+                        observer.observe(document, { childList: true, subtree: true });
+                    }
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', injectLayoutFix);
+                    }
+                })();
+            """)
+            self.page = self.context.new_page()
+            self._browser_pid = self._detect_browser_pid()
+            window_theme_applied = apply_browser_window_theme(
+                self._browser_pid,
+                dark_mode,
+            )
+        except Exception:
+            for resource, close_method in (
+                (self.page, "close"),
+                (self.context, "close"),
+                (self.browser, "close"),
+                (self.playwright, "stop"),
+            ):
+                try:
+                    if resource is not None:
+                        getattr(resource, close_method)()
+                except Exception:
+                    pass
+
+            self.page = None
+            self.context = None
+            self.browser = None
+            self.playwright = None
+            self._browser_pid = None
+            self._browser_dark_mode = None
+            self._browser_page_dark_mode = None
+            self._browser_window_dark_mode = None
+            raise
+
+        self._browser_page_dark_mode = dark_mode
+        self._browser_window_dark_mode = (
+            dark_mode if window_theme_applied is not False else None
+        )
+        self._browser_dark_mode = (
+            dark_mode
+            if self._browser_window_dark_mode == dark_mode
+            else None
+        )
+
+    def _apply_pending_browser_theme(self) -> None:
+        """Browser theme is determined at launch time; runtime changes are disabled."""
+        pass
 
     def set_play_count_mode(self, enabled: bool):
         """Play Count Analyze Mode 토글"""
@@ -271,13 +546,7 @@ class ArcaeaOnline:
         
         try:
             self.log("Initializing browser...")
-            self.playwright = sync_playwright().start()
-            self.browser = get_browser(self.playwright, headless=False)
-            
-            self.context = self.browser.new_context(
-                viewport={'width': 600, 'height': 1000}
-            )
-            self.page = self.context.new_page()
+            self.initialize_browser({'width': 600, 'height': 1000})
             
             # Inject UI event listeners (Vue.js Reactivity Watcher)
             self.page.add_init_script("""
@@ -364,9 +633,6 @@ class ArcaeaOnline:
                 })()
             """)
             
-            # Cache browser PID via window title marker (browser-agnostic)
-            self._browser_pid = self._detect_browser_pid()
-            
             # Response 인터셉트 설정 (썸네일 캐싱용)
             self.setup_browser_listeners()
 
@@ -402,6 +668,8 @@ class ArcaeaOnline:
 
             while self.status.is_running and not self._browser_closed:
                 try:
+                    self._apply_pending_browser_theme()
+
                     # Play Count Mode 토글 감지 → 분석 스레드에서 안전하게 세션 리셋
                     if self._mode_toggle_pending:
                         self._mode_toggle_pending = False
@@ -596,6 +864,9 @@ class ArcaeaOnline:
         self.browser = None
         self.playwright = None
         self._difficulty_tag = None
+        self._browser_dark_mode = None
+        self._browser_page_dark_mode = None
+        self._browser_window_dark_mode = None
 
     def _detect_browser_pid(self):
         """Detect the running Playwright browser PID.
@@ -877,6 +1148,7 @@ class ArcaeaOnline:
                 start_time = time.time()
                 result = None
                 while time.time() - start_time < 30:
+                    self._apply_pending_browser_theme()
                     result = check_login()
                     if result:
                         break
@@ -903,6 +1175,7 @@ class ArcaeaOnline:
             start_time = time.time()
             login_success = False
             while self.status.is_running and (time.time() - start_time < 300):
+                 self._apply_pending_browser_theme()
                  if self._browser_closed: 
                       break
                  try:

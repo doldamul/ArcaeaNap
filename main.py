@@ -13,6 +13,7 @@ from handlers.stats_handler import StatsHandler
 from handlers.statistics_handler import StatisticsHandler
 from handlers.profile_handler import ProfileHandler
 from handlers.settings_handler import SettingsHandler
+from handlers.theme_handler import ThemeHandler
 from handlers.update_handler import UpdateHandler
 from services.about_service import build_about_context
 try:
@@ -106,12 +107,6 @@ def main():
     QSurfaceFormat.setDefaultFormat(fmt)
 
     app = QGuiApplication(sys.argv)
-    # Temporary patch: the UI is light-only, but QtQuick.Controls.Basic controls
-    # without an explicit text color (radio buttons, toggles, the About "Open
-    # Source Licenses" button) fall back to the palette's dark-mode text color and
-    # become invisible under macOS Dark Mode. Force the Light color scheme until a
-    # proper dark theme is implemented.
-    app.styleHints().setColorScheme(Qt.ColorScheme.Light)
     qml_font_context = register_embedded_fonts()
     app_icon, app_logo_source = _resolve_icons()
     about_context = build_about_context(get_app_root())
@@ -140,7 +135,10 @@ def main():
         engine.rootContext().setContextProperty(key, value)
 
     # Register handlers
-    analysis_handler = AnalysisHandler()
+    theme_handler = ThemeHandler()
+    engine.rootContext().setContextProperty("themeHandler", theme_handler)
+
+    analysis_handler = AnalysisHandler(theme_handler)
     engine.rootContext().setContextProperty("analysisHandler", analysis_handler)
 
     startup_handler = StartupHandler()
@@ -156,6 +154,7 @@ def main():
     engine.rootContext().setContextProperty("profileHandler", profile_handler)
 
     settings_handler = SettingsHandler()
+    settings_handler.set_theme_handler(theme_handler)
     settings_handler.set_analyzer(analysis_handler.analyzer)
     analysis_handler.set_settings_handler(settings_handler)  # Enable connection status updates
     engine.rootContext().setContextProperty("settingsHandler", settings_handler)

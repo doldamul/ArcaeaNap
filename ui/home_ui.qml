@@ -166,11 +166,11 @@ Item {
                 Layout.preferredWidth: 6
                 Layout.preferredHeight: mainGrid.isNarrow ? 600 : -1
 
-                color: "#FFFFFF"
+                color: Theme.bgCard
                 radius: 30
                 
                 // 그림자 효과 흉내 (border 이용)
-                border.color: "#E0E0E0"
+                border.color: Theme.borderCard
                 border.width: 1
 
                 RowLayout {
@@ -191,7 +191,7 @@ Item {
 
                             Text {
                                 text: "PLAYER PROFILE"
-                                color: "#999999"
+                                color: Theme.textLight
                                 font.pixelSize: 12
                                 font.letterSpacing: 1.5
                                 visible: homeRoot.showNameInProfile || homeRoot.showDescriptionInProfile
@@ -199,7 +199,7 @@ Item {
 
                             Text {
                                 text: profileData.connected ? (profileData.name || "—") : "—"
-                                color: "#1A1A1A"
+                                color: Theme.textTitle
                                 font.pixelSize: 42
                                 font.bold: true
                                 visible: homeRoot.showNameInProfile
@@ -208,7 +208,7 @@ Item {
                             // 닉네임이 숨겨졌을 때 표시되는 Description 텍스트 (Bold)
                             Text {
                                 text: homeRoot.profileDescriptionText
-                                color: "#1A1A1A"
+                                color: Theme.textTitle
                                 font.pixelSize: 20
                                 font.bold: true
                                 Layout.fillWidth: true
@@ -223,7 +223,7 @@ Item {
                                 text: profileData.connected && profileData.user_code
                                       ? "ID: " + (profileData.formattedUserCode || "")
                                       : ""
-                                color: "#999999"
+                                color: Theme.textLight
                                 font.pixelSize: 16
                                 visible: profileData.connected && profileData.user_code && homeRoot.showFriendCodeInProfile
                             }
@@ -231,7 +231,7 @@ Item {
                             // 닉네임이 보일 때 표시되는 Description 텍스트 (Regular)
                             Text {
                                 text: homeRoot.profileDescriptionText
-                                color: "#666666"
+                                color: Theme.textSecondary
                                 font.pixelSize: 18
                                 Layout.fillWidth: true
                                 Layout.maximumWidth: profileCardRect.width * 0.36
@@ -248,7 +248,7 @@ Item {
                             
                             Text {
                                 text: "POTENTIAL"
-                                color: "#999999"
+                                color: Theme.textLight
                                 font.pixelSize: 12
                                 font.letterSpacing: 1.5
                                 visible: homeRoot.showPotentialInProfile
@@ -259,14 +259,16 @@ Item {
                                 spacing: 2
                                 visible: homeRoot.showPotentialInProfile
                                 
-                                property string colorTheme: (profileData.connected && profileData.potentialColor) ? profileData.potentialColor : "#999999"
+                                property color colorTheme: (profileData.connected && profileData.rating !== null && profileData.rating !== undefined)
+                                    ? Theme.getPotentialColor(profileData.rating)
+                                    : Theme.textLight
                                 property int starCount: (profileData.connected && profileData.potentialStars) ? profileData.potentialStars : 0
                                 property bool hasRating: profileData.connected && profileData.rating !== null && profileData.rating !== undefined
 
                                 // Rating Value (floating directly on background)
                                 Text {
                                     text: potentialContainer.hasRating ? (profileData.rating / 100).toFixed(2) : "—"
-                                    color: potentialContainer.hasRating ? "#2A2A2A" : "#999999"
+                                    color: potentialContainer.hasRating ? Theme.textPotential : Theme.textLight
                                     font.pixelSize: 42
                                     font.bold: true
                                 }
@@ -350,7 +352,7 @@ Item {
                                             spacing: 5
                                             Text { 
                                                 text: "PLAY COUNT" 
-                                                color: "#999999" 
+                                                color: Theme.textLight 
                                                 font.pixelSize: 10 
                                                 font.bold: true
                                                 font.letterSpacing: 1.0
@@ -359,7 +361,7 @@ Item {
                                             Text { 
                                                 id: playCountText
                                                 text: "0" 
-                                                color: "#333333" 
+                                                color: Theme.textPrimary 
                                                 font.pixelSize: 20 
                                                 font.bold: true 
                                                 anchors.right: parent.right
@@ -379,7 +381,7 @@ Item {
                                             verticalAlignment: Text.AlignVCenter
                                             text: modelData.count
                                             font.pixelSize: 15
-                                            color: "#888"
+                                            color: Theme.textMuted
                                         }
                                     }
                                 }
@@ -393,7 +395,7 @@ Item {
                                         Layout.preferredWidth: 50
                                         Layout.preferredHeight: 40
                                         Rectangle { 
-                                            width: 1; height: 30; color: "#DDDDDD" 
+                                            width: 1; height: 30; color: Theme.borderDivider 
                                             anchors.centerIn: parent
                                         }
                                     }
@@ -410,7 +412,7 @@ Item {
                                             verticalAlignment: Text.AlignVCenter
                                             horizontalAlignment: Text.AlignHCenter
                                             text: modelData.name
-                                            color: modelData.color
+                                            color: Theme.getDiffColor(modelData.difficulty)
                                             font.bold: true
                                             font.pixelSize: 14
                                         }
@@ -434,7 +436,7 @@ Item {
                                             spacing: 5
                                             Text { 
                                                 text: "PLAY TIME" 
-                                                color: "#999999" 
+                                                color: Theme.textLight 
                                                 font.pixelSize: 10 
                                                 font.bold: true
                                                 font.letterSpacing: 1.0
@@ -442,7 +444,7 @@ Item {
                                             Text { 
                                                 id: playTimeText
                                                 text: "0h 0m" 
-                                                color: "#333333" 
+                                                color: Theme.textPrimary 
                                                 font.pixelSize: 20 
                                                 font.bold: true 
                                             }
@@ -461,7 +463,7 @@ Item {
                                             verticalAlignment: Text.AlignVCenter
                                             text: modelData.time
                                             font.pixelSize: 15
-                                            color: "#888"
+                                            color: Theme.textMuted
                                         }
                                     }
                                 }
@@ -524,29 +526,29 @@ Item {
                                 orientation: Gradient.Horizontal
                                 
                                 // 초중반에 미리 선명도(알파값)를 끌어올려 끝단에서 튀는 현상을 막는 Ease-Out 형태의 곡선입니다.
-                                GradientStop { position: 0;                                  color: "#00000000" } // 0%
-                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.10;       color: "#1AFFFFFF" } // 10% (기존 5%보다 진하게)
-                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.20;       color: "#33FFFFFF" } // 20%
-                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.35;       color: "#59FFFFFF" } // 35%
-                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.50;       color: "#80FFFFFF" } // 50% (기존 30%에서 대폭 끌어올림)
-                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.65;       color: "#A6FFFFFF" } // 65%
-                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.80;       color: "#CCFFFFFF" } // 80%
-                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.90;       color: "#E0FFFFFF" } // 88%
-                                GradientStop { position: standardMaskRect.fadeEndRatio;              color: "#E6FFFFFF" } // 90% (연장 구간 초입에 이미 거의 다 선명해짐)
+                                GradientStop { position: 0;                                  color: "transparent" } // 0%
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.10;       color: Theme.mask10 } // 10% (기존 5%보다 진하게)
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.20;       color: Theme.borderOverlay } // 20%
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.35;       color: Theme.mask35 } // 35%
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.50;       color: Theme.mask50 } // 50% (기존 30%에서 대폭 끌어올림)
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.65;       color: Theme.mask65 } // 65%
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.80;       color: Theme.mask80 } // 80%
+                                GradientStop { position: standardMaskRect.fadeEndRatio * 0.90;       color: Theme.mask88 } // 88%
+                                GradientStop { position: standardMaskRect.fadeEndRatio;              color: Theme.mask90 } // 90% (연장 구간 초입에 이미 거의 다 선명해짐)
                                 
                                 // 연장 꼬리 구간: 이미 90%까지 도달해 있으므로, 남은 10%의 투명도만 아주 얕고 길게 펴발라 끝이 튀는 현상을 방지
-                                GradientStop { position: standardMaskRect.fadeEndRatio + (standardMaskRect.fullyOpaqueRatio - standardMaskRect.fadeEndRatio) * 0.2; color: "#EBFFFFFF" } // 92%
-                                GradientStop { position: standardMaskRect.fadeEndRatio + (standardMaskRect.fullyOpaqueRatio - standardMaskRect.fadeEndRatio) * 0.4; color: "#F0FFFFFF" } // 94%
-                                GradientStop { position: standardMaskRect.fadeEndRatio + (standardMaskRect.fullyOpaqueRatio - standardMaskRect.fadeEndRatio) * 0.6; color: "#F5FFFFFF" } // 96%
-                                GradientStop { position: standardMaskRect.fadeEndRatio + (standardMaskRect.fullyOpaqueRatio - standardMaskRect.fadeEndRatio) * 0.8; color: "#FAFFFFFF" } // 98%
-                                GradientStop { position: standardMaskRect.fullyOpaqueRatio;                                                         color: "#FFFFFFFF" } // 100% 완전 선명
+                                GradientStop { position: standardMaskRect.fadeEndRatio + (standardMaskRect.fullyOpaqueRatio - standardMaskRect.fadeEndRatio) * 0.2; color: Theme.mask92 } // 92%
+                                GradientStop { position: standardMaskRect.fadeEndRatio + (standardMaskRect.fullyOpaqueRatio - standardMaskRect.fadeEndRatio) * 0.4; color: Theme.mask94 } // 94%
+                                GradientStop { position: standardMaskRect.fadeEndRatio + (standardMaskRect.fullyOpaqueRatio - standardMaskRect.fadeEndRatio) * 0.6; color: Theme.mask96 } // 96%
+                                GradientStop { position: standardMaskRect.fadeEndRatio + (standardMaskRect.fullyOpaqueRatio - standardMaskRect.fadeEndRatio) * 0.8; color: Theme.mask98 } // 98%
+                                GradientStop { position: standardMaskRect.fullyOpaqueRatio;                                                         color: Theme.mask100 } // 100% 완전 선명
                                 
                                 // 우측 코너 페이드: 시각적으로 완전히 투명해진 것처럼 보이지만,
                                 // 너무 일찍 이미지가 사라져버리는 현상을 막기 위해 끝단 투명도를 0%가 아닌 5~10% 수준으로 살짝 남깁니다.
-                                GradientStop { position: 0.920;                              color: "#FFFFFFFF" } // 100% 선명
-                                GradientStop { position: 0.950;                              color: "#B3FFFFFF" } // 70%
-                                GradientStop { position: 0.975;                              color: "#66FFFFFF" } // 40%
-                                GradientStop { position: 1.000;                              color: "#1AFFFFFF" } // 약 10% 불투명 (거의 투명하게 보이지만 형태의 끝단까지 형체가 유지됨)
+                                GradientStop { position: 0.920;                              color: Theme.mask100 } // 100% 선명
+                                GradientStop { position: 0.950;                              color: Theme.mask70 } // 70%
+                                GradientStop { position: 0.975;                              color: Theme.mask40 } // 40%
+                                GradientStop { position: 1.000;                              color: Theme.mask10 } // 약 10% 불투명 (거의 투명하게 보이지만 형태의 끝단까지 형체가 유지됨)
                             }
                         }
 
@@ -563,16 +565,16 @@ Item {
                                 orientation: Gradient.Horizontal
                                 
                                 // 좌측의 짧은 페이드 (절반으로 줄임)
-                                GradientStop { position: 0.000;                              color: "#1AFFFFFF" }
-                                GradientStop { position: 0.0125;                             color: "#66FFFFFF" }
-                                GradientStop { position: 0.025;                              color: "#B3FFFFFF" }
-                                GradientStop { position: 0.040;                              color: "#FFFFFFFF" }
+                                GradientStop { position: 0.000;                              color: Theme.mask10 }
+                                GradientStop { position: 0.0125;                             color: Theme.mask40 }
+                                GradientStop { position: 0.025;                              color: Theme.mask70 }
+                                GradientStop { position: 0.040;                              color: Theme.mask100 }
                                 
                                 // 우측의 짧은 페이드 (절반으로 줄임)
-                                GradientStop { position: 0.960;                              color: "#FFFFFFFF" }
-                                GradientStop { position: 0.975;                              color: "#B3FFFFFF" }
-                                GradientStop { position: 0.9875;                             color: "#66FFFFFF" }
-                                GradientStop { position: 1.000;                              color: "#1AFFFFFF" }
+                                GradientStop { position: 0.960;                              color: Theme.mask100 }
+                                GradientStop { position: 0.975;                              color: Theme.mask70 }
+                                GradientStop { position: 0.9875;                             color: Theme.mask40 }
+                                GradientStop { position: 1.000;                              color: Theme.mask10 }
                             }
                         }
                     }
@@ -613,8 +615,8 @@ Item {
 
                             Rectangle {
                                 anchors.fill: parent
-                                color: "#F0F0F0"
-                                border.color: "#E0E0E0"
+                                color: Theme.bgButton
+                                border.color: Theme.borderCard
                                 border.width: 1
                                 visible: profileImagePath !== "" && !profileImageHome.visible
                             }
@@ -622,7 +624,7 @@ Item {
                             Text {
                                 anchors.centerIn: parent
                                 text: "No Image"
-                                color: "#999999"
+                                color: Theme.textLight
                                 font.pixelSize: 12
                                 visible: profileImagePath !== "" && !profileImageHome.visible
                             }
@@ -640,9 +642,9 @@ Item {
                 Layout.preferredWidth: 4
                 Layout.preferredHeight: mainGrid.isNarrow ? 600 : -1
                 
-                color: "#FFFFFF"
+                color: Theme.bgCard
                 radius: 30
-                border.color: "#E0E0E0"
+                border.color: Theme.borderCard
                 border.width: 1
 
                 ColumnLayout {
@@ -658,12 +660,13 @@ Item {
                         Layout.fillWidth: true
                         Text {
                             text: "Most Played"
+                            color: Theme.textTitle
                             font.pixelSize: 22
                             font.bold: true
                         }
                         Text {
                             text: "Top 10 - " + homeRoot.groupingCriteriaLabel + " • " + homeRoot.aggregationScopeLabel
-                            color: "#999999"
+                            color: Theme.textLight
                             font.pixelSize: 14
                             Layout.alignment: Qt.AlignLeft
                         }
@@ -700,13 +703,13 @@ Item {
                             readonly property real playCountFontSize: isRank1 ? 26 : (isRank2 ? 23 : (isRank3 ? 20 : 18))
                             
                             // Colors
-                            readonly property string playCountColor: isRank1 ? "#C5A028" : (isRank2 ? "#7A7A7A" : (isRank3 ? "#A0522D" : "#984AD0"))
-                            readonly property string rankDiamondBgColor: isRank1 ? "#c2a955" : (isRank2 ? "#8c8f93" : "#b16a48")
-                            readonly property string rankDiamondBorderColor: isRank1 ? "#B8860B" : (isRank2 ? "#636363" : "#8B4513")
-                            readonly property string rankNumberColor: isTop3 ? "white" : "#999999"
-                            readonly property string titleColor: "#333"
-                            readonly property string artistColor: "#888"
-                            readonly property string playsLabelColor: "#999"
+                            readonly property string playCountColor: isRank1 ? Theme.rankGold : (isRank2 ? Theme.rankSilver : (isRank3 ? Theme.rankBronze : Theme.rankPurple))
+                            readonly property string rankDiamondBgColor: isRank1 ? Theme.diamondBg1 : (isRank2 ? Theme.diamondBg2 : Theme.diamondBg3)
+                            readonly property string rankDiamondBorderColor: isRank1 ? Theme.diamondBorder1 : (isRank2 ? Theme.diamondBorder2 : Theme.diamondBorder3)
+                            readonly property string rankNumberColor: isTop3 ? "white" : Theme.textLight
+                            readonly property string titleColor: Theme.textPrimary
+                            readonly property string artistColor: Theme.textMuted
+                            readonly property string playsLabelColor: Theme.textLight
                             
                             height: rowHeight
 
@@ -732,7 +735,7 @@ Item {
                                     layer.enabled: true
                                     layer.effect: MultiEffect {
                                         shadowEnabled: true
-                                        shadowColor: "#40000000"
+                                        shadowColor: Theme.shadowLight
                                         shadowBlur: 4
                                         shadowHorizontalOffset: 1
                                         shadowVerticalOffset: 1
@@ -751,7 +754,7 @@ Item {
                                     layer.enabled: isTop3
                                     layer.effect: MultiEffect {
                                         shadowEnabled: true
-                                        shadowColor: "#80000000"
+                                        shadowColor: Theme.shadowNormal
                                         shadowBlur: 0.5
                                         shadowHorizontalOffset: 0.5
                                         shadowVerticalOffset: 0.5
@@ -794,8 +797,8 @@ Item {
                                     // Placeholder / border
                                     Rectangle {
                                         anchors.fill: parent
-                                        color: "#EEEEEE"
-                                        border.color: "#E0E0E0"
+                                        color: Theme.borderSubtle
+                                        border.color: Theme.borderCard
                                         border.width: 1
                                         visible: thumbnailImage.status !== Image.Ready
                                         z: -1
@@ -829,7 +832,7 @@ Item {
                                         text: model.difficultyName || ""
                                         font.pixelSize: 13
                                         font.bold: true
-                                        color: model.difficultyColor || "#888"
+                                        color: Theme.getDiffColor(model.thumbnailDifficulty !== undefined ? model.thumbnailDifficulty : model.difficulty)
                                         visible: !!model.difficultyName
                                         anchors.bottom: titleLabel.bottom
                                         anchors.bottomMargin: 2
@@ -884,7 +887,7 @@ Item {
                                 text: "No Most Played Data"
                                 font.pixelSize: 22
                                 font.bold: true
-                                color: "#999999"
+                                color: Theme.textLight
                                 horizontalAlignment: Text.AlignHCenter
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 width: Math.min(implicitWidth, parent.width)
@@ -893,7 +896,7 @@ Item {
                             Text {
                                 text: "Adjust Difficulty Filter or play some charts to see statistics here."
                                 font.pixelSize: 14
-                                color: "#BBBBBB"
+                                color: Theme.textDimmed
                                 horizontalAlignment: Text.AlignHCenter
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 width: Math.min(implicitWidth, parent.width)

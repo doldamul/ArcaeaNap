@@ -1,18 +1,19 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
 import QtQuick.Window
 
 Window {
     id: aboutWindow
     width: 480
-    height: contentCol.implicitHeight + 80   // card margins(16*2) + column margins(24*2)
+    // The final height is locked once after the About data has been assigned.
+    // Keep a valid initial size while the window is still hidden.
+    height: 480
     minimumWidth: 480
     maximumWidth: 480
-    minimumHeight: contentCol.implicitHeight + 80
-    maximumHeight: contentCol.implicitHeight + 80
     title: "About"
-    color: "#F3F4F8"
+    color: Theme.bgWindow
     transientParent: null
     flags: Qt.Dialog | Qt.WindowCloseButtonHint | Qt.WindowTitleHint
 
@@ -27,13 +28,45 @@ Window {
     property string termsOfServiceUrl: ""
     property var openSourceItems: []
     signal openOssRequested()
+    property bool windowSizeLocked: false
+    property bool windowSizeLockScheduled: false
+
+    function lockInitialWindowSize() {
+        if (windowSizeLocked || windowSizeLockScheduled)
+            return
+
+        windowSizeLockScheduled = true
+        // ColumnLayout completes its first measurement after the Window has
+        // been shown. Defer two layout turns so implicitHeight is final.
+        Qt.callLater(function() {
+            Qt.callLater(function() {
+                if (windowSizeLocked)
+                    return
+
+                var targetHeight = Math.ceil(contentCol.implicitHeight + 80)
+                if (targetHeight <= 0) {
+                    windowSizeLockScheduled = false
+                    return
+                }
+
+                windowSizeLocked = true
+                height = targetHeight
+                minimumHeight = targetHeight
+                maximumHeight = targetHeight
+            })
+        })
+    }
 
     Rectangle {
-        anchors.fill: parent
-        anchors.margins: 16
+        // Use the window dimensions directly because contentItem has no valid
+        // size until the Window is shown for the first time.
+        x: 16
+        y: 16
+        width: aboutWindow.width - 32
+        height: aboutWindow.height - 32
         radius: 12
-        color: "#FFFFFF"
-        border.color: "#D9DCE5"
+        color: Theme.bgCard
+        border.color: Theme.borderCard
 
         ColumnLayout {
             id: contentCol
@@ -61,12 +94,12 @@ Window {
                         text: aboutWindow.appTitle
                         font.pixelSize: 50
                         font.bold: true
-                        color: "#1A1A1A"
+                        color: Theme.textTitle
                     }
                     Text {
                         text: "Version " + aboutWindow.appVersion
                         font.pixelSize: 18
-                        color: "#666"
+                        color: Theme.textSecondary
                     }
                 }
             }
@@ -80,20 +113,21 @@ Window {
                     width: parent.width
                     text: "Build Date: " + aboutWindow.buildDate
                     font.pixelSize: 14
-                    color: "#444"
+                    color: Theme.textSecondary
                 }
                 Text {
                     width: parent.width
                     text: "Author: doldamul"
                     font.pixelSize: 14
-                    color: "#444"
+                    color: Theme.textSecondary
                 }
                 Text {
                     width: parent.width
                     textFormat: Text.RichText
                     text: "Repository: <a href=\"" + aboutWindow.repositoryUrl + "\">" + aboutWindow.repositoryUrl + "</a>"
                     font.pixelSize: 14
-                    color: "#444"
+                    color: Theme.textSecondary
+                    linkColor: Theme.accent
                     wrapMode: Text.WrapAnywhere
                     onLinkActivated: link => Qt.openUrlExternally(link)
                 }
@@ -108,7 +142,7 @@ Window {
                     text: "Updates"
                     font.pixelSize: 14
                     font.bold: true
-                    color: "#333"
+                    color: Theme.textPrimary
                 }
 
                 Row {
@@ -121,17 +155,23 @@ Window {
                         anchors.verticalCenter: parent.verticalCenter
                         color: {
                             switch (updateHandler ? updateHandler.phase : "") {
-                            case "available": return "#EADCF7"
-                            case "not-available": return "#E2EFE2"
-                            case "error": return "#F7DCDC"
-                            default: return "#E8E8E8"
+                            case "available": return Theme.bgSelected
+                            case "not-available": return Theme.googleBg
+                            case "error": return Theme.statusOff
+                            default: return Theme.bgHover
                             }
                         }
                         Text {
                             id: badgeText
                             anchors.centerIn: parent
                             font.pixelSize: 12
-                            color: "#444"
+                            color: {
+                                switch (updateHandler ? updateHandler.phase : "") {
+                                case "not-available": return Theme.googleTitle
+                                case "error": return Theme.textTitle
+                                default: return Theme.textSecondary
+                                }
+                            }
                             text: {
                                 switch (updateHandler ? updateHandler.phase : "") {
                                 case "checking": return "Checking"
@@ -156,10 +196,10 @@ Window {
                         text: "v" + (updateHandler ? updateHandler.latestVersion : "")
                         font.pixelSize: 13
                         font.bold: true
-                        color: "#6A0DAD"
+                        color: Theme.accent
                     }
 
-                    Button {
+                    Basic.Button {
                         anchors.verticalCenter: parent.verticalCenter
                         // dev(비-frozen)에서는 downloaded 상태의 "설치 및 재시작"을 비활성화.
                         enabled: updateHandler
@@ -186,12 +226,40 @@ Window {
                             default: updateHandler.checkForUpdates()
                             }
                         }
+                        hoverEnabled: true
+                        background: Rectangle {
+                            radius: 6
+                            color: !parent.enabled ? Theme.bgInput
+                                  : (parent.down ? Theme.accentHover
+                                  : (parent.hovered ? Theme.bgHover : Theme.bgButton))
+                            border.color: Theme.borderCard
+                        }
+                        contentItem: Text {
+                            text: parent.text
+                            color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
                     }
-                    Button {
+                    Basic.Button {
                         anchors.verticalCenter: parent.verticalCenter
                         visible: !!updateHandler && updateHandler.phase === "downloaded"
                         text: "Show in Folder"
                         onClicked: { if (updateHandler) updateHandler.revealDownload() }
+                        hoverEnabled: true
+                        background: Rectangle {
+                            radius: 6
+                            color: !parent.enabled ? Theme.bgInput
+                                  : (parent.down ? Theme.accentHover
+                                  : (parent.hovered ? Theme.bgHover : Theme.bgButton))
+                            border.color: Theme.borderCard
+                        }
+                        contentItem: Text {
+                            text: parent.text
+                            color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
                     }
                 }
 
@@ -200,7 +268,7 @@ Window {
                     visible: !!updateHandler && updateHandler.phase === "downloaded" && !updateHandler.isFrozen
                     text: "In-app install isn't supported in dev builds. Use 'Show in Folder' to install manually."
                     font.pixelSize: 12
-                    color: "#999"
+                    color: Theme.textLight
                     wrapMode: Text.Wrap
                 }
 
@@ -213,11 +281,11 @@ Window {
                         width: parent.width
                         height: 6
                         radius: 3
-                        color: "#E0E0E0"
+                        color: Theme.borderCard
                         Rectangle {
                             height: parent.height
                             radius: 3
-                            color: "#6A0DAD"
+                            color: Theme.accent
                             width: parent.width * ((updateHandler ? updateHandler.progressPercent : 0) / 100.0)
                         }
                     }
@@ -225,7 +293,7 @@ Window {
                     Text {
                         width: parent.width
                         font.pixelSize: 12
-                        color: "#666"
+                        color: Theme.textSecondary
                         text: {
                             if (!updateHandler) return ""
                             function fmt(b) {
@@ -246,17 +314,32 @@ Window {
                     textFormat: Text.RichText
                     text: "<a href=\"" + aboutWindow.repositoryUrl + "/releases\">View releases</a>"
                     font.pixelSize: 13
-                    color: "#555"
+                    color: Theme.textSecondary
+                    linkColor: Theme.accent
                     onLinkActivated: link => Qt.openUrlExternally(link)
                 }
             }
 
             // Open Source Licenses Button
-            Button {
+            Basic.Button {
                 Layout.alignment: Qt.AlignHCenter
                 text: "Open Source Licenses"
                 height: 36
                 onClicked: aboutWindow.openOssRequested()
+                hoverEnabled: true
+                background: Rectangle {
+                    radius: 6
+                    color: !parent.enabled ? Theme.bgInput
+                          : (parent.down ? Theme.accentHover
+                          : (parent.hovered ? Theme.bgHover : Theme.bgButton))
+                    border.color: Theme.borderCard
+                }
+                contentItem: Text {
+                    text: parent.text
+                    color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
             }
 
             // Copyright Section
@@ -266,7 +349,7 @@ Window {
                 wrapMode: Text.Wrap
                 horizontalAlignment: Text.AlignHCenter
                 font.pixelSize: 12
-                color: "#777"
+                color: Theme.textMuted
                 lineHeight: 1.2
             }
 
@@ -278,7 +361,7 @@ Window {
                 Text {
                     text: "Homepage ↗"
                     font.pixelSize: 13
-                    color: homepageMouseArea.containsMouse ? "#1A1A1A" : "#555"
+                    color: homepageMouseArea.containsMouse ? Theme.textTitle : Theme.textSecondary
                     font.underline: homepageMouseArea.containsMouse
                     MouseArea {
                         id: homepageMouseArea
@@ -292,7 +375,7 @@ Window {
                 Text {
                     text: "Privacy Policy ↗"
                     font.pixelSize: 13
-                    color: privacyMouseArea.containsMouse ? "#1A1A1A" : "#555"
+                    color: privacyMouseArea.containsMouse ? Theme.textTitle : Theme.textSecondary
                     font.underline: privacyMouseArea.containsMouse
                     MouseArea {
                         id: privacyMouseArea
@@ -306,7 +389,7 @@ Window {
                 Text {
                     text: "Terms of Service ↗"
                     font.pixelSize: 13
-                    color: termsMouseArea.containsMouse ? "#1A1A1A" : "#555"
+                    color: termsMouseArea.containsMouse ? Theme.textTitle : Theme.textSecondary
                     font.underline: termsMouseArea.containsMouse
                     MouseArea {
                         id: termsMouseArea

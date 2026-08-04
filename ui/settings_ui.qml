@@ -15,7 +15,7 @@ Window {
     maximumWidth: 600
     minimumHeight: 600
     title: "Settings"
-    color: "#F3F4F8"
+    color: Theme.bgWindow
     
     // 메인 윈도우 위에 고정되지 않도록 부모 관계 해제
     transientParent: null
@@ -107,7 +107,7 @@ Window {
     Rectangle {
         id: migrationOverlay
         anchors.fill: parent
-        color: "#80000000"
+        color: Theme.shadowNormal
         visible: settingsWindow.isMigrating
         z: 1000
         
@@ -121,7 +121,7 @@ Window {
             width: 280
             height: 120
             radius: 16
-            color: "#FFFFFF"
+            color: Theme.bgCard
             
             Column {
                 anchors.centerIn: parent
@@ -136,7 +136,7 @@ Window {
                     text: "Moving cache files..."
                     font.pixelSize: 14
                     font.bold: true
-                    color: "#333"
+                    color: Theme.textPrimary
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
             }
@@ -154,9 +154,9 @@ Window {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         
         background: Rectangle {
-            color: "#FFFFFF"
+            color: Theme.bgCard
             radius: 12
-            border.color: "#E53935"
+            border.color: Theme.statusOff
             border.width: 2
         }
         
@@ -170,21 +170,27 @@ Window {
                 text: "⚠️ Migration Failed"
                 font.bold: true
                 font.pixelSize: 16
-                color: "#E53935"
+                color: Theme.statusOff
             }
             
             Text {
                 id: errorMessageText
                 wrapMode: Text.WordWrap
                 width: parent.width
-                color: "#333"
+                color: Theme.textPrimary
             }
             
             Basic.Button {
                 text: "OK"
                 anchors.right: parent.right
                 onClicked: errorPopup.close()
-                background: Rectangle { color: "#F0F0F0"; radius: 6 }
+                background: Rectangle { color: Theme.bgButton; radius: 6 }
+                contentItem: Text {
+                    text: parent.text
+                    color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
             }
         }
     }
@@ -199,9 +205,9 @@ Window {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         background: Rectangle {
-            color: "#FFFFFF"
+            color: Theme.bgCard
             radius: 12
-            border.color: "#FB8C00"
+            border.color: Theme.browserBtnBg
             border.width: 2
         }
 
@@ -215,14 +221,14 @@ Window {
                 text: "⚠ Concurrent Write Risk Detected"
                 font.bold: true
                 font.pixelSize: 16
-                color: "#E65100"
+                color: Theme.browserBtnBg
             }
 
             Text {
                 id: songDbWriteConflictText
                 width: parent.width
                 wrapMode: Text.WordWrap
-                color: "#333"
+                color: Theme.textPrimary
             }
 
             Row {
@@ -232,7 +238,13 @@ Window {
                 Basic.Button {
                     text: "Cancel"
                     onClicked: songDbWriteConflictPopup.close()
-                    background: Rectangle { color: "#F0F0F0"; radius: 6 }
+                    background: Rectangle { color: Theme.bgButton; radius: 6 }
+                    contentItem: Text {
+                        text: parent.text
+                        color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
 
                 Basic.Button {
@@ -241,10 +253,10 @@ Window {
                         songDbWriteConflictPopup.close()
                         if (settingsHandler) settingsHandler.forceUpdateSongDatabase()
                     }
-                    background: Rectangle { color: "#FB8C00"; radius: 6 }
+                    background: Rectangle { color: Theme.browserBtnBg; radius: 6 }
                     contentItem: Text {
                         text: "Force Update"
-                        color: "white"
+                        color: Theme.bgCard
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -269,9 +281,9 @@ Window {
         }
 
         background: Rectangle {
-            color: "#FFFFFF"
+            color: Theme.bgCard
             radius: 12
-            border.color: "#E0E0E0"
+            border.color: Theme.borderCard
             border.width: 1
         }
 
@@ -289,7 +301,7 @@ Window {
                     text: "Which cache path data would you like to use?"
                     font.bold: true
                     font.pixelSize: 16
-                    color: "#333"
+                    color: Theme.textPrimary
                     wrapMode: Text.WordWrap
                 }
 
@@ -298,8 +310,14 @@ Window {
                     hoverEnabled: true
                     onClicked: cachePathModeDialog.close()
                     background: Rectangle {
-                        color: parent.hovered ? "#EFEFEF" : "transparent"
+                        color: parent.hovered ? Theme.hoverOverlay : "transparent"
                         radius: 12
+                    }
+                    contentItem: Text {
+                        text: parent.text
+                        color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                 }
             }
@@ -311,7 +329,7 @@ Window {
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
-                color: "#444"
+                color: Theme.textSecondary
             }
 
             RowLayout {
@@ -337,7 +355,13 @@ Window {
                         }
                         cachePathModeDialog.close()
                     }
-                    background: Rectangle { color: "#F0F0F0"; radius: 8 }
+                    background: Rectangle { color: Theme.bgButton; radius: 8 }
+                    contentItem: Text {
+                        text: parent.text
+                        color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
 
                 Basic.Button {
@@ -359,19 +383,30 @@ Window {
                         }
                         cachePathModeDialog.close()
                     }
-                    background: Rectangle { color: "#F0F0F0"; radius: 8 }
+                    background: Rectangle { color: Theme.bgButton; radius: 8 }
+                    contentItem: Text {
+                        text: parent.text
+                        color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
             }
         }
     }
 
-    ScrollView {
-        id: scrollView
+    Item {
+        id: settingsScrollArea
         anchors.fill: parent
-        contentWidth: availableWidth
-        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-        clip: true
-        padding: 40
+
+        ScrollView {
+            id: scrollView
+            anchors.fill: parent
+            contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+            ScrollBar.vertical.policy: ScrollBar.AlwaysOff
+            clip: true
+            padding: 40
         
         TapHandler {
             onTapped: {
@@ -384,13 +419,46 @@ Window {
             width: scrollView.availableWidth
             spacing: 30
 
+            // --- 0. Appearance Section ---
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: appearanceLayout.implicitHeight + 60
+                color: Theme.bgCard
+                radius: 20
+                border.color: Theme.borderCard; border.width: 1
+
+                ColumnLayout {
+                    id: appearanceLayout
+                    anchors.fill: parent
+                    anchors.margins: 30
+                    spacing: 24
+
+                    Text { text: "Appearance"; font.bold: true; font.pixelSize: 18; color: Theme.textPrimary }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 20
+                        Text { text: "Theme"; font.bold: true; color: Theme.textPrimary }
+                        Item { Layout.fillWidth: true }
+
+                        ThemeModeSelector {
+                            mode: typeof themeHandler === "undefined" ? "system" : themeHandler.themeMode
+                            onModeRequested: function(requestedMode) {
+                                if (typeof themeHandler !== "undefined")
+                                    themeHandler.setThemeMode(requestedMode)
+                            }
+                        }
+                    }
+                }
+            }
+
             // --- 1. General Section ---
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: generalLayout.implicitHeight + 60
-                color: "#FFFFFF"
+                color: Theme.bgCard
                 radius: 20
-                border.color: "#E0E0E0"; border.width: 1
+                border.color: Theme.borderCard; border.width: 1
 
                 ColumnLayout {
                     id: generalLayout
@@ -399,10 +467,10 @@ Window {
                     spacing: 24
 
                     // Header
-                    Text { text: "General"; font.bold: true; font.pixelSize: 18; color: "#333" }
+                    Text { text: "General"; font.bold: true; font.pixelSize: 18; color: Theme.textPrimary }
 
                     // Account Connections
-                    Text { text: "Account Connections"; font.bold: true; color: "#333" }
+                    Text { text: "Account Connections"; font.bold: true; color: Theme.textPrimary }
                     RowLayout {
                         spacing: 20
                         
@@ -411,7 +479,7 @@ Window {
                             id: arcaeaButton
                             width: 200; height: 80
                             radius: 10
-                            color: isConnected ? "#F3E5F5" : "#F0F0F0"
+                            color: isConnected ? Theme.arcaeaBg : Theme.bgButton
                             Behavior on color { PropertyAction {} }
                             
                             property bool isConnected: settingsHandler ? settingsHandler.isArcaeaOnlineConnected() : false
@@ -426,7 +494,7 @@ Window {
                                     text: "Arcaea Online"
                                     font.bold: true
                                     font.pixelSize: 14
-                                    color: arcaeaButton.isConnected ? "#6A0DAD" : "#424242"
+                                    color: arcaeaButton.isConnected ? Theme.accent : Theme.titleOff
                                     anchors.horizontalCenter: parent.horizontalCenter
                                 }
                                 
@@ -442,7 +510,7 @@ Window {
                                         return displayName
                                     }
                                     font.pixelSize: 10
-                                    color: "#757575"
+                                    color: Theme.settingsTextMuted
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     horizontalAlignment: Text.AlignHCenter
                                 }
@@ -451,7 +519,7 @@ Window {
                                     visible: !arcaeaButton.isConnected
                                     text: "Not Connected"
                                     font.pixelSize: 11
-                                    color: "#E53935"
+                                    color: Theme.statusOff
                                     anchors.horizontalCenter: parent.horizontalCenter
                                 }
                             }
@@ -459,7 +527,7 @@ Window {
                             // Hover overlay
                             Rectangle {
                                 anchors.fill: parent
-                                color: "#80000000"
+                                color: Theme.shadowNormal
                                 radius: parent.radius
                                 visible: arcaeaButtonMouseArea.containsMouse || arcaeaButton.isConnecting
                                 
@@ -471,7 +539,7 @@ Window {
                                     }
                                     color: {
                                         if (arcaeaButton.isConnecting) {
-                                            return arcaeaButtonMouseArea.containsMouse ? "white" : "#CCCCCC"
+                                            return arcaeaButtonMouseArea.containsMouse ? "white" : Theme.toggleBorderOff
                                         }
                                         return "white"
                                     }
@@ -514,7 +582,7 @@ Window {
                             id: googleButton
                             width: 200; height: 80
                             radius: 10
-                            color: isConnected ? "#E8F5E9" : "#F0F0F0"
+                            color: isConnected ? Theme.googleBg : Theme.bgButton
                             Behavior on color { PropertyAction {} }
                             
                             property bool isConnected: settingsHandler ? settingsHandler.isGoogleSheetConnected() : false
@@ -528,7 +596,7 @@ Window {
                                     text: "Google Sheet"
                                     font.bold: true
                                     font.pixelSize: 14
-                                    color: googleButton.isConnected ? "#2E7D32" : "#424242"
+                                    color: googleButton.isConnected ? Theme.googleTitle : Theme.titleOff
                                     anchors.horizontalCenter: parent.horizontalCenter
                                 }
                                 
@@ -546,7 +614,7 @@ Window {
                                         return ""
                                     }
                                     font.pixelSize: 10
-                                    color: "#757575"
+                                    color: Theme.settingsTextMuted
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     horizontalAlignment: Text.AlignHCenter
                                 }
@@ -555,7 +623,7 @@ Window {
                                     visible: !googleButton.isConnected
                                     text: "Not Connected"
                                     font.pixelSize: 11
-                                    color: "#E53935"
+                                    color: Theme.statusOff
                                     anchors.horizontalCenter: parent.horizontalCenter
                                 }
                             }
@@ -563,21 +631,24 @@ Window {
                             // Hover overlay
                             Rectangle {
                                 anchors.fill: parent
-                                color: "#80000000"
+                                color: Theme.shadowNormal
                                 radius: parent.radius
                                 visible: googleButtonMouseArea.containsMouse
+                                z: 10
                                 
                                 Text {
                                     anchors.centerIn: parent
                                     text: googleButton.isConnected ? "Disconnect" : "Connect"
-                                    color: "white"
+                                    color: Theme.overlayText
                                     font.bold: true
                                     font.pixelSize: 14
+                                    z: 1
                                 }
                             }
                             
                             MouseArea {
                                 id: googleButtonMouseArea
+                                z: 20
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 hoverEnabled: true
@@ -603,9 +674,9 @@ Window {
                         modal: true
                         
                         background: Rectangle {
-                            color: "#FFFFFF"
+                            color: Theme.bgCard
                             radius: 12
-                            border.color: "#E0E0E0"
+                            border.color: Theme.borderCard
                             border.width: 1
                         }
                         
@@ -618,7 +689,7 @@ Window {
                                 text: "Disconnect Arcaea Online?"
                                 wrapMode: Text.WordWrap
                                 width: parent.width
-                                color: "#333"
+                                color: Theme.textPrimary
                             }
                             
                             RowLayout {
@@ -628,7 +699,13 @@ Window {
                                 Basic.Button {
                                     text: "Cancel"
                                     onClicked: disconnectArcaeaDialog.close()
-                                    background: Rectangle { color: "#F0F0F0"; radius: 6 }
+                                    background: Rectangle { color: Theme.bgButton; radius: 6 }
+                                    contentItem: Text {
+                                        text: parent.text
+                                        color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
                                 }
                                 
                                 Basic.Button {
@@ -637,10 +714,10 @@ Window {
                                         if (settingsHandler) settingsHandler.disconnectArcaeaOnline()
                                         disconnectArcaeaDialog.close()
                                     }
-                                    background: Rectangle { color: "#E53935"; radius: 6 }
+                                    background: Rectangle { color: Theme.statusOff; radius: 6 }
                                     contentItem: Text {
                                         text: parent.text
-                                        color: "white"
+                                        color: Theme.bgCard
                                         font.bold: true
                                         horizontalAlignment: Text.AlignHCenter
                                         verticalAlignment: Text.AlignVCenter
@@ -660,9 +737,9 @@ Window {
                         modal: true
                         
                         background: Rectangle {
-                            color: "#FFFFFF"
+                            color: Theme.bgCard
                             radius: 12
-                            border.color: "#E0E0E0"
+                            border.color: Theme.borderCard
                             border.width: 1
                         }
                         
@@ -675,7 +752,7 @@ Window {
                                 text: "Disconnect Google Sheet?"
                                 wrapMode: Text.WordWrap
                                 width: parent.width
-                                color: "#333"
+                                color: Theme.textPrimary
                             }
                             
                             RowLayout {
@@ -685,7 +762,13 @@ Window {
                                 Basic.Button {
                                     text: "Cancel"
                                     onClicked: disconnectGoogleDialog.close()
-                                    background: Rectangle { color: "#F0F0F0"; radius: 6 }
+                                    background: Rectangle { color: Theme.bgButton; radius: 6 }
+                                    contentItem: Text {
+                                        text: parent.text
+                                        color: parent.enabled ? Theme.textPrimary : Theme.textDisabled
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
                                 }
                                 
                                 Basic.Button {
@@ -694,10 +777,10 @@ Window {
                                         if (settingsHandler) settingsHandler.disconnectGoogleSheet()
                                         disconnectGoogleDialog.close()
                                     }
-                                    background: Rectangle { color: "#E53935"; radius: 6 }
+                                    background: Rectangle { color: Theme.statusOff; radius: 6 }
                                     contentItem: Text {
                                         text: parent.text
-                                        color: "white"
+                                        color: Theme.bgCard
                                         font.bold: true
                                         horizontalAlignment: Text.AlignHCenter
                                         verticalAlignment: Text.AlignVCenter
@@ -707,20 +790,20 @@ Window {
                         }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
 
                     // Database Management
                     // Arcaea Consultant Sheet Section
-                    Text { text: "Arcaea Consultant Sheet"; font.bold: true; color: "#333" }
+                    Text { text: "Arcaea Consultant Sheet"; font.bold: true; color: Theme.textPrimary }
                     
                     // Sheet Management Card
                     Rectangle {
                         id: sheetMgmtCard
                         Layout.fillWidth: true
                         Layout.preferredHeight: sheetMgmtLayout.implicitHeight + 30
-                        color: "#FFFFFF"
+                        color: Theme.bgCard
                         radius: 12
-                        border.color: "#E0E0E0"; border.width: 1
+                        border.color: Theme.borderCard; border.width: 1
                         
                         property bool isGoogleConnected: settingsHandler ? settingsHandler.isGoogleSheetConnected() : false
                         property var boundSheetInfo: settingsHandler ? settingsHandler.getBoundSheetInfo() : ({})
@@ -766,7 +849,7 @@ Window {
                             spacing: 12
                             
                             // Header removed as requested
-                            // Text { text: "Sheet Management"; font.bold: true; color: "#2E7D32"; font.pixelSize: 13 }
+                            // Text { text: "Sheet Management"; font.bold: true; color: Theme.googleTitle; font.pixelSize: 13 }
                             
                             // State: No sheet bound - show Bind Sheet button
                             Basic.Button {
@@ -776,12 +859,12 @@ Window {
                                 text: "Bind Sheet"
                                 onClicked: if (settingsHandler) settingsHandler.bindSheet()
                                 background: Rectangle {
-                                    color: bindSheetButton.down ? "#43A047" : "#4CAF50"
+                                    color: bindSheetButton.down ? Theme.browserBtnBgDown : Theme.browserDesc
                                     radius: 8
                                 }
                                 contentItem: Text {
                                     text: bindSheetButton.text
-                                    color: "white"
+                                    color: Theme.bgCard
                                     font.bold: true
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
@@ -800,15 +883,15 @@ Window {
                                 }
                                 Text {
                                     text: "Opening Google Picker..."
-                                    color: "#757575"
+                                    color: Theme.settingsTextMuted
                                     font.pixelSize: 12
                                     Layout.fillWidth: true
                                 }
                                 Basic.Button {
                                     text: "Cancel"
                                     onClicked: if (settingsHandler) settingsHandler.cancelBindSheet()
-                                    background: Rectangle { color: "#F0F0F0"; radius: 6 }
-                                    contentItem: Text { text: "Cancel"; color: "#333"; font.pixelSize: 11; anchors.centerIn: parent }
+                                    background: Rectangle { color: Theme.bgButton; radius: 6 }
+                                    contentItem: Text { text: "Cancel"; color: Theme.textPrimary; font.pixelSize: 11; anchors.centerIn: parent }
                                 }
                             }
                             
@@ -823,7 +906,7 @@ Window {
                                     text: sheetMgmtCard.boundSheetName
                                     font.bold: true
                                     font.pixelSize: 14
-                                    color: "#333"
+                                    color: Theme.textPrimary
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
                                 }
@@ -838,7 +921,7 @@ Window {
                                         spacing: 8
                                         
                                         Rectangle {
-                                            color: "#E8F5E9"
+                                            color: Theme.googleBg
                                             radius: 4
                                             implicitWidth: verRow1.implicitWidth + 16
                                             implicitHeight: verRow1.implicitHeight + 8
@@ -847,23 +930,23 @@ Window {
                                                 id: verRow1
                                                 anchors.centerIn: parent
                                                 spacing: 4
-                                                Text { text: "Sheet"; font.pixelSize: 11; color: "#2E7D32"; font.bold: true }
+                                                Text { text: "Sheet"; font.pixelSize: 11; color: Theme.googleTitle; font.bold: true }
                                                 SpinnerIndicator {
                                                     implicitWidth: 11; implicitHeight: 11
                                                     lineWidth: 1.5
-                                                    strokeColor: "#333"
+                                                    strokeColor: Theme.textPrimary
                                                     running: !sheetMgmtCard.parsedSheetVer || sheetMgmtCard.parsedSheetVer === '?'
                                                 }
                                                 Text {
                                                     text: sheetMgmtCard.parsedSheetVer || ''
-                                                    font.pixelSize: 11; color: "#333"
+                                                    font.pixelSize: 11; color: Theme.textPrimary
                                                     visible: sheetMgmtCard.parsedSheetVer && sheetMgmtCard.parsedSheetVer !== '?'
                                                 }
                                             }
                                         }
                                         
                                         Rectangle {
-                                            color: "#E3F2FD"
+                                            color: Theme.arcaeaBadgeBg
                                             radius: 4
                                             implicitWidth: verRow2.implicitWidth + 16
                                             implicitHeight: verRow2.implicitHeight + 8
@@ -872,16 +955,16 @@ Window {
                                                 id: verRow2
                                                 anchors.centerIn: parent
                                                 spacing: 4
-                                                Text { text: "Arcaea"; font.pixelSize: 11; color: "#1565C0"; font.bold: true }
+                                                Text { text: "Arcaea"; font.pixelSize: 11; color: Theme.arcaeaBadgeText; font.bold: true }
                                                 SpinnerIndicator {
                                                     implicitWidth: 11; implicitHeight: 11
                                                     lineWidth: 1.5
-                                                    strokeColor: "#333"
+                                                    strokeColor: Theme.textPrimary
                                                     running: !sheetMgmtCard.parsedArcaeaVer || sheetMgmtCard.parsedArcaeaVer === '?'
                                                 }
                                                 Text {
                                                     text: sheetMgmtCard.parsedArcaeaVer || ''
-                                                    font.pixelSize: 11; color: "#333"
+                                                    font.pixelSize: 11; color: Theme.textPrimary
                                                     visible: sheetMgmtCard.parsedArcaeaVer && sheetMgmtCard.parsedArcaeaVer !== '?'
                                                 }
                                             }
@@ -894,8 +977,8 @@ Window {
                                     Basic.Button {
                                         text: "Open Sheet"
                                         onClicked: if (settingsHandler) settingsHandler.openBoundSheet()
-                                        background: Rectangle { color: "#F1F8E9"; radius: 4; border.color: "#C5E1A5" }
-                                        contentItem: Text { text: "Open Sheet"; color: "#33691E"; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                        background: Rectangle { color: Theme.btnOpenBg; radius: 4; border.color: Theme.btnOpenBorder }
+                                        contentItem: Text { text: "Open Sheet"; color: Theme.btnOpenText; font.pixelSize: 11; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                         implicitHeight: 26
                                     }
                                     
@@ -903,7 +986,7 @@ Window {
                                     Basic.Button {
                                         text: "🔄"
                                         onClicked: if (settingsHandler) settingsHandler.bindSheet()
-                                        background: Rectangle { color: "#F5F5F5"; radius: 4; border.color: "#E0E0E0" }
+                                        background: Rectangle { color: Theme.bgInput; radius: 4; border.color: Theme.borderCard }
                                         contentItem: Text { text: "🔄"; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                                         implicitWidth: 30; implicitHeight: 26
                                     }
@@ -920,8 +1003,8 @@ Window {
                                     onClicked: if (settingsHandler) settingsHandler.sendData()
                                     background: Rectangle {
                                         color: {
-                                            if (!sendDataButton.enabled) return "#B0BEC5"
-                                            return sendDataButton.down ? "#5E35B1" : "#673AB7"
+                                            if (!sendDataButton.enabled) return Theme.btnDisabled
+                                            return sendDataButton.down ? Theme.btnSendPressed : Theme.btnSendBg
                                         }
                                         radius: 8
                                     }
@@ -938,7 +1021,7 @@ Window {
                                         }
                                         Text {
                                             text: sheetMgmtCard.isSending ? "Sending..." : "Send Data"
-                                            color: "white"
+                                            color: Theme.bgCard
                                             font.bold: true
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
@@ -955,7 +1038,7 @@ Window {
                                         return "Last synced: " + Qt.formatDateTime(date, "yyyy-MM-dd hh:mm")
                                     }
                                     font.pixelSize: 11
-                                    color: "#757575"
+                                    color: Theme.settingsTextMuted
                                 }
                             }
                         }
@@ -963,7 +1046,7 @@ Window {
                         // Disabled overlay when Google account not connected
                         Rectangle {
                             anchors.fill: parent
-                            color: "#D0FFFFFF"
+                            color: Theme.overlayLight
                             radius: parent.radius
                             visible: !sheetMgmtCard.isGoogleConnected
                             
@@ -971,7 +1054,7 @@ Window {
                                 anchors.centerIn: parent
                                 text: "Connect Google account first"
                                 font.pixelSize: 12
-                                color: "#999"
+                                color: Theme.textLight
                                 font.italic: true
                             }
                             
@@ -982,20 +1065,20 @@ Window {
                         }
                     }
                     
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
 
                     // Database Management
                     Text {
                         text: settingsHandler && settingsHandler.isSongsDbExisting ? "Song Database" : "Generate Song Database"
-                        font.bold: true; color: "#333"
+                        font.bold: true; color: Theme.textPrimary
                     }
                     
                     Rectangle {
                         Layout.fillWidth: true
                         height: 50
                         radius: 10
-                        color: "#E3F2FD"
-                        border.color: "#90CAF9"
+                        color: Theme.arcaeaBadgeBg
+                        border.color: Theme.dbCardBorder
                         
                         RowLayout {
                             anchors.fill: parent
@@ -1005,11 +1088,11 @@ Window {
                                 spacing: 2
                                 Text {
                                     text: settingsHandler && settingsHandler.isSongsDbExisting ? "Update Song Database" : "Generate Song Database"
-                                    font.bold: true; color: "#1976D2"
+                                    font.bold: true; color: Theme.dbTitle
                                 }
                                 Text {
                                     text: settingsHandler && settingsHandler.isSongsDbExisting ? "Rebuild song database from online sources" : "Generate song database from online sources"
-                                    font.pixelSize: 11; color: "#1976D2"
+                                    font.pixelSize: 11; color: Theme.dbTitle
                                 }
                             }
                             
@@ -1028,14 +1111,14 @@ Window {
 
                                 background: Rectangle {
                                     color: {
-                                        if (!updateDbButton.enabled) return "#B0BEC5"
-                                        return updateDbButton.down ? "#42A5F5" : "#64B5F6"
+                                        if (!updateDbButton.enabled) return Theme.btnDisabled
+                                        return updateDbButton.down ? Theme.dbBtnBgDown : Theme.dbBtnBg
                                     }
                                     radius: 6
                                 }
                                 contentItem: Text {
                                     text: updateDbButton.text
-                                    color: "white"
+                                    color: Theme.bgCard
                                     font.bold: true
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
@@ -1044,18 +1127,18 @@ Window {
                         }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
 
                     // Browser Setup
-                    Text { text: "Browser"; font.bold: true; color: "#333" }
+                    Text { text: "Browser"; font.bold: true; color: Theme.textPrimary }
 
                     Rectangle {
                         id: browserSetupCard
                         Layout.fillWidth: true
                         Layout.preferredHeight: browserSetupLayout.implicitHeight + 30
                         radius: 10
-                        color: browserSetupCard.installed ? "#E8F5E9" : "#FFF3E0"
-                        border.color: browserSetupCard.installed ? "#A5D6A7" : "#FFCC80"
+                        color: browserSetupCard.installed ? Theme.googleBg : Theme.bgInput
+                        border.color: browserSetupCard.installed ? Theme.browserBorder : Theme.browserBorder
                         border.width: 1
 
                         property bool installed: settingsHandler ? settingsHandler.isBrowserInstalled() : false
@@ -1091,14 +1174,14 @@ Window {
                                     Text {
                                         text: browserSetupCard.installed ? "Chromium Installed" : "Chromium Not Installed"
                                         font.bold: true
-                                        color: browserSetupCard.installed ? "#2E7D32" : "#E65100"
+                                        color: browserSetupCard.installed ? Theme.googleTitle : Theme.browserBtnBg
                                     }
                                     Text {
                                         text: browserSetupCard.installed
                                             ? "Browser is ready for analysis"
                                             : "Required for Arcaea Online analysis"
                                         font.pixelSize: 11
-                                        color: browserSetupCard.installed ? "#4CAF50" : "#FF9800"
+                                        color: browserSetupCard.installed ? Theme.browserDesc : Theme.browserBtnBg
                                     }
                                 }
 
@@ -1114,14 +1197,14 @@ Window {
                                     onClicked: if (settingsHandler) settingsHandler.installBrowser()
                                     background: Rectangle {
                                         color: {
-                                            if (!installBrowserBtn.enabled) return "#B0BEC5"
-                                            return installBrowserBtn.down ? "#E65100" : "#FF9800"
+                                            if (!installBrowserBtn.enabled) return Theme.btnDisabled
+                                            return installBrowserBtn.down ? Theme.browserBtnBg : Theme.browserBtnBg
                                         }
                                         radius: 6
                                     }
                                     contentItem: Text {
                                         text: installBrowserBtn.text
-                                        color: "white"
+                                        color: Theme.bgCard
                                         font.bold: true
                                         horizontalAlignment: Text.AlignHCenter
                                         verticalAlignment: Text.AlignVCenter
@@ -1135,13 +1218,13 @@ Window {
                                 Layout.fillWidth: true
                                 text: browserSetupCard.installLog
                                 font.pixelSize: 11
-                                color: "#666666"
+                                color: Theme.textSecondary
                                 elide: Text.ElideRight
                             }
                         }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
 
                     // Analyze Mode Toggle
                     RowLayout {
@@ -1155,13 +1238,13 @@ Window {
                                 Text { 
                                     text: "Play Count Analyze Mode"
                                     font.bold: true
-                                    color: "#333" 
+                                    color: Theme.textPrimary 
                                 }
                                 
                                 Text {
                                     text: "ⓘ"
                                     font.pixelSize: 14
-                                    color: helpMouse.containsMouse ? "#6A0DAD" : "#999"
+                                    color: helpMouse.containsMouse ? Theme.accent : Theme.textLight
                                     
                                     MouseArea {
                                         id: helpMouse
@@ -1181,12 +1264,12 @@ Window {
                                                   "Normally, the analyzer updates play count of a record only when a new score is found, for ensuring record consistency and preventing server strain. Enable this mode to temporarily bypass limits and update play counts for ALL songs.\n" +
                                                   "This is useful for archiving your complete yearly statistics before the reset."
                                             font.pixelSize: 12
-                                            color: "#FFFFFF"
+                                            color: Theme.bgCard
                                             wrapMode: Text.WordWrap
                                         }
                                         
                                         background: Rectangle {
-                                            color: "#333333"
+                                            color: Theme.textPrimary
                                             radius: 6
                                             opacity: 0.95
                                         }
@@ -1216,8 +1299,8 @@ Window {
                                 id: toggleTrack
                                 anchors.fill: parent
                                 radius: 13
-                                color: analyzeToggle.checked ? "#6A0DAD" : "#E0E0E0"
-                                border.color: analyzeToggle.checked ? "#6A0DAD" : "#CCCCCC"
+                                color: analyzeToggle.checked ? Theme.accent : Theme.borderCard
+                                border.color: analyzeToggle.checked ? Theme.accent : Theme.toggleBorderOff
                                 Behavior on color { ColorAnimation { duration: 200 } }
                                 Behavior on border.color { ColorAnimation { duration: 200 } }
 
@@ -1225,7 +1308,7 @@ Window {
                                     width: 22; height: 22; radius: 11
                                     anchors.verticalCenter: parent.verticalCenter
                                     x: analyzeToggle.checked ? parent.width - width - 2 : 2
-                                    color: "white"
+                                    color: Theme.bgCard
                                     
                                     Behavior on x { NumberAnimation { duration: 200; easing.type: Easing.InOutCubic } }
                                 }
@@ -1242,42 +1325,42 @@ Window {
                         }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
 
                     // Statistics Section
-                    Text { text: "Statistics"; font.bold: true; color: "#333" }
+                    Text { text: "Statistics"; font.bold: true; color: Theme.textPrimary }
 
                     ColumnLayout {
                         spacing: 8
-                        Text { text: "Best potential mark"; color: "#333" }
+                        Text { text: "Best potential mark"; color: Theme.textPrimary }
                         RowLayout {
                             spacing: 10
-                            RadioButton {
+                            ThemedRadioButton {
                                 text: "None"
                                 checked: settingsHandler ? settingsHandler.getBestPotentialMark() === 'none' : true
                                 onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('none')
                             }
-                            RadioButton {
+                            ThemedRadioButton {
                                 text: "B10"
                                 checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '10' : false
                                 onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('10')
                             }
-                            RadioButton {
+                            ThemedRadioButton {
                                 text: "B30"
                                 checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '30' : false
                                 onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('30')
                             }
-                            RadioButton {
+                            ThemedRadioButton {
                                 text: "B50"
                                 checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '50' : false
                                 onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('50')
                             }
-                            RadioButton {
+                            ThemedRadioButton {
                                 text: "B100"
                                 checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '100' : false
                                 onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('100')
                             }
-                            RadioButton {
+                            ThemedRadioButton {
                                 text: "All"
                                 checked: settingsHandler ? settingsHandler.getBestPotentialMark() === 'all' : false
                                 onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('all')
@@ -1285,21 +1368,21 @@ Window {
                         }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
 
                     // Language
                     ColumnLayout {
                         spacing: 8
-                        Text { text: "Language"; font.bold: true; color: "#333333" }
+                        Text { text: "Language"; font.bold: true; color: Theme.textPrimary }
                         RowLayout {
                             spacing: 10
-                            Text { text: "Song Title:" }
-                            RadioButton {
+                            Text { text: "Song Title:"; color: Theme.textPrimary }
+                            ThemedRadioButton {
                                 text: "en"
                                 checked: settingsHandler ? settingsHandler.getSongTitleLanguage() === 'en' : true
                                 onToggled: if (checked && settingsHandler) settingsHandler.setSongTitleLanguage('en')
                             }
-                            RadioButton {
+                            ThemedRadioButton {
                                 text: "jp"
                                 checked: settingsHandler ? settingsHandler.getSongTitleLanguage() === 'jp' : false
                                 onToggled: if (checked && settingsHandler) settingsHandler.setSongTitleLanguage('jp')
@@ -1307,14 +1390,14 @@ Window {
                         }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
 
                     // Cache Path
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        Text { text: "Cache Path"; font.bold: true; color: "#333" }
-                        Text { text: "Location where scores and images are stored"; font.pixelSize: 12; color: "#888" }
+                        Text { text: "Cache Path"; font.bold: true; color: Theme.textPrimary }
+                        Text { text: "Location where scores and images are stored"; font.pixelSize: 12; color: Theme.textMuted }
                         
                         RowLayout {
                             Layout.fillWidth: true
@@ -1325,8 +1408,12 @@ Window {
                                 Layout.fillWidth: true
                                 text: settingsHandler ? settingsHandler.getCachePath() : ""
                                 readOnly: true
+                                color: Theme.textPrimary
+                                selectionColor: Theme.accent
+                                selectedTextColor: Theme.bgCard
+                                placeholderTextColor: Theme.textPlaceholder
                                 background: Rectangle {
-                                    color: "#F5F5F5"; radius: 8; border.width: 0
+                                    color: Theme.bgInput; radius: 8; border.width: 0
                                 }
                                 
                                 // Update when cache path changes
@@ -1341,7 +1428,7 @@ Window {
                             // Open folder button
                             Basic.Button {
                                 text: "📂"
-                                background: Rectangle { color: "#F0F0F0"; radius: 8 }
+                                background: Rectangle { color: Theme.bgButton; radius: 8 }
                                 onClicked: if (settingsHandler) settingsHandler.openCacheFolder()
                                 Basic.ToolTip { text: "Open folder"; visible: parent.hovered }
                             }
@@ -1349,7 +1436,7 @@ Window {
                             // Change folder button
                             Basic.Button {
                                 text: "📁"
-                                background: Rectangle { color: "#F0F0F0"; radius: 8 }
+                                background: Rectangle { color: Theme.bgButton; radius: 8 }
                                 onClicked: folderDialog.open()
                                 Basic.ToolTip { text: "Change folder"; visible: parent.hovered }
                             }
@@ -1375,9 +1462,9 @@ Window {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: profileLayout.implicitHeight + 60
-                color: "#FFFFFF"
+                color: Theme.bgCard
                 radius: 20
-                border.color: "#E0E0E0"; border.width: 1
+                border.color: Theme.borderCard; border.width: 1
 
                 ColumnLayout {
                     id: profileLayout
@@ -1385,7 +1472,7 @@ Window {
                     anchors.margins: 30
                     spacing: 24
 
-                    Text { text: "Profile"; font.bold: true; font.pixelSize: 18; color: "#333" }
+                    Text { text: "Profile"; font.bold: true; font.pixelSize: 18; color: Theme.textPrimary }
 
                     // Profile Actions & Image (Moved)
                     RowLayout {
@@ -1403,8 +1490,8 @@ Window {
                         Rectangle {
                             id: profileImageRect
                             width: 80; height: 80
-                            color: "#F0F0F0"
-                            border.color: "#E0E0E0"
+                            color: Theme.bgButton
+                            border.color: Theme.borderCard
                             clip: true
                             property bool hoverActive: false
                             
@@ -1427,13 +1514,13 @@ Window {
                             // Hover overlay: open file dialog on click
                             Rectangle {
                                 anchors.fill: parent
-                                color: "#80000000"
+                                color: Theme.shadowNormal
                                 visible: profileImageRect.hoverActive
                                 
                                 Text {
                                     anchors.centerIn: parent
                                     text: "🖼️"
-                                    color: "white"
+                                    color: Theme.bgCard
                                     font.pixelSize: 24
                                     horizontalAlignment: Text.AlignHCenter
                                 }
@@ -1444,8 +1531,8 @@ Window {
                                 id: profileImageClearButton
                                 width: 22; height: 22
                                 radius: 11
-                                color: clearProfileImageMouse.containsMouse ? "#F0F0F0" : "#E8E8E8"
-                                border.color: "#D0D0D0"
+                                color: clearProfileImageMouse.containsMouse ? Theme.bgButton : Theme.bgHover
+                                border.color: Theme.borderCard
                                 anchors.top: parent.top
                                 anchors.right: parent.right
                                 anchors.topMargin: 4
@@ -1457,7 +1544,7 @@ Window {
                                     anchors.centerIn: parent
                                     text: "✕"
                                     font.pixelSize: 12
-                                    color: "#666"
+                                    color: Theme.textSecondary
                                 }
 
                                 MouseArea {
@@ -1504,19 +1591,19 @@ Window {
                                     text: profileInfoLayout.profileData.name || "Unknown"
                                     font.pixelSize: 18
                                     font.bold: true
-                                    color: "#333"
+                                    color: Theme.textPrimary
                                 }
                                 RowLayout {
                                     spacing: 12
                                     Text {
                                         text: "ID: " + (profileInfoLayout.profileData.user_code || "Unknown")
                                         font.pixelSize: 13
-                                        color: "#666"
+                                        color: Theme.textSecondary
                                     }
                                     Text {
                                         text: "PTT: " + (profileInfoLayout.profileData.rating !== undefined && profileInfoLayout.profileData.rating >= 0 ? (profileInfoLayout.profileData.rating / 100).toFixed(2) : "-")
                                         font.pixelSize: 13
-                                        color: "#666"
+                                        color: Theme.textSecondary
                                     }
                                 }
                                 
@@ -1524,8 +1611,8 @@ Window {
                                     Layout.fillWidth: true
                                     Layout.maximumWidth: 320
                                     Layout.preferredHeight: 70
-                                    color: "#F9F9F9"
-                                    border.color: profileDescArea.activeFocus ? "#4CAF50" : "#E0E0E0"
+                                    color: Theme.bgCard
+                                    border.color: profileDescArea.activeFocus ? Theme.browserDesc : Theme.borderCard
                                     radius: 4
 
                                     TextEdit {
@@ -1534,13 +1621,13 @@ Window {
                                         anchors.margins: 8
                                         text: settingsHandler ? settingsHandler.getProfileDescription() : ""
                                         font.pixelSize: 13
-                                        color: "#666"
+                                        color: Theme.textSecondary
                                         wrapMode: TextEdit.Wrap
                                         selectByMouse: true
                                         
                                         Text {
                                             text: "Write a short description (max 120 chars)..."
-                                            color: "#AAA"
+                                            color: Theme.textFaint
                                             font.pixelSize: 13
                                             visible: !profileDescArea.text
                                         }
@@ -1574,36 +1661,36 @@ Window {
                         }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
 
                     // Privacy Options
-                    Text { text: "Privacy"; font.bold: true; color: "#333" }
+                    Text { text: "Privacy"; font.bold: true; color: Theme.textPrimary }
                     ColumnLayout {
                         spacing: 10
                         RowLayout {
                             spacing: 30
-                            CheckBox {
+                            ThemedCheckBox {
                                 text: "Show Name"
                                 checked: settingsHandler ? settingsHandler.getShowName() : true
                                 onCheckedChanged: if (settingsHandler) settingsHandler.setShowName(checked)
                             }
-                            CheckBox {
+                            ThemedCheckBox {
                                 text: "Show Friend Code"
                                 checked: settingsHandler ? settingsHandler.getShowFriendCode() : false
                                 onCheckedChanged: if (settingsHandler) settingsHandler.setShowFriendCode(checked)
                             }
-                            CheckBox {
+                            ThemedCheckBox {
                                 text: "Show Potential"
                                 checked: settingsHandler ? settingsHandler.getShowPotential() : false
                                 onCheckedChanged: if (settingsHandler) settingsHandler.setShowPotential(checked)
                             }
                         }
-                        CheckBox {
+                        ThemedCheckBox {
                             text: "Show Description"
                             checked: settingsHandler ? settingsHandler.getShowDescription() : true
                             onCheckedChanged: if (settingsHandler) settingsHandler.setShowDescription(checked)
                         }
-                        CheckBox {
+                        ThemedCheckBox {
                             id: showPlayCountTimeCheckBox
                             text: "Show Play Count & Play Time"
                             checked: settingsHandler ? settingsHandler.getShowPlayCountTime() : true
@@ -1691,9 +1778,9 @@ Window {
                             Component.onCompleted: loadFromConfig()
 
                             spacing: 10
-                            Text { text: "Difficulty Filter:" }
+                            Text { text: "Difficulty Filter:"; color: Theme.textPrimary }
 
-                            CheckBox {
+                            ThemedCheckBox {
                                 id: playStatsAllCheck
                                 text: "On"
                                 tristate: true
@@ -1730,7 +1817,7 @@ Window {
                                 }
                             }
 
-                            CheckBox {
+                            ThemedCheckBox {
                                 text: "PST"
                                 checked: playStatsDiffFilterRow.pstChecked
                                 enabled: !playStatsDiffFilterRow.isOff
@@ -1740,7 +1827,7 @@ Window {
                                     playStatsDiffFilterRow.updateAllState()
                                 }
                             }
-                            CheckBox {
+                            ThemedCheckBox {
                                 text: "PRS"
                                 checked: playStatsDiffFilterRow.prsChecked
                                 enabled: !playStatsDiffFilterRow.isOff
@@ -1750,7 +1837,7 @@ Window {
                                     playStatsDiffFilterRow.updateAllState()
                                 }
                             }
-                            CheckBox {
+                            ThemedCheckBox {
                                 text: "FTR"
                                 checked: playStatsDiffFilterRow.ftrChecked
                                 enabled: !playStatsDiffFilterRow.isOff
@@ -1760,7 +1847,7 @@ Window {
                                     playStatsDiffFilterRow.updateAllState()
                                 }
                             }
-                            CheckBox {
+                            ThemedCheckBox {
                                 text: "ETR"
                                 checked: playStatsDiffFilterRow.etrChecked
                                 enabled: !playStatsDiffFilterRow.isOff
@@ -1770,7 +1857,7 @@ Window {
                                     playStatsDiffFilterRow.updateAllState()
                                 }
                             }
-                            CheckBox {
+                            ThemedCheckBox {
                                 text: "BYD"
                                 checked: playStatsDiffFilterRow.bydChecked
                                 enabled: !playStatsDiffFilterRow.isOff
@@ -1782,17 +1869,17 @@ Window {
                             }
                         }
                         
-                        CheckBox {
+                        ThemedCheckBox {
                             text: "Show Play Count in Most Played"
                             checked: settingsHandler ? settingsHandler.getShowPlayCountMostPlayed() : true
                             onCheckedChanged: if (settingsHandler) settingsHandler.setShowPlayCountMostPlayed(checked)
                         }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#EEEEEE" }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
                     
                     // Most Played Order
-                    Text { text: "Most Played Order"; font.bold: true; color: "#333" }
+                    Text { text: "Most Played Order"; font.bold: true; color: Theme.textPrimary }
                     
                     ColumnLayout {
                         spacing: 15
@@ -1800,13 +1887,13 @@ Window {
                         // Grouping Criteria
                         RowLayout {
                             spacing: 10
-                            Text { text: "Grouping Criteria:" }
-                            RadioButton {
+                            Text { text: "Grouping Criteria:"; color: Theme.textPrimary }
+                            ThemedRadioButton {
                                 text: "By Song"
                                 checked: settingsHandler ? settingsHandler.getGroupingCriteria() === 'song' : true
                                 onToggled: if(checked && settingsHandler) settingsHandler.setGroupingCriteria('song')
                             }
-                            RadioButton {
+                            ThemedRadioButton {
                                 text: "By Chart"
                                 checked: settingsHandler ? settingsHandler.getGroupingCriteria() === 'chart' : false
                                 onToggled: if(checked && settingsHandler) settingsHandler.setGroupingCriteria('chart')
@@ -1878,10 +1965,10 @@ Window {
                             Component.onCompleted: loadFromConfig()
 
                             spacing: 10
-                            Text { text: "Difficulty Filter:" }
+                            Text { text: "Difficulty Filter:"; color: Theme.textPrimary }
 
                             // All 체크박스: pst/prs/ftr/etr/byd 상태에 따라 삼진(check / partial / unchecked)
-                            CheckBox {
+                            ThemedCheckBox {
                                 id: allCheck
                                 text: "All"
                                 tristate: true
@@ -1905,7 +1992,7 @@ Window {
                                 }
                             }
 
-                            CheckBox {
+                            ThemedCheckBox {
                                 text: "PST"
                                 checked: diffFilterRow.pstChecked
                                 onToggled: {
@@ -1914,7 +2001,7 @@ Window {
                                     diffFilterRow.updateAllState()
                                 }
                             }
-                            CheckBox {
+                            ThemedCheckBox {
                                 text: "PRS"
                                 checked: diffFilterRow.prsChecked
                                 onToggled: {
@@ -1923,7 +2010,7 @@ Window {
                                     diffFilterRow.updateAllState()
                                 }
                             }
-                            CheckBox {
+                            ThemedCheckBox {
                                 text: "FTR"
                                 checked: diffFilterRow.ftrChecked
                                 onToggled: {
@@ -1932,7 +2019,7 @@ Window {
                                     diffFilterRow.updateAllState()
                                 }
                             }
-                            CheckBox {
+                            ThemedCheckBox {
                                 text: "ETR"
                                 checked: diffFilterRow.etrChecked
                                 onToggled: {
@@ -1941,7 +2028,7 @@ Window {
                                     diffFilterRow.updateAllState()
                                 }
                             }
-                            CheckBox {
+                            ThemedCheckBox {
                                 text: "BYD"
                                 checked: diffFilterRow.bydChecked
                                 onToggled: {
@@ -1955,13 +2042,13 @@ Window {
                         // Aggregation scope (Most Played count: total vs this year)
                         RowLayout {
                             spacing: 10
-                            Text { text: "Aggregation Scope:" }
-                            RadioButton {
+                            Text { text: "Aggregation Scope:"; color: Theme.textPrimary }
+                            ThemedRadioButton {
                                 text: "Total plays"
                                 checked: settingsHandler ? settingsHandler.getMostPlayedScope() === 'total' : true
                                 onToggled: if(checked && settingsHandler) settingsHandler.setMostPlayedScope('total')
                             }
-                            RadioButton {
+                            ThemedRadioButton {
                                 text: "This year plays"
                                 checked: settingsHandler ? settingsHandler.getMostPlayedScope() === 'this_year' : false
                                 onToggled: if(checked && settingsHandler) settingsHandler.setMostPlayedScope('this_year')
@@ -1969,6 +2056,60 @@ Window {
                         }
                     }
                 }
+            }
+        }
+    }
+
+        Basic.ScrollBar {
+            id: settingsVerticalBar
+            z: 10
+            anchors.top: parent.top
+            anchors.topMargin: scrollView.topPadding
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: scrollView.bottomPadding
+            anchors.right: parent.right
+            anchors.rightMargin: 4
+            width: 10
+
+            policy: ScrollBar.AlwaysOn
+            size: scrollView.contentItem ? scrollView.contentItem.visibleArea.heightRatio : 1
+            position: scrollView.contentItem ? scrollView.contentItem.visibleArea.yPosition : 0
+
+            onPositionChanged: {
+                if (pressed && scrollView.contentItem)
+                    scrollView.contentItem.contentY = position * scrollView.contentItem.contentHeight
+            }
+
+            property bool showScrollbar: (scrollView.contentItem && scrollView.contentItem.moving)
+                                          || settingsHideTimer.running
+                                          || settingsVerticalBar.hovered
+                                          || settingsVerticalBar.pressed
+            hoverEnabled: true
+            active: true
+
+            Timer { id: settingsHideTimer; interval: 1000 }
+            Connections {
+                target: scrollView.contentItem
+                function onMovingChanged() {
+                    if (!scrollView.contentItem.moving)
+                        settingsHideTimer.restart()
+                }
+            }
+            onPressedChanged: {
+                if (!pressed && scrollView.contentItem && !scrollView.contentItem.moving)
+                    settingsHideTimer.restart()
+            }
+
+            opacity: showScrollbar ? 1.0 : 0.0
+            Behavior on opacity { NumberAnimation { duration: 200 } }
+
+            background: Rectangle { color: "transparent" }
+            contentItem: Rectangle {
+                implicitWidth: 6
+                implicitHeight: 100
+                radius: 3
+                color: Theme.scrollbar
+                opacity: settingsVerticalBar.pressed ? 1.0 : (settingsVerticalBar.hovered ? 1.0 : 0.6)
             }
         }
     }

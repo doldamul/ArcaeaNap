@@ -14,7 +14,7 @@ RowLayout {
     
     Text { 
         text: flagName
-        color: "#333"
+        color: Theme.textPrimary
         Layout.preferredWidth: 120
     }
     
@@ -24,8 +24,8 @@ RowLayout {
         Rectangle {
             width: 50; height: 28
             radius: index === 0 ? 4 : (index === 2 ? 4 : 0)
-            color: flagSegmentRoot.selectedIndex === index ? "#6A0DAD" : "#F0F0F0"
-            border.color: "#D0D0D0"
+            color: flagSegmentRoot.selectedIndex === index ? Theme.accent : Theme.bgButton
+            border.color: Theme.borderCard
             border.width: flagSegmentRoot.selectedIndex === index ? 0 : 1
             
             // Round only left/right corners based on position
@@ -44,7 +44,7 @@ RowLayout {
                 anchors.centerIn: parent
                 text: modelData
                 font.pixelSize: 11
-                color: flagSegmentRoot.selectedIndex === index ? "white" : "#666"
+                color: flagSegmentRoot.selectedIndex === index ? "white" : Theme.textSecondary
             }
             
             MouseArea {

@@ -51,6 +51,9 @@ class SettingsHandler(QObject):
         super().__init__()
         self._pending_migration_path = None  # Stores the new path during migration
         self._analyzer = None
+        self._theme_handler = None
+        self._browser_dark_mode = False
+        self._browser_dark_mode_lock = threading.Lock()
         self._is_arcaea_connecting = False
         self._is_binding_sheet = False
         self._is_sending_data = False
@@ -64,8 +67,43 @@ class SettingsHandler(QObject):
         self._browser_installed = None
 
     def set_analyzer(self, analyzer):
-        """Connect to ArcaeaOnline instance for play count mode control."""
+        """Connect to the shared analyzer owned by AnalysisHandler for play count mode control."""
         self._analyzer = analyzer
+
+    def set_theme_handler(self, theme_handler):
+        """Cache theme state for this handler's temporary login analyzer only.
+
+        AnalysisHandler owns the shared analysis analyzer and forwards its theme
+        updates separately.
+        """
+        if theme_handler is self._theme_handler:
+            return
+
+        if self._theme_handler:
+            try:
+                self._theme_handler.isDarkModeChanged.disconnect(
+                    self._handle_dark_mode_changed
+                )
+            except Exception:
+                pass
+
+        self._theme_handler = theme_handler
+        with self._browser_dark_mode_lock:
+            self._browser_dark_mode = bool(theme_handler.isDarkMode) if theme_handler else False
+        if theme_handler:
+            theme_handler.isDarkModeChanged.connect(self._handle_dark_mode_changed)
+
+    def _current_browser_dark_mode(self):
+        """Return the cached primitive state safe to pass into a worker thread."""
+        with self._browser_dark_mode_lock:
+            return self._browser_dark_mode
+
+    def _handle_dark_mode_changed(self, is_dark_mode):
+        dark_mode = bool(is_dark_mode)
+        with self._browser_dark_mode_lock:
+            self._browser_dark_mode = dark_mode
+        if self._arcaea_login_instance:
+            self._arcaea_login_instance.set_dark_mode(dark_mode)
 
     @pyqtProperty(bool, notify=settingsChanged)
     def isSongsDbExisting(self):
@@ -546,7 +584,9 @@ class SettingsHandler(QObject):
 
     @pyqtSlot(bool)
     def setShowFriendCode(self, show):
-        config['profile']['show_friend_code'] = str(show)
+        changed = config['profile'].__setitem__('show_friend_code', str(show))
+        if not changed:
+            return
         self.profileDisplayChanged.emit()
         self.settingsChanged.emit()
 
@@ -556,7 +596,9 @@ class SettingsHandler(QObject):
 
     @pyqtSlot(bool)
     def setShowPotential(self, show):
-        config['profile']['show_potential'] = str(show)
+        changed = config['profile'].__setitem__('show_potential', str(show))
+        if not changed:
+            return
         self.profileDisplayChanged.emit()
         self.settingsChanged.emit()
 
@@ -566,7 +608,9 @@ class SettingsHandler(QObject):
 
     @pyqtSlot(bool)
     def setShowName(self, show):
-        config['profile']['show_name'] = str(show)
+        changed = config['profile'].__setitem__('show_name', str(show))
+        if not changed:
+            return
         self.profileDisplayChanged.emit()
         self.settingsChanged.emit()
 
@@ -576,7 +620,9 @@ class SettingsHandler(QObject):
 
     @pyqtSlot(bool)
     def setShowDescription(self, show):
-        config['profile']['show_description'] = str(show)
+        changed = config['profile'].__setitem__('show_description', str(show))
+        if not changed:
+            return
         self.profileDisplayChanged.emit()
         self.settingsChanged.emit()
 
@@ -586,7 +632,9 @@ class SettingsHandler(QObject):
 
     @pyqtSlot(bool)
     def setShowPlayCountTime(self, show):
-        config['profile']['show_play_count_time'] = str(show)
+        changed = config['profile'].__setitem__('show_play_count_time', str(show))
+        if not changed:
+            return
         self.profileDisplayChanged.emit()
         self.settingsChanged.emit()
 
@@ -749,28 +797,23 @@ class SettingsHandler(QObject):
 
         self._is_arcaea_connecting = True
         self.arcaeaOnlineConnectionChanged.emit()
+        initial_dark_mode = self._current_browser_dark_mode()
 
-        def _connect():
+        def _connect(initial_dark_mode):
             try:
                 # Create a temporary ArcaeaOnline instance for login
-                temp_analyzer = ArcaeaOnline()
+                temp_analyzer = ArcaeaOnline(dark_mode=initial_dark_mode)
                 temp_analyzer.log = lambda msg: print(f"[ArcaeaOnline] {msg}")
                 
                 lang = 'en'
                 url = f'https://arcaea.lowiro.com/{lang}/profile/scores?page=1'
                 
                 # Initialize browser and login
-                from playwright.sync_api import sync_playwright
-                from utils.browser_utils import get_browser
-                
-                temp_analyzer.playwright = sync_playwright().start()
-                temp_analyzer.browser = get_browser(temp_analyzer.playwright, headless=False)
-                temp_analyzer.context = temp_analyzer.browser.new_context(
-                    viewport={'width': 600, 'height': 1000}
-                )
-                temp_analyzer.page = temp_analyzer.context.new_page()
+                temp_analyzer.initialize_browser({"width": 600, "height": 1000})
                 
                 self._arcaea_login_instance = temp_analyzer
+                # Apply a request received while browser initialization was in progress.
+                temp_analyzer.set_dark_mode(self._current_browser_dark_mode())
                 # Enable running status for polling loop in login()
                 temp_analyzer.status.is_running = True
                 
@@ -794,7 +837,7 @@ class SettingsHandler(QObject):
                 self.arcaeaOnlineConnectionChanged.emit()
         
         # Run in separate thread to avoid blocking UI
-        thread = threading.Thread(target=_connect, daemon=True)
+        thread = threading.Thread(target=_connect, args=(initial_dark_mode,), daemon=True)
         thread.start()
     
     @pyqtSlot()

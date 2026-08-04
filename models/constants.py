@@ -16,14 +16,6 @@ DIFFICULTY_NAMES: dict[int, str] = {
     0: 'PST', 1: 'PRS', 2: 'FTR', 3: 'BYD', 4: 'ETR'
 }
 
-# 난이도 정수 → 색상 코드 매핑
-DIFFICULTY_COLORS: dict[int, str] = {
-    0: '#00A0E9',  # PST - 파랑
-    1: '#50C050',  # PRS - 초록
-    2: '#A060FF',  # FTR - 보라
-    3: '#E04040',  # BYD - 빨강
-    4: '#808080',  # ETR - 회색
-}
 
 # UI 표시 순서: PST → PRS → FTR → ETR → BYD
 DIFFICULTY_ORDER: list[int] = [0, 1, 2, 4, 3]
@@ -66,37 +58,23 @@ def calculate_rank(score: int | None) -> str:
 
 # === 포텐셜 등급 상수 ===
 
-# (최소 rating, 색상, 뱃지 텍스트, 별 개수)
+# (최소 rating, 뱃지 텍스트, 별 개수)
 # 내림차순 정렬. 조회 시 rating >= threshold 인 첫 항목을 사용한다.
-# 색상/뱃지/별의 분기점이 각각 다르므로, 모든 고유 분기점을 병합한 통합 테이블이다.
-POTENTIAL_GRADES: list[tuple[int, str, str, int]] = [
-    (1300, '#D14A6B', 'TRIPLE STAR', 3),
-    (1250, '#C12955', 'DOUBLE STAR', 2),
-    (1200, '#C12955', 'STAR',        1),
-    (1100, '#C62828', 'RED',         0),
-    (1000, '#8E24AA', 'PURPLE',      0),
-    (700,  '#AB47BC', 'PURPLE',      0),
-    (300,  '#4CAF50', 'GREEN',       0),
-    (0,    '#29B6F6', 'BLUE',        0),
+# 뱃지/별의 분기점이 각각 다르므로, 모든 고유 분기점을 병합한 통합 테이블이다.
+POTENTIAL_GRADES: list[tuple[int, str, int]] = [
+    (1300, 'TRIPLE STAR', 3),
+    (1250, 'DOUBLE STAR', 2),
+    (1200, 'STAR',        1),
+    (1100, 'RED',         0),
+    (1000, 'PURPLE',      0),
+    (700,  'PURPLE',      0),
+    (300,  'GREEN',       0),
+    (0,    'BLUE',        0),
 ]
 
-DEFAULT_POTENTIAL_COLOR: str = '#999999'
 
 
-# === 랭크 색상 상수 ===
 
-RANK_COLORS: dict[str, str] = {
-    'PM':  '#00aaaa',
-    'EX+': '#5865F2',
-    'EX':  '#5865F2',
-    'AA':  '#9050B0',
-    'A':   '#9050B0',
-    'B':   '#D04040',
-    'C':   '#D04040',
-    'D':   '#D04040',
-}
-
-DEFAULT_RANK_COLOR: str = '#666666'
 
 
 # === 클리어 타입 텍스트 상수 ===
