@@ -8,7 +8,7 @@ import sys
 
 
 APP_TITLE = "ArcaeaNap"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 MIN_MACOS_VERSION = "14.0"
 APP_ICON_NAME = "ArcaeaNap"
 
