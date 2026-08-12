@@ -26,6 +26,22 @@
           style="padding: 0.5rem 1rem; font-size: 0.9rem"
           >Download</a
         >
+        <button class="theme-toggle-btn" aria-label="Toggle theme" title="Toggle theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -62,8 +78,9 @@
         </div>
 
         <!-- Integrated first image with caption in same section background -->
-        <div class="screenshot-container" style="margin-top: 3rem">
-          <img src="./assets/screenshots/1.png" alt="Home Tab Screenshot" />
+        <div class="screenshot-container frameless" style="margin-top: 3rem">
+          <img src="./assets/screenshots/1_light.png" class="light-only" alt="Home Tab Screenshot (Light)" />
+          <img src="./assets/screenshots/1_dark.png" class="dark-only" alt="Home Tab Screenshot (Dark)" />
         </div>
         <p class="description-text">
           Check your play time and top play rankings at a glance.
@@ -73,7 +90,8 @@
       <!-- Section 2: Sync & Analyze -->
       <section id="sync">
         <div class="screenshot-container">
-          <img src="./assets/screenshots/2.png" alt="Analyze Tab Screenshot" />
+          <img src="./assets/screenshots/2_light.jpeg" class="light-only" alt="Analyze Tab Screenshot (Light)" />
+          <img src="./assets/screenshots/2_dark.jpeg" class="dark-only" alt="Analyze Tab Screenshot (Dark)" />
         </div>
         <p class="description-text">
           Save your Arcaea Online play records directly to your local PC.
@@ -85,11 +103,9 @@
 
       <!-- Section 3: Explorer & Stats -->
       <section id="explorer">
-        <div class="screenshot-container">
-          <img
-            src="./assets/screenshots/3.png"
-            alt="Statistics Tab Screenshot"
-          />
+        <div class="screenshot-container frameless">
+          <img src="./assets/screenshots/3_light.png" class="light-only" alt="Statistics Tab Screenshot (Light)" />
+          <img src="./assets/screenshots/3_dark.png" class="dark-only" alt="Statistics Tab Screenshot (Dark)" />
         </div>
         <p class="description-text">
           Quickly explore records stored on your PC with filtering, sorting, and
@@ -100,10 +116,8 @@
       <!-- Section 4: Consultant Sheet -->
       <section id="consultant-sheet">
         <div class="screenshot-container">
-          <img
-            src="./assets/screenshots/4.png"
-            alt="Arcaea Consultant Sheet Sync Screenshot"
-          />
+          <img src="./assets/screenshots/4_light.jpg" class="light-only" alt="Arcaea Consultant Sheet Sync Screenshot (Light)" />
+          <img src="./assets/screenshots/4_dark.jpg" class="dark-only" alt="Arcaea Consultant Sheet Sync Screenshot (Dark)" />
         </div>
         <p class="description-text">
           Batch upload records stored on your PC to Arcaea Consultant Sheet.

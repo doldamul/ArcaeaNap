@@ -3,14 +3,32 @@
 :root {
     --primary-color: #6C5B7B; /* App Purple */
     --primary-light: #8e7ea0;
-    --text-color: #333;
+    --text-color: #333333;
     --text-title: #1A1A1A; /* App title color */
-    --text-secondary: #666;
+    --text-secondary: #666666;
     --bg-light: #F9F8FC; /* Soft Lavender Grey */
     --bg-white: #FFFFFF;
-    --bg-header: rgba(255, 255, 255, 0.8);
+    --bg-header: rgba(255, 255, 255, 0.85);
     --border-color: #EEEEEE;
+    --card-shadow: rgba(0, 0, 0, 0.05);
+    --toggle-bg: #EAE8EE;
+    --toggle-hover: #DDD9E4;
     --title-font: 'Noto Sans JP', sans-serif;
+}
+
+[data-theme="dark"] {
+    --primary-color: #B4A4C8; /* Vibrant light purple for high readability */
+    --primary-light: #C9BCE0;
+    --text-color: #E2E1E8;
+    --text-title: #F5F4F8;
+    --text-secondary: #A09DAA;
+    --bg-light: #15141A; /* Deep Dark Lavender Charcoal */
+    --bg-white: #1C1B24; /* Section Contrast Dark */
+    --bg-header: rgba(21, 20, 26, 0.85);
+    --border-color: #2D2A38;
+    --card-shadow: rgba(0, 0, 0, 0.35);
+    --toggle-bg: #2B2836;
+    --toggle-hover: #383546;
 }
 
 * {
@@ -25,7 +43,9 @@ html, body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     font-size: 18px;
     color: var(--text-color);
+    background-color: var(--bg-white);
     line-height: 1.6;
+    transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 .scroll-container {
@@ -51,7 +71,7 @@ html, body {
     justify-content: space-between;
     padding: 0 2rem;
     transform: translateY(-100%);
-    transition: transform 0.3s ease-in-out;
+    transition: transform 0.3s ease-in-out, background 0.25s ease, border-color 0.25s ease;
 }
 
 .sticky-header.visible {
@@ -75,7 +95,7 @@ html, body {
 .header-actions {
     display: flex;
     align-items: center;
-    gap: 1.2rem;
+    gap: 1rem;
 }
 
 .header-actions .github-link {
@@ -85,6 +105,7 @@ html, body {
     font-weight: 500;
     display: flex;
     align-items: center;
+    transition: color 0.2s ease;
 }
 
 .header-actions .github-link:hover {
@@ -97,6 +118,53 @@ html, body {
     opacity: 0.6;
 }
 
+/* Theme Toggle Button */
+.theme-toggle-btn {
+    background: var(--toggle-bg);
+    color: var(--text-title);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    padding: 0;
+    outline: none;
+}
+
+.theme-toggle-btn:hover {
+    background: var(--toggle-hover);
+    transform: scale(1.06);
+}
+
+.theme-toggle-btn svg {
+    width: 20px;
+    height: 20px;
+    transition: transform 0.3s ease;
+}
+
+.theme-toggle-btn:hover svg {
+    transform: rotate(15deg);
+}
+
+/* Toggle Icon Visibility */
+.theme-toggle-btn .icon-sun {
+    display: none;
+}
+.theme-toggle-btn .icon-moon {
+    display: block;
+}
+
+[data-theme="dark"] .theme-toggle-btn .icon-sun {
+    display: block;
+}
+[data-theme="dark"] .theme-toggle-btn .icon-moon {
+    display: none;
+}
+
 section {
     min-height: 80vh;
     width: 100%;
@@ -106,6 +174,7 @@ section {
     justify-content: center;
     padding: 5rem 2rem; /* Slightly reduced padding */
     text-align: center;
+    transition: background-color 0.25s ease;
 }
 
 section.hero-section {
@@ -134,6 +203,11 @@ section:nth-child(even) {
     max-width: 85%;
     max-height: 70vh;
     margin-bottom: 2rem;
+    transition: max-width 0.25s ease;
+}
+
+.screenshot-container.frameless {
+    max-width: 90%; /* Increased size for frameless PNGs */
 }
 
 .screenshot-container img {
@@ -143,8 +217,24 @@ section:nth-child(even) {
     object-fit: contain;
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    background: white;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    background: var(--bg-white);
+    box-shadow: 0 4px 20px var(--card-shadow);
+    transition: border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.screenshot-container.frameless img {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+/* Dual Screenshot Image Switching (Preloaded, Instant) */
+html:not([data-theme="dark"]) .dark-only {
+    display: none !important;
+}
+html[data-theme="dark"] .light-only {
+    display: none !important;
 }
 
 /* Hero Branding */
@@ -153,11 +243,11 @@ section:nth-child(even) {
     flex-direction: column;
     align-items: center;
     gap: 0.5rem;
-    margin-bottom: 1.5rem; /* Reduced from 2rem */
+    margin-bottom: 1.5rem;
 }
 
 .hero-branding img {
-    width: 120px; /* Slightly reduced from 140px */
+    width: 120px;
     height: 120px;
     margin-bottom: 0.5rem;
 }
@@ -167,12 +257,13 @@ h1 {
     margin: 0;
     font-family: var(--title-font);
     color: var(--text-title);
+    transition: color 0.25s ease;
 }
 
 .hero-branding h1 {
-    font-size: 4rem; /* Slightly reduced from 4.5rem for calmness */
-    font-weight: 700; /* Match app bolding */
-    letter-spacing: -0.03em; /* Tighter tracking for premium feel */
+    font-size: 4rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
 }
 
 /* Reduced title size for legal pages */
@@ -186,46 +277,48 @@ section.legal-header .hero-branding img {
 }
 
 .description-text {
-    max-width: 1000px; /* Increased width from 900px */
+    max-width: 1000px;
     font-size: 1.3rem; 
     line-height: 1.5;
     color: var(--text-secondary);
     margin: 0 auto;
+    transition: color 0.25s ease;
 }
 
 .warning-text {
     font-size: 1rem;
     color: var(--text-secondary);
     margin-top: 10px;
+    transition: color 0.25s ease;
 }
 
 /* CTA Buttons */
 .cta-group {
     display: flex;
-    gap: 1.5rem; /* Reduced gap from 2rem */
+    gap: 1.5rem;
     justify-content: center;
     align-items: flex-start;
-    margin-top: 2rem; /* Reduced from 3rem */
+    margin-top: 2rem;
 }
 
 .btn-wrapper {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.4rem; /* Reduced gap */
+    gap: 0.4rem;
 }
 
 .button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 0.7rem 1.8rem; /* Reduced from 1rem 2.2rem */
+    padding: 0.7rem 1.8rem;
     border-radius: 10px;
     font-weight: 700;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
     text-decoration: none;
     line-height: 1;
-    font-size: 1.05rem; /* Reduced from 1.15rem */
+    font-size: 1.05rem;
 }
 
 .button .icon-external {
@@ -237,11 +330,12 @@ section.legal-header .hero-branding img {
 .subtext {
     font-size: 0.9rem;
     color: var(--text-secondary);
+    transition: color 0.25s ease;
 }
 
 .button.primary {
     background: var(--primary-color);
-    color: white;
+    color: #FFFFFF;
 }
 
 .button.primary:hover {
@@ -255,29 +349,32 @@ section.legal-header .hero-branding img {
 }
 
 .button.secondary:hover {
-    background: var(--bg-light);
+    background: var(--toggle-bg);
 }
 
 footer {
-    padding: 3rem 2rem; /* Reduced from 6rem */
+    padding: 3rem 2rem;
     background: var(--bg-white);
     text-align: center;
     font-size: 1.05rem;
     border-top: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
 }
 
 .footer-links {
-  margin: 10px 0; /* Reduced from 15px */
+  margin: 10px 0;
 }
 
 footer p {
-    margin: 0.5rem 0; /* Tighten paragraph spacing */
+    margin: 0.5rem 0;
 }
 
 .footer-links a {
   margin: 0 12px;
   text-decoration: none;
   color: var(--primary-color);
+  transition: color 0.2s ease;
 }
 
 .footer-links a:hover {
@@ -291,15 +388,21 @@ footer p {
     padding: 2rem;
     font-size: 1.2rem; 
     line-height: 1.9;
+    color: var(--text-color);
+    transition: color 0.25s ease;
 }
 
 .legal-container h3 {
     font-size: 1.8rem;
     margin-top: 2.5rem;
+    color: var(--text-title);
+    transition: color 0.25s ease;
 }
 
 .legal-container hr {
     border: 0;
     border-top: 1px solid var(--border-color);
     margin: 2rem 0;
+    transition: border-color 0.25s ease;
 }
+

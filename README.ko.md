@@ -1,6 +1,6 @@
 <div align="center">
 
-<img width="80%" src="https://github.com/doldamul/ArcaeaNap/blob/main/docs/assets/screenshots/1.png">
+<img width="80%" src="https://github.com/doldamul/ArcaeaNap/blob/main/docs/assets/screenshots/1_light.png">
 
 <h1>
   <img width="3%" src="https://github.com/doldamul/ArcaeaNap/blob/main/docs/assets/logo.png">
