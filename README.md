@@ -37,17 +37,14 @@ ArcaeaNap is a fast and convenient Arcaea play record viewer. It saves Arcaea On
 1. Download the program archive from the [Releases](https://github.com/doldamul/ArcaeaNap/releases) page.
 2. The execution method depends on your operating system:
    - **Windows:** Extract the archive and run the `ArcaeaNap.exe` file inside the program directory.
-   - **macOS:** After extracting the archive, open the Terminal app and type the following:
-     ```bash
-     xattr -cr 
-     ```
-     (There must be a space after `-cr`)
+   - **macOS:** Extract the archive and move `ArcaeaNap.app` to the `/Applications` folder. Then right-click the app, select **Open**, and approve the macOS security prompt if it appears. If macOS shows an **Open Anyway** button in **System Settings > Privacy & Security**, use that button to approve the first launch.
 
-     Then drag and drop the extracted `ArcaeaNap.app` file into the terminal window. It will look something like this:
+     If the app is still blocked because it retains the downloaded-file quarantine attribute, use this narrower terminal fallback:
      ```bash
-     xattr -cr /Users/username/Downloads/ArcaeaNap.app
+     xattr -dr com.apple.quarantine "/Applications/ArcaeaNap.app"
      ```
-     Press Enter. Once the process is complete, move the app to the `/Applications` folder and run it.
+
+     The app uses an ad-hoc signature, so an unidentified-developer warning may still appear on the first launch.
 3. Log in with your Google account and generate the song information database.
 4. Download the browser for data analysis from the Settings.
 5. In Settings, log in to Arcaea Online and ensure your subscription is active.
@@ -64,27 +61,49 @@ Once all updates since the last saved record have been viewed, the Synchronizati
 - Python 3.13+
 - Install required dependencies:
   ```bash
-  pip install PyQt6 playwright requests beautifulsoup4 google-auth google-auth-oauthlib google-api-python-client gspread keyring pywin32-ctypes cx_Freeze
+  pip install "PyQt6>=6.9.0" playwright requests beautifulsoup4 google-auth google-auth-oauthlib google-api-python-client gspread keyring pywin32-ctypes cx_Freeze
   playwright install chromium
   ```
+- Additional requirements for running from source or manual building:
+  - **Windows:** Windows App Runtime 2.3.1+, Visual Studio 2022 C++ tools, the Windows SDK, and CMake must be available.
+  - **macOS:** Apple Silicon, macOS 14+, Xcode command-line tools, CMake, and `codesign` are required.
 
-To run the application from the source code, run `main.py`:
+To run the application from source on Windows, build the development bridge
+and then start the application:
 
 ```bash
+python -m tools.build_windows_bridge
 python main.py
 ```
 
-This project uses `cx_Freeze` to build the standalone executable.
+Run the application from source on macOS in the same way:
 
-For Windows:
 ```bash
-python setup.py build
+python -m tools.build_macos_bridge
+python main.py
 ```
 
-For macOS:
+After that, you do not need to rebuild the bridge every time you run the app
+unless the native bridge source has changed.
+
+When running the app directly through Python on macOS, it uses legacy window mode,
+so the native traffic lights may appear smaller than intended. To use the intended
+macOS window appearance, first build the development bridge and then build and run
+the macOS-specific C++ launcher:
+
 ```bash
-python setup.py bdist_mac
+python -m tools.build_macos_bridge
+python -m tools.build_macos_launcher
+./ArcaeaNapLauncher
 ```
+
+To build a frozen application for the current host OS and architecture, run:
+
+```bash
+python -m tools.build_app
+```
+
+The build process handles the native bridge and application bundle packaging automatically.
 
 A valid `client_secret.json` (Google Cloud API credentials) is required in the project root directory when running or building the application.
 Here are the steps to generate the `client_secret.json` file:

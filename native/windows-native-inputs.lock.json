@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "projection_metadata_version": "10.0.17763.0",
+  "packages": {
+    "foundation": {
+      "id": "Microsoft.WindowsAppSDK.Foundation",
+      "version": "2.3.5",
+      "sha256": "15d78449c8566f889e0f95ae6ebc0610d79b32f95ce296b621f54b8ec8f496cb"
+    },
+    "interactive": {
+      "id": "Microsoft.WindowsAppSDK.InteractiveExperiences",
+      "version": "2.1.3",
+      "sha256": "e8063437eb853b5abe4dc6b6bdb2ecfb82f49ec281764c82cd04b4d94e144f68"
+    },
+    "runtime": {
+      "id": "Microsoft.WindowsAppSDK.Runtime",
+      "version": "2.3.1",
+      "sha256": "f15c6c682a81a019e13beaee512de9fb83ffd5a1f3e83b99209b6860a7aebba2"
+    },
+    "cppwinrt": {
+      "id": "Microsoft.Windows.CppWinRT",
+      "version": "2.0.250303.1",
+      "sha256": "955e3051b35db1c00177ed14ab6b7b995c3b32a53fdb6c184ea53b1dba66e439"
+    }
+  }
+}

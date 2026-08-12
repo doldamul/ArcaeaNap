@@ -1,0 +1,32 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-release",
+      "displayName": "Windows x64 Release",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/../build/native/windows-x64",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/../build/native-stage/windows-x64"
+      }
+    },
+    {
+      "name": "macos-release",
+      "displayName": "macOS arm64 Release",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/../build/native/macos-arm64",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "14.0",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/../build/native-stage/macos-arm64"
+      }
+    }
+  ]
+}

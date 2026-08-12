@@ -5,6 +5,7 @@ QtObject {
     id: theme
 
     readonly property bool isDarkMode: typeof themeHandler === "undefined" ? false : themeHandler.isDarkMode
+    readonly property bool isDark: isDarkMode
 
     // Base UI
     property color bgWindow: isDarkMode ? "#1A1A1E" : "#F3F4F8"

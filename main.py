@@ -4,7 +4,7 @@ import os
 
 from PyQt6.QtGui import QGuiApplication, QSurfaceFormat, QIcon, QImageReader, QPixmap
 from PyQt6.QtQml import QQmlApplicationEngine
-from PyQt6.QtCore import QUrl, QByteArray, QBuffer, QIODevice, Qt, QTimer
+from PyQt6.QtCore import QUrl, QByteArray, QBuffer, QIODevice, Qt, QTimer, QObject, pyqtSlot
 
 from utils.app_fonts import register_embedded_fonts, get_app_root
 from handlers.startup_handler import StartupHandler
@@ -16,6 +16,8 @@ from handlers.settings_handler import SettingsHandler
 from handlers.theme_handler import ThemeHandler
 from handlers.update_handler import UpdateHandler
 from services.about_service import build_about_context
+from utils.native_frame_windows import NativeTitleBarController
+from utils.native_frame_mac import MacWindowController
 try:
     from utils.embedded_app_icon import get_embedded_app_icon
 except Exception:
@@ -98,15 +100,51 @@ def _set_windows_app_user_model_id():
         print(f"[main] Failed to set AppUserModelID: {e}")
 
 
+class BridgeManager(QObject):
+    def __init__(self, theme_handler: ThemeHandler, parent=None):
+        super().__init__(parent)
+        _ = theme_handler
+
+    @pyqtSlot(QObject, QObject, int)
+    def attachBridgeStyle(self, bridge: QObject, qml_window: QObject, toolbar_style: int):
+        if not bridge or not qml_window:
+            return
+
+        try:
+            win_id = int(qml_window.winId())
+            window_attach = getattr(bridge, "attach_window", None)
+            if callable(window_attach):
+                attached = window_attach(win_id, qml_window, toolbar_style)
+            else:
+                attached = bridge.attach(win_id, toolbar_style)
+
+            if not attached:
+                print(f"[BridgeManager] Failed to attach bridge: {bridge.errorMessage}")
+        except Exception as e:
+            print(f"[BridgeManager] attach error: {e}")
+
+
 def main():
     _set_windows_app_user_model_id()
 
     fmt = QSurfaceFormat()
     fmt.setSamples(8)  # MSAA 8x
-    fmt.setRenderableType(QSurfaceFormat.RenderableType.OpenGL)
     QSurfaceFormat.setDefaultFormat(fmt)
 
+
+    uses_app_window_title_bar = sys.platform == "win32"
+    uses_mac_cocoa_window = sys.platform == "darwin"
+
     app = QGuiApplication(sys.argv)
+
+    # C++ 브리지가 메인 윈도우(QWindow)의 NSWindow를 하이재킹하면서,
+    # macOS가 메인 윈도우를 숨겨진 것으로 간주할 수 있습니다.
+    # 이 상태에서 About이나 Settings 같은 보조 창을 닫으면,
+    # 활성화된 창이 하나도 없다고 판단하여 앱이 강제로 종료되어 버립니다.
+    # 이를 방지하기 위해 마지막 창이 닫혀도 앱이 종료되지 않도록 설정합니다.
+    # 앱 종료는 main.qml의 onClosing(Qt.quit())에서 명시적으로 처리합니다.
+    app.setQuitOnLastWindowClosed(False)
+
     qml_font_context = register_embedded_fonts()
     app_icon, app_logo_source = _resolve_icons()
     about_context = build_about_context(get_app_root())
@@ -125,6 +163,23 @@ def main():
 
     print("UI loading...")
     engine = QQmlApplicationEngine()
+    theme_handler = ThemeHandler()
+    engine.rootContext().setContextProperty("themeHandler", theme_handler)
+
+    bridge_manager = BridgeManager(theme_handler)
+    engine.rootContext().setContextProperty("bridgeManager", bridge_manager)
+    engine.rootContext().setContextProperty("usesAppWindowTitleBar", uses_app_window_title_bar)
+    engine.rootContext().setContextProperty("usesMacCocoaWindow", uses_mac_cocoa_window)
+
+    # Pre-create bridges for known windows so they are properly introspected by QML
+    main_bridge = NativeTitleBarController() if uses_app_window_title_bar else MacWindowController()
+    about_bridge = NativeTitleBarController() if uses_app_window_title_bar else MacWindowController()
+    settings_bridge = NativeTitleBarController() if uses_app_window_title_bar else MacWindowController()
+
+    engine.rootContext().setContextProperty("mainNativeBridge", main_bridge)
+    engine.rootContext().setContextProperty("aboutNativeBridge", about_bridge)
+    engine.rootContext().setContextProperty("settingsNativeBridge", settings_bridge)
+
     for key, value in qml_font_context.items():
         engine.rootContext().setContextProperty(key, value)
     engine.rootContext().setContextProperty(
@@ -133,10 +188,6 @@ def main():
     )
     for key, value in about_context.items():
         engine.rootContext().setContextProperty(key, value)
-
-    # Register handlers
-    theme_handler = ThemeHandler()
-    engine.rootContext().setContextProperty("themeHandler", theme_handler)
 
     analysis_handler = AnalysisHandler(theme_handler)
     engine.rootContext().setContextProperty("analysisHandler", analysis_handler)
@@ -177,6 +228,10 @@ def main():
         sys.exit(-1)
 
     root_window = engine.rootObjects()[0]
+
+    # We don't attach the bridge here manually anymore.
+    # QML will call BridgeManager.attachToWindow() in Component.onCompleted.
+
     if sys.platform != "darwin" and hasattr(root_window, "setIcon"):
         if not app_icon.isNull():
             root_window.setIcon(app_icon)

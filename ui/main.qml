@@ -9,9 +9,21 @@ ApplicationWindow {
     id: window
     width: 1280
     height: 900
-    visible: true
+    // Native bridges configure the hidden platform window before this binding shows it.
+    property QtObject nativeBridge: mainNativeBridge
+    // If the optional native title-bar bridge is unavailable, keep the regular
+    // platform window visible instead of leaving the application apparently
+    // stuck in the hidden pre-attach state.
+    property bool nativeBridgeFallbackVisible: false
+
+    // NOTE: ApplicationWindow.visibility starts as Hidden until explicitly shown.
+    property bool isNativeBridgeReady: nativeBridge ? nativeBridge.available : false
+    visible: usesAppWindowTitleBar
+             ? (nativeBridge.available || nativeBridgeFallbackVisible)
+             : (!usesMacCocoaWindow || nativeBridge.available || nativeBridgeFallbackVisible)
     title: "ArcaeaNap"
     color: Theme.bgWindow
+    flags: usesAppWindowTitleBar ? Qt.Window : Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint
     
     minimumWidth: 1280
     minimumHeight: 900
@@ -19,6 +31,17 @@ ApplicationWindow {
     // 현재 선택된 탭 인덱스 (0: Home, 1: Analyze, 2: Statistics)
     // Settings는 별도 윈도우로 분리됨
     property int currentTab: 0
+
+    property real safeAreaTop: usesMacCocoaWindow ? (nativeBridge ? nativeBridge.safeAreaTop : 0) : window.SafeArea.margins.top
+    property real titleBarHeight: usesAppWindowTitleBar
+        ? (nativeBridge ? nativeBridge.height : 0)
+        : (usesMacCocoaWindow ? 52 : Math.max(40, window.safeAreaTop + 12))
+    property real titleBarLeftInset: usesAppWindowTitleBar
+        ? (nativeBridge ? nativeBridge.leftInset : 0)
+        : (usesMacCocoaWindow && nativeBridge ? nativeBridge.safeAreaLeft : 0)
+    property real titleBarRightInset: usesAppWindowTitleBar
+        ? (nativeBridge ? nativeBridge.rightInset : 0)
+        : (usesMacCocoaWindow && nativeBridge ? nativeBridge.safeAreaRight : 0)
 
     readonly property string baseUiFontFamily: {
         if (typeof embeddedBaseUiFontFamily === "string" && embeddedBaseUiFontFamily.length > 0) {
@@ -48,8 +71,8 @@ ApplicationWindow {
     }
 
     function showAboutWindow() {
-        if (!aboutWindow) {
-            return
+        if (!aboutWindowLoader.active) {
+            aboutWindowLoader.active = true
         }
         aboutWindow.appTitle = (typeof appTitle === "string") ? appTitle : "ArcaeaNap"
         aboutWindow.appVersion = (typeof appVersion === "string") ? appVersion : ""
@@ -73,22 +96,127 @@ ApplicationWindow {
         showWindow(ossLicensesWindow)
     }
 
+    function updateNativeDragRegions() {
+        if (!usesAppWindowTitleBar || !isNativeBridgeReady) return;
+        const dragLeft = window.titleBarLeftInset;
+        const dragRight = Math.max(dragLeft, window.width - window.titleBarRightInset);
+        const dragRects = [];
+        const interactiveItems = [brandContainer, settingsBtn];
+        if (typeof updateNotice !== "undefined" && updateNotice && updateNotice.visible) {
+            interactiveItems.push(updateNotice);
+        }
+        if (typeof tabRepeater !== "undefined" && tabRepeater) {
+            for (let i = 0; i < tabRepeater.count; i++) {
+                if (i !== window.currentTab) {
+                    let tabItem = tabRepeater.itemAt(i);
+                    if (tabItem) interactiveItems.push(tabItem);
+                }
+            }
+        } else if (typeof menuContainer !== "undefined" && menuContainer) {
+            interactiveItems.push(menuContainer);
+        }
+        const interactiveRanges = interactiveItems
+            .filter(item => item && item.visible && item.width > 0)
+            .map(item => {
+                const point = item.mapToItem(navBar, 0, 0);
+                return {
+                    left: Math.max(dragLeft, point.x),
+                    right: Math.min(dragRight, point.x + item.width)
+                }
+            }).sort((a, b) => a.left - b.left);
+        let cursor = dragLeft;
+        for (const range of interactiveRanges) {
+            if (range.right <= cursor) continue;
+            if (range.left > cursor) {
+                dragRects.push({ x: cursor, y: 0, width: range.left - cursor, height: window.titleBarHeight });
+            }
+            cursor = Math.max(cursor, range.right);
+        }
+        if (dragRight > cursor) {
+            dragRects.push({ x: cursor, y: 0, width: dragRight - cursor, height: window.titleBarHeight });
+        }
+        if (nativeBridge) {
+            nativeBridge.setDragRectangles(dragRects);
+        }
+    }
+    onWidthChanged: { Qt.callLater(updateNativeDragRegions); }
+    onHeightChanged: { Qt.callLater(updateNativeDragRegions); }
+    onCurrentTabChanged: { Qt.callLater(updateNativeDragRegions); }
+    Connections {
+        target: nativeBridge
+        function onMetricsChanged() { Qt.callLater(window.updateNativeDragRegions); }
+        function onAvailableChanged() {
+            if (isNativeBridgeReady && nativeBridge) {
+                nativeBridge.setDarkMode(Theme.isDarkMode)
+                if (usesAppWindowTitleBar) {
+                    window.width = 1280
+                    window.height = 900
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: Theme
+        function onIsDarkModeChanged() {
+            if (nativeBridge) nativeBridge.setDarkMode(Theme.isDarkMode)
+        }
+    }
+
+    Component.onCompleted: {
+        bridgeManager.attachBridgeStyle(mainNativeBridge, window, 1)
+        if (nativeBridge && !nativeBridge.available) {
+            nativeBridgeFallbackVisible = true
+        }
+        updateNativeDragRegions()
+
+        dbMissingPopup.refreshGoogleConnectionState()
+        if (startupHandler) {
+            startupHandler.checkAndLoad()
+        }
+    }
+
     // --- 통합 상단 네비게이션 바 ---
+    // On macOS with ExpandedClientAreaHint, children start at SafeArea top.
+    // Extend the navBar upward into the title bar area so there's no gap.
     Rectangle {
         id: navBar
         width: parent.width
-        height: 70
+        // 전체화면에서는 QML 좌표계가 절대 최상단(0,0)에 맞춰지므로 y를 0으로 고정하여 위로 잘리는 현상 방지
+        y: usesAppWindowTitleBar || (usesMacCocoaWindow && window.visibility === Window.FullScreen) ? 0 : -safeAreaTop
+        height: usesAppWindowTitleBar ? titleBarHeight : (usesMacCocoaWindow ? titleBarHeight : titleBarHeight + safeAreaTop)
         color: Theme.bgCard
         z: 10
 
-        // [수정] RowLayout 제거 -> 앵커(Anchors) 기반의 독립 배치로 변경
+        // Content container: spans the full navBar so content is vertically
+        // centered across the entire bar (including the title bar area).
+        // Horizontal traffic-light avoidance is handled by titleBarLeftInset.
+        Item {
+            id: navBarContent
+            anchors.fill: parent
+        }
+
+        MouseArea {
+            id: moveSurface
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+            z: 0
+            enabled: !usesAppWindowTitleBar
+            onPressed: window.startSystemMove()
+            onDoubleClicked: {
+                if (window.visibility === Window.Maximized) window.showNormal()
+                else window.showMaximized()
+            }
+        }
 
         // 1. 브랜드 로고 + 텍스트 (왼쪽 고정)
         Item {
             id: brandContainer
             anchors.left: parent.left
-            anchors.leftMargin: 40
-            anchors.verticalCenter: parent.verticalCenter
+            // macOS 전체화면에서는 신호등이 숨겨지므로 기본 패딩(20) 적용.
+            // 창 모드에서는 브리지가 계산한 신호등 너비(titleBarLeftInset)에 + 20 패딩 추가하여 넉넉하게 띄움.
+            anchors.leftMargin: usesMacCocoaWindow ? (window.visibility === Window.FullScreen ? 20 : titleBarLeftInset + 20) : Math.max(12, titleBarLeftInset + 12)
+            anchors.verticalCenter: navBarContent.verticalCenter
             width: brandRow.implicitWidth
             height: 40
             visible: window.width > 800
@@ -100,8 +228,8 @@ ApplicationWindow {
 
                 Image {
                     id: brandLogo
-                    width: 28
-                    height: 28
+                    width: 24
+                    height: 24
                     source: (typeof appLogoSource === "string") ? appLogoSource : ""
                     fillMode: Image.PreserveAspectFit
                     mipmap: true
@@ -111,7 +239,7 @@ ApplicationWindow {
                 Text {
                     id: logoText
                     text: "ArcaeaNap"
-                    font.pixelSize: 20
+                    font.pixelSize: 18
                     font.bold: true
                     color: Theme.textTitle
                     anchors.verticalCenter: parent.verticalCenter
@@ -132,7 +260,7 @@ ApplicationWindow {
             visible: !!updateHandler && updateHandler.phase === "available"
             anchors.left: brandContainer.right
             anchors.leftMargin: 12
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenter: navBarContent.verticalCenter
             width: noticeRow.implicitWidth
             height: 28
 
@@ -168,10 +296,11 @@ ApplicationWindow {
         Item {
             id: menuContainer
             width: 400 
-            height: parent.height
+            height: navBarContent.height
             
-            // [핵심] 부모의 정중앙에 강제로 위치시킴
-            anchors.centerIn: parent
+            // [핵심] navBarContent의 정중앙에 강제로 위치시킴
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.verticalCenter: navBarContent.verticalCenter
 
             // --- (이하 탭 메뉴 내부 코드는 기존과 동일) ---
             Item {
@@ -218,8 +347,23 @@ ApplicationWindow {
                                 id: tabMouse
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: window.currentTab = index
+                                cursorShape: parent.isActive ? Qt.ArrowCursor : Qt.PointingHandCursor
+                                onPressed: (mouse) => {
+                                    if (parent.isActive && !usesAppWindowTitleBar) {
+                                        window.startSystemMove()
+                                    }
+                                }
+                                onDoubleClicked: (mouse) => {
+                                    if (parent.isActive && !usesAppWindowTitleBar) {
+                                        if (window.visibility === Window.Maximized) window.showNormal()
+                                        else window.showMaximized()
+                                    }
+                                }
+                                onClicked: {
+                                    if (!parent.isActive) {
+                                        window.currentTab = index
+                                    }
+                                }
                             }
 
                             Text {
@@ -267,8 +411,8 @@ ApplicationWindow {
             
             // [핵심] 오른쪽 끝에 강제로 고정
             anchors.right: parent.right
-            anchors.rightMargin: 40
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.rightMargin: Math.max(40, titleBarRightInset + 16)
+            anchors.verticalCenter: navBarContent.verticalCenter
             
             Rectangle {
                 anchors.fill: parent
@@ -293,12 +437,12 @@ ApplicationWindow {
                 hoverEnabled: true 
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                    // Show settings window or bring it to focus
-                    if (settingsWindow.visible) {
-                        settingsWindow.raise()
-                        settingsWindow.requestActivate()
+                    if (settingsWindowLoader.item && settingsWindowLoader.item.visible) {
+                        settingsWindowLoader.item.raise()
+                        settingsWindowLoader.item.requestActivate()
                     } else {
-                        settingsWindow.show()
+                        settingsWindowLoader.active = true
+                        settingsWindowLoader.item.show()
                     }
                 }
             }
@@ -309,17 +453,36 @@ ApplicationWindow {
     Loader {
         id: settingsWindowLoader
         source: "settings_ui.qml"
-        asynchronous: true
+        active: false
     }
-    
+
     property Window settingsWindow: settingsWindowLoader.item
+
+    Connections {
+        target: settingsWindowLoader.item
+        function onVisibleChanged() {
+            if (settingsWindowLoader.item && !settingsWindowLoader.item.visible) {
+                Qt.callLater(function() { settingsWindowLoader.active = false })
+            }
+        }
+    }
+
     Loader {
         id: aboutWindowLoader
         source: "about_ui.qml"
-        asynchronous: false
+        active: false
     }
 
     property Window aboutWindow: aboutWindowLoader.item
+
+    Connections {
+        target: aboutWindowLoader.item
+        function onVisibleChanged() {
+            if (aboutWindowLoader.item && !aboutWindowLoader.item.visible) {
+                Qt.callLater(function() { aboutWindowLoader.active = false })
+            }
+        }
+    }
 
     Loader {
         id: ossLicensesWindowLoader
@@ -346,6 +509,7 @@ ApplicationWindow {
         if (ossLicensesWindow && ossLicensesWindow.visible) {
             ossLicensesWindow.close()
         }
+        Qt.quit()
     }
 
     // --- 페이지 컨테이너 (StackLayout) ---
@@ -811,13 +975,6 @@ ApplicationWindow {
         function onSessionReset(message) {
             toastText.text = message
             toastAnimation.restart()
-        }
-    }
-
-    Component.onCompleted: {
-        dbMissingPopup.refreshGoogleConnectionState()
-        if (startupHandler) {
-            startupHandler.checkAndLoad()
         }
     }
 

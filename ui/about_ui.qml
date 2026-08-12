@@ -12,10 +12,61 @@ Window {
     height: 480
     minimumWidth: 480
     maximumWidth: 480
-    title: "About"
-    color: Theme.bgWindow
+    title: usesMacCocoaWindow ? "" : "About"
+    color: Theme.bgCard
     transientParent: null
-    flags: Qt.Dialog | Qt.WindowCloseButtonHint | Qt.WindowTitleHint
+    flags: usesAppWindowTitleBar ? (Qt.Dialog | Qt.WindowCloseButtonHint | Qt.WindowTitleHint) : (Qt.Dialog | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint)
+
+    property QtObject nativeBridge: aboutNativeBridge
+    property bool isNativeBridgeReady: nativeBridge ? nativeBridge.available : false
+
+    property real safeAreaTop: usesMacCocoaWindow ? (nativeBridge ? nativeBridge.safeAreaTop : 0) : 0
+    property real titleBarHeight: usesAppWindowTitleBar ? (nativeBridge ? nativeBridge.height : 0) : 52
+
+    MouseArea {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: titleBarHeight
+        acceptedButtons: Qt.LeftButton
+        z: 999
+        onPressed: aboutWindow.startSystemMove()
+    }
+    Component.onCompleted: {
+        bridgeManager.attachBridgeStyle(aboutNativeBridge, aboutWindow, 1)
+    }
+
+    Connections {
+        target: nativeBridge
+        function onAvailableChanged() {
+            if (isNativeBridgeReady && nativeBridge) {
+                nativeBridge.setDarkMode(Theme.isDarkMode)
+                if (usesAppWindowTitleBar) {
+                    aboutWindow.width = 480
+                }
+            }
+        }
+        function onMetricsChanged() {
+            Qt.callLater(aboutWindow.updateNativeDragRegions);
+        }
+    }
+
+    Connections {
+        target: Theme
+        function onIsDarkModeChanged() {
+            if (nativeBridge) nativeBridge.setDarkMode(Theme.isDarkMode)
+        }
+    }
+
+    function updateNativeDragRegions() {
+        if (!usesAppWindowTitleBar || !isNativeBridgeReady) return;
+        const dragRects = [{ x: 0, y: 0, width: aboutWindow.width, height: titleBarHeight }];
+        if (nativeBridge) {
+            nativeBridge.setDragRectangles(dragRects);
+        }
+    }
+    onWidthChanged: { Qt.callLater(updateNativeDragRegions); }
+    onHeightChanged: { Qt.callLater(updateNativeDragRegions); }
 
     property string appTitle: "ArcaeaNap"
     property string appVersion: ""
@@ -43,11 +94,8 @@ Window {
                 if (windowSizeLocked)
                     return
 
-                var targetHeight = Math.ceil(contentCol.implicitHeight + 80)
-                if (targetHeight <= 0) {
-                    windowSizeLockScheduled = false
-                    return
-                }
+                // contentCol.implicitHeight + anchors.margins (top 48 + bottom 24) = 72, plus safe buffer
+                var targetHeight = Math.ceil(contentCol.implicitHeight + 96)
 
                 windowSizeLocked = true
                 height = targetHeight
@@ -57,22 +105,14 @@ Window {
         })
     }
 
-    Rectangle {
-        // Use the window dimensions directly because contentItem has no valid
-        // size until the Window is shown for the first time.
-        x: 16
-        y: 16
-        width: aboutWindow.width - 32
-        height: aboutWindow.height - 32
-        radius: 12
-        color: Theme.bgCard
-        border.color: Theme.borderCard
-
-        ColumnLayout {
-            id: contentCol
-            anchors.fill: parent
-            anchors.margins: 24
-            spacing: 20
+    ColumnLayout {
+        id: contentCol
+        anchors.fill: parent
+        anchors.topMargin: 48
+        anchors.bottomMargin: 24
+        anchors.leftMargin: 24
+        anchors.rightMargin: 24
+        spacing: 20
 
             // Branding Section
             Row {
@@ -323,7 +363,7 @@ Window {
             // Open Source Licenses Button
             Basic.Button {
                 Layout.alignment: Qt.AlignHCenter
-                text: "Open Source Licenses"
+                text: "Third-Party Licenses & Notices"
                 height: 36
                 onClicked: aboutWindow.openOssRequested()
                 hoverEnabled: true
@@ -400,6 +440,5 @@ Window {
                     }
                 }
             }
-        }
     }
 }

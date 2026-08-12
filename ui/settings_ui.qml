@@ -14,11 +14,65 @@ Window {
     minimumWidth: 600
     maximumWidth: 600
     minimumHeight: 600
-    title: "Settings"
+    title: usesMacCocoaWindow ? "" : "Settings"
     color: Theme.bgWindow
-    
+
+    flags: usesAppWindowTitleBar ? (Qt.Dialog | Qt.WindowCloseButtonHint | Qt.WindowTitleHint) : (Qt.Dialog | Qt.WindowCloseButtonHint | Qt.WindowTitleHint | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint)
+
     // 메인 윈도우 위에 고정되지 않도록 부모 관계 해제
     transientParent: null
+
+    property QtObject nativeBridge: settingsNativeBridge
+    property bool isNativeBridgeReady: nativeBridge ? nativeBridge.available : false
+
+    property real safeAreaTop: usesMacCocoaWindow ? (nativeBridge ? nativeBridge.safeAreaTop : 0) : 0
+    property real titleBarHeight: usesAppWindowTitleBar ? (nativeBridge ? nativeBridge.height : 0) : (usesMacCocoaWindow ? 40 : Math.max(40, safeAreaTop + 12))
+
+    MouseArea {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: titleBarHeight
+        acceptedButtons: Qt.LeftButton
+        z: 999
+        onPressed: settingsWindow.startSystemMove()
+    }
+    Component.onCompleted: {
+        bridgeManager.attachBridgeStyle(settingsNativeBridge, settingsWindow, 2)
+    }
+
+    Connections {
+        target: nativeBridge
+        function onAvailableChanged() {
+            if (isNativeBridgeReady && nativeBridge) {
+                nativeBridge.setDarkMode(Theme.isDarkMode)
+                if (usesAppWindowTitleBar) {
+                    settingsWindow.width = 600
+                    settingsWindow.height = 800
+                }
+            }
+        }
+        function onMetricsChanged() {
+            Qt.callLater(settingsWindow.updateNativeDragRegions);
+        }
+    }
+
+    Connections {
+        target: Theme
+        function onIsDarkModeChanged() {
+            if (nativeBridge) nativeBridge.setDarkMode(Theme.isDarkMode)
+        }
+    }
+
+    function updateNativeDragRegions() {
+        if (!usesAppWindowTitleBar || !isNativeBridgeReady) return;
+        const dragRects = [{ x: 0, y: 0, width: settingsWindow.width, height: titleBarHeight }];
+        if (nativeBridge) {
+            nativeBridge.setDragRectangles(dragRects);
+        }
+    }
+    onWidthChanged: { Qt.callLater(updateNativeDragRegions); }
+    onHeightChanged: { Qt.callLater(updateNativeDragRegions); }
 
     // No version fetch on visibility change — versions are stored in account_connections.json
     // and loaded on init via getSheetVersions()
@@ -397,7 +451,10 @@ Window {
 
     Item {
         id: settingsScrollArea
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.top: parent.top
 
         ScrollView {
             id: scrollView

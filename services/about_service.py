@@ -18,6 +18,20 @@ DEFAULT_REPOSITORY_URL = "https://github.com/doldamul/ArcaeaNap"
 
 OPEN_SOURCE_ITEMS = [
     {
+        "name": "Windows App SDK",
+        "url": "https://learn.microsoft.com/windows/apps/windows-app-sdk/",
+        "license": "Microsoft Software License Terms",
+        "copyright": "Microsoft Corporation",
+        "license_file": "windows-app-sdk.txt",
+    },
+    {
+        "name": "C++/WinRT",
+        "url": "https://github.com/microsoft/cppwinrt",
+        "license": "MIT",
+        "copyright": "Microsoft Corporation",
+        "license_file": "cppwinrt-mit.txt",
+    },
+    {
         "name": "PyQt6",
         "url": "https://www.riverbankcomputing.com/software/pyqt/",
         "license": "GPL-3.0",
@@ -204,4 +218,3 @@ def build_about_context(repo_root: str) -> dict[str, Any]:
         "openSourceItems": _build_open_source_items(),
         "buildDate": _get_build_date(),
     }
-

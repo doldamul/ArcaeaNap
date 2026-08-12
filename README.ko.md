@@ -37,17 +37,14 @@ ArcaeaNap은 빠르고 편리한 Arcaea 플레이 기록 뷰어입니다. Arcaea
 1. [Releases](https://github.com/doldamul/ArcaeaNap/releases) 페이지에서 프로그램 압축 파일을 다운받습니다.
 2. 운영체제에 따라 다음 과정을 진행합니다:
    - **Windows:** 압축을 풀고 프로그램 디렉토리 내 `ArcaeaNap.exe` 파일을 실행합니다.
-   - **macOS:** 압축을 푼 후 터미널 앱을 열어 다음을 작성합니다:
-     ```bash
-     xattr -cr 
-     ```
-     (`-cr` 뒤에 띄어쓰기가 되어있어야 합니다)
+   - **macOS:** 압축을 풀고 `ArcaeaNap.app`을 `/Applications` 폴더로 옮깁니다. 이후 앱을 우클릭하여 **열기(Open)**를 선택하고, macOS 보안 확인 창이 표시되면 실행을 승인합니다. **시스템 설정 > 개인정보 보호 및 보안**에 **Open Anyway(확인 없이 열기)** 버튼이 표시되면 해당 버튼으로 최초 실행을 승인합니다.
 
-     그리고 압축을 푼 `ArcaeaNap.app` 파일을 터미널 창에 놓습니다. 다음과 같은 형태가 될 것입니다:
+     다운로드 파일의 quarantine 속성 때문에 계속 차단되는 경우에만 다음과 같이 quarantine 속성만 제거하는 터미널 명령을 사용할 수 있습니다:
      ```bash
-     xattr -cr /Users/username/Downloads/ArcaeaNap.app
+     xattr -dr com.apple.quarantine "/Applications/ArcaeaNap.app"
      ```
-     엔터 키를 누른 후, 작업이 완료되면 해당 앱을 `/Applications` 폴더로 옮기고 실행합니다.
+
+     이 앱은 ad-hoc 서명을 사용하므로 최초 실행 시 확인되지 않은 개발자 경고가 표시될 수 있습니다.
 3. 구글 계정에 로그인하고 곡 정보 데이터베이스를 생성합니다.
 4. 설정에서 데이터 분석용 브라우저를 다운받습니다.
 5. 설정에서 Arcaea Online에 로그인하고 구독이 활성화되어 있는지 확인합니다.
@@ -64,27 +61,44 @@ ArcaeaNap은 빠르고 편리한 Arcaea 플레이 기록 뷰어입니다. Arcaea
 - Python 3.13 이상
 - 필수 패키지 설치:
   ```bash
-  pip install PyQt6 playwright requests beautifulsoup4 google-auth google-auth-oauthlib google-api-python-client gspread keyring pywin32-ctypes cx_Freeze
+  pip install "PyQt6>=6.9.0" playwright requests beautifulsoup4 google-auth google-auth-oauthlib google-api-python-client gspread keyring pywin32-ctypes cx_Freeze
   playwright install chromium
   ```
+- 소스 코드 실행 및 직접 빌드를 위한 추가 요구사항:
+  - **Windows:** Windows App Runtime 2.3.1+, Visual Studio 2022 C++ 도구, Windows SDK, CMake가 필요합니다.
+  - **macOS:** Apple Silicon, macOS 14+, Xcode command-line tools, CMake, `codesign`이 필요합니다.
 
-소스 코드로 실행할 때는 main.py로 접근합니다:
+Windows에서 소스 코드로 실행하려면 개발용 브리지를 빌드한 뒤 앱을 실행합니다:
 
 ```bash
+python -m tools.build_windows_bridge
 python main.py
 ```
 
-이 프로젝트는 `cx_Freeze`를 사용하여 독립 실행 파일을 빌드합니다.
+macOS에서도 위와 동일한 방식으로 앱을 실행합니다:
 
-Windows 빌드:
 ```bash
-python setup.py build
+python -m tools.build_macos_bridge
+python main.py
 ```
 
-macOS 앱 빌드:
+이후 네이티브 브리지 소스를 변경하지 않는다면 앱을 실행할 때 매번 브리지를 빌드하지 않아도 됩니다.
+
+macOS에서 Python으로 앱을 직접 실행할 경우, 앱이 레거시 윈도우 모드로 동작하여 네이티브 신호등이 의도한 크기보다 작게 표시될 수 있습니다. 의도한 macOS 윈도우 형태로 실행하려면 먼저 개발용 브리지를 빌드한 뒤 macOS 전용 C++ 런처를 빌드하고 실행합니다:
+
 ```bash
-python setup.py bdist_mac
+python -m tools.build_macos_bridge
+python -m tools.build_macos_launcher
+./ArcaeaNapLauncher
 ```
+
+배포용 frozen 앱은 다음 명령으로 빌드합니다:
+
+```bash
+python -m tools.build_app
+```
+
+이 명령은 네이티브 브리지와 앱 번들 패키징 과정을 자동으로 처리합니다.
 
 실행 및 빌드시 프로젝트 루트 디렉토리에 유효한 `client_secret.json` (Google Cloud API 인증 정보) 파일이 필요합니다.
 client_secret.json 파일 생성 절차는 다음과 같습니다:

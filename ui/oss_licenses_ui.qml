@@ -9,7 +9,7 @@ Window {
     height: 860
     minimumWidth: 880
     minimumHeight: 680
-    title: "Open Source Licenses"
+    title: "Third-Party Licenses & Notices"
     color: Theme.bgWindow
     transientParent: null
 

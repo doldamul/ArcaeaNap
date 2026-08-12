@@ -26,6 +26,24 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Native bridge and platform build outputs
+/native/build/
+/native/build-*/
+/native/Release/
+/native/CMakeFiles/
+/native/CMakeCache.txt
+/native/appwindow_titlebar_bridge.dll
+/native/appwindow_titlebar_bridge.exp
+/native/appwindow_titlebar_bridge.lib
+/native/appwindow_titlebar_bridge.pdb
+/native/appwindow_titlebar_bridge.ilk
+/native/appwindow_titlebar_bridge.old.dll
+/native/Microsoft.WindowsAppRuntime.Bootstrap.dll
+/native/libmacos_window_bridge.dylib
+/ArcaeaNapLauncher
+/native/generated/winrt/
+/native/third_party/
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -174,7 +192,11 @@ client_secret.json
 .claude
 .worktrees/
 agent_docs
+
 tests
 updates/
+/docs/superpowers/
 AGENT.md
+/AGENTS.md
 CLAUDE.md
+/pytest.ini
