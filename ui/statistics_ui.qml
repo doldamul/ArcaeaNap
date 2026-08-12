@@ -405,11 +405,178 @@ Item {
                                 }
                             }
                             
-                            // Item count label
-                            Text {
-                                text: songListView.count + " items"
-                                font.pixelSize: 11
-                                color: Theme.textLight
+                            // Item count and Active Filters
+                            RowLayout {
+                                Layout.fillWidth: true
+
+                                Text {
+                                    text: songListView.count + " items"
+                                    font.pixelSize: 11
+                                    color: Theme.textLight
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                Row {
+                                    Layout.alignment: Qt.AlignVCenter
+                                    spacing: 6
+
+                                    Repeater {
+                                        model: statisticsHandler ? statisticsHandler.activeFiltersModel : null
+
+                                        Row {
+                                            spacing: 6
+                                            
+                                            Text {
+                                                text: "/"
+                                                font.pixelSize: 11
+                                                color: Theme.textLight
+                                                visible: index > 0
+                                                anchors.verticalCenter: parent.verticalCenter
+                                            }
+                                            
+                                            Loader {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                property var filterData: modelData
+                                                sourceComponent: {
+                                                    if (!modelData) return null;
+                                                    switch(modelData.type) {
+                                                        case "difficulties": return diffComp;
+                                                        case "level": return levelComp;
+                                                        case "bp": return bpComp;
+                                                        case "score": return scoreComp;
+                                                        case "clear": return clearComp;
+                                                        case "flags": return flagsComp;
+                                                        default: return null;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Formatting Components for Filters
+                            Component {
+                                id: diffComp
+                                Row {
+                                    spacing: 0
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    Repeater {
+                                        model: filterData ? filterData.data : []
+                                        Text {
+                                            text: modelData.active ? "◆" : "◇"
+                                            color: Theme.getDiffColor(modelData.diff)
+                                            font.pixelSize: 11
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                    }
+                                }
+                            }
+
+                            Component {
+                                id: levelComp
+                                Text {
+                                    textFormat: Text.StyledText
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                    text: {
+                                        if (!filterData) return "";
+                                        function getLevelVal(lstr) {
+                                            var str = String(lstr);
+                                            if (str.indexOf("⁺") !== -1 || str.indexOf("+") !== -1) return parseFloat(str) + 0.5;
+                                            return parseFloat(str);
+                                        }
+                                        var cMin = rangeSlider.getColorForLevel(getLevelVal(filterData.min))
+                                        if (filterData.min === filterData.max) {
+                                            return "<font color='" + cMin + "'>" + filterData.min + "</font>"
+                                        }
+                                        var cMax = rangeSlider.getColorForLevel(getLevelVal(filterData.max))
+                                        return "<font color='" + cMin + "'>" + filterData.min + "</font>" +
+                                               "<font color='" + Theme.textLight + "'>-</font>" +
+                                               "<font color='" + cMax + "'>" + filterData.max + "</font>"
+                                    }
+                                }
+                            }
+
+                            Component {
+                                id: bpComp
+                                Text {
+                                    textFormat: Text.StyledText
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                    text: {
+                                        if (!filterData) return "";
+                                        var cMin = rangeSlider.getColorForLevel(parseFloat(filterData.min))
+                                        var minStr = Number(filterData.min).toFixed(1)
+                                        var maxStr = Number(filterData.max).toFixed(1)
+                                        if (minStr === maxStr || Math.abs(Number(filterData.min) - Number(filterData.max)) < 1e-4) {
+                                            return "<font color='" + cMin + "'>" + minStr + "</font>"
+                                        }
+                                        var cMax = rangeSlider.getColorForLevel(parseFloat(filterData.max))
+                                        return "<font color='" + cMin + "'>" + minStr + "</font>" +
+                                               "<font color='" + Theme.textLight + "'>-</font>" +
+                                               "<font color='" + cMax + "'>" + maxStr + "</font>"
+                                    }
+                                }
+                            }
+
+                            Component {
+                                id: scoreComp
+                                Text {
+                                    textFormat: Text.StyledText
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                    text: {
+                                        if (!filterData) return "";
+                                        var cMin = scoreRangeSlider.getColorForScoreIndex(filterData.minIdx)
+                                        if (filterData.minIdx === filterData.maxIdx || filterData.minStr === filterData.maxStr) {
+                                            return "<font color='" + cMin + "'>" + filterData.minStr + "</font>"
+                                        }
+                                        var cMax = scoreRangeSlider.getColorForScoreIndex(filterData.maxIdx)
+                                        return "<font color='" + cMin + "'>" + filterData.minStr + "</font>" +
+                                               "<font color='" + Theme.textLight + "'>-</font>" +
+                                               "<font color='" + cMax + "'>" + filterData.maxStr + "</font>"
+                                    }
+                                }
+                            }
+
+                            Component {
+                                id: clearComp
+                                Text {
+                                    textFormat: Text.StyledText
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                    text: {
+                                        if (!filterData) return "";
+                                        var cMin = clearRangeSlider.getColorForIndex(filterData.minIdx)
+                                        if (filterData.isSingle || filterData.minIdx === filterData.maxIdx || filterData.minStr === filterData.maxStr) {
+                                            return "<font color='" + cMin + "'>" + filterData.minStr + "</font>"
+                                        }
+                                        var cMax = clearRangeSlider.getColorForIndex(filterData.maxIdx)
+                                        return "<font color='" + cMin + "'>" + filterData.minStr + "</font>" +
+                                               "<font color='" + Theme.textLight + "'>-</font>" +
+                                               "<font color='" + cMax + "'>" + filterData.maxStr + "</font>"
+                                    }
+                                }
+                            }
+
+                            Component {
+                                id: flagsComp
+                                Row {
+                                    spacing: 1
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    Repeater {
+                                        model: filterData ? filterData.data : []
+                                        Text {
+                                            text: modelData.icon
+                                            font.pixelSize: 10
+                                            opacity: modelData.state === "off" ? 0.3 : 1.0
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                    }
+                                }
                             }
                             
                             // Song/Chart ListView Wrapper

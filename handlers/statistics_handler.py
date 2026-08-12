@@ -335,6 +335,84 @@ class StatisticsHandler(QObject):
     def selectedIndex(self):
         return self._selected_index
 
+    @pyqtProperty('QVariantList', notify=dataChanged)
+    def activeFiltersModel(self):
+        filters = []
+        
+        # Flags Filter
+        flags = []
+        if self._filter_ignore_chart != "contain":
+            flags.append({"icon": "⛔", "state": self._filter_ignore_chart})
+        if self._filter_skill_issues != "contain":
+            flags.append({"icon": "⚠️", "state": self._filter_skill_issues})
+        if self._filter_hard_bpm != "contain":
+            flags.append({"icon": "⏪", "state": self._filter_hard_bpm})
+            
+        if flags:
+            filters.append({
+                "type": "flags",
+                "data": flags
+            })
+            
+        # Clear Type Filter
+        if len(self._filter_clear_types) < 6:
+            if self._filter_clear_types:
+                LOGICAL_ORDER = [0, 4, 1, 5, 2, 3]
+                SHORT_NAMES = {0: "L", 4: "C", 1: "C", 5: "C", 2: "F", 3: "P"}
+                
+                indices = [LOGICAL_ORDER.index(ct) for ct in self._filter_clear_types if ct in LOGICAL_ORDER]
+                if indices:
+                    min_idx = min(indices)
+                    max_idx = max(indices)
+                    filters.append({
+                        "type": "clear",
+                        "minIdx": min_idx,
+                        "maxIdx": max_idx,
+                        "minStr": SHORT_NAMES[LOGICAL_ORDER[min_idx]],
+                        "maxStr": SHORT_NAMES[LOGICAL_ORDER[max_idx]],
+                        "isSingle": len(indices) == 1
+                    })
+                    
+        # Score Range Filter
+        if self._filter_score_min_rank != 0 or self._filter_score_max_rank != len(SCORE_RANKS) - 1:
+            filters.append({
+                "type": "score",
+                "minIdx": self._filter_score_min_rank,
+                "maxIdx": self._filter_score_max_rank,
+                "minStr": SCORE_RANKS[self._filter_score_min_rank],
+                "maxStr": SCORE_RANKS[self._filter_score_max_rank]
+            })
+            
+        # Level / BP Range Filter
+        if self._filter_bp_mode:
+            bps = self._service.available_bps
+            min_bp = bps[0] if bps else 1.0
+            max_bp = bps[-1] if bps else 13.0
+            if abs(self._filter_bp_min - min_bp) > 1e-4 or abs(self._filter_bp_max - max_bp) > 1e-4:
+                filters.append({
+                    "type": "bp",
+                    "min": self._filter_bp_min,
+                    "max": self._filter_bp_max
+                })
+        else:
+            if self._filter_level_min_str != "1" or self._filter_level_max_str != "12":
+                filters.append({
+                    "type": "level",
+                    "min": self._filter_level_min_str.replace("+", "⁺"),
+                    "max": self._filter_level_max_str.replace("+", "⁺")
+                })
+                
+        # Difficulty Filter (Always shown)
+        filters.append({
+            "type": "difficulties",
+            "data": [
+                {"diff": d, "active": d in self._filter_difficulties}
+                for d in [0, 1, 2, 4, 3]
+            ]
+        })
+            
+        return filters
+
     # === QML Slots ===
     @pyqtSlot(str)
     def setDisplayMode(self, mode):
