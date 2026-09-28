@@ -11,9 +11,9 @@ class StatisticsHandler(QObject):
     dataChanged = pyqtSignal()
     selectedItemChanged = pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, service: StatisticsService | None = None):
         super().__init__()
-        self._service = StatisticsService()
+        self._service = service if service is not None else StatisticsService()
 
         # UI 상태
         self._display_mode = "song"  # "song" or "chart"
@@ -24,6 +24,7 @@ class StatisticsHandler(QObject):
 
         # Filters
         self._filter_difficulties = [0, 1, 2, 3, 4]  # All difficulties
+        self._filter_include_inscribed = True  # Inscribed filter (default: True)
         self._filter_level_min_str = "1"  # Level string for min
         self._filter_level_max_str = "12"  # Level string for max
         self._filter_bp_mode = False  # False = level range, True = BP range
@@ -65,6 +66,7 @@ class StatisticsHandler(QObject):
             score_min_rank=self._filter_score_min_rank,
             score_max_rank=self._filter_score_max_rank,
             clear_types=self._filter_clear_types,
+            include_inscribed=self._filter_include_inscribed,
         )
 
     def _get_item_detail_difficulties(self, item):
@@ -335,6 +337,16 @@ class StatisticsHandler(QObject):
     def selectedIndex(self):
         return self._selected_index
 
+    @pyqtProperty(bool, notify=dataChanged)
+    def hasInscribedScore(self) -> bool:
+        """INS 플레이 기록 존재 여부 (하나라도 기록이 있으면 True)."""
+        return self._service.has_any_inscribed_played()
+
+    @pyqtProperty(bool, notify=dataChanged)
+    def isInscribedUnlocked(self) -> bool:
+        """DEINOS PHAINEIN INS 해금 여부."""
+        return self._service.is_inscribed_unlocked()
+
     @pyqtProperty('QVariantList', notify=dataChanged)
     def activeFiltersModel(self):
         filters = []
@@ -403,12 +415,19 @@ class StatisticsHandler(QObject):
                 })
                 
         # Difficulty Filter (Always shown)
+        byd_active = (3 in self._filter_difficulties)
+        ins_active = self._filter_include_inscribed
+        has_ins = self._service.has_any_inscribed_played()
+        show_ins_mark = has_ins and (byd_active != ins_active)
+
         filters.append({
             "type": "difficulties",
             "data": [
                 {"diff": d, "active": d in self._filter_difficulties}
                 for d in [0, 1, 2, 4, 3]
-            ]
+            ],
+            "showInsMark": show_ins_mark,
+            "insActive": ins_active,
         })
             
         return filters
@@ -471,6 +490,8 @@ class StatisticsHandler(QObject):
             self._filter_score_min_rank = int(value) if value is not None else 0
         elif filter_type == 'score_max_rank':
             self._filter_score_max_rank = int(value) if value is not None else len(SCORE_RANKS) - 1
+        elif filter_type in ('include_inscribed', 'includeInscribed'):
+            self._filter_include_inscribed = bool(value)
 
         self._on_filter_changed(selection_mode='adjacent_fallback')
 

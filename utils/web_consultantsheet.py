@@ -15,7 +15,7 @@ from utils.configuration import config, get_cache_dir
 import gspread
 import re
 from repositories.song_repository import init_songs_db, get_connection, resolve_song_id
-from models.types import Difficulty
+from models.types import Difficulty, ClearType
 from services.connection_store import get_provider, set_provider, remove_provider
 from services.keyring_store import get_secret, set_secret, delete_secret
 
@@ -474,7 +474,17 @@ def send_scores_to_sheet(sheet_id=None, log_callback=None, cancellation_context=
             f"score={'yes' if score_col is not None else 'no'}"
         )
     
-    log(f"Columns: title={title_col}, diff={diff_col}, score={score_col}")
+    lost_col = None
+    for idx in range(score_col + 1, len(header)):
+        cell_str = str(header[idx]).strip()
+        if cell_str == 'L':
+            lost_col = idx
+            break
+
+    if lost_col is not None:
+        log(f"Columns: title={title_col}, diff={diff_col}, score={score_col}, lost={lost_col}")
+    else:
+        log(f"Columns: title={title_col}, diff={diff_col}, score={score_col} (Lost 'L' column not found, sending scores only)")
     
     # Load local data
     songs_data = get_all_songs_with_charts()
@@ -502,6 +512,7 @@ def send_scores_to_sheet(sheet_id=None, log_callback=None, cancellation_context=
         'FTR': Difficulty.FTR.value,
         'BYD': Difficulty.BYD.value,
         'ETR': Difficulty.ETR.value,
+        'INS': Difficulty.BYD.value,
     }
     
     # Prepare batch updates
@@ -523,13 +534,13 @@ def send_scores_to_sheet(sheet_id=None, log_callback=None, cancellation_context=
         if not sheet_title or not sheet_diff:
             continue
         
-        total_data_rows += 1
-        
         # Convert difficulty string
         difficulty_int = diff_str_to_int.get(sheet_diff)
         if difficulty_int is None:
             continue
         
+        total_data_rows += 1
+
         # Match title: try direct match first, then alias map
         lookup_title = sheet_title.lower()
         
@@ -547,14 +558,35 @@ def send_scores_to_sheet(sheet_id=None, log_callback=None, cancellation_context=
         if not score_data or not score_data.get('score'):
             continue
         
-        # Convert score_col index to A1 notation
-        col_letter = _col_index_to_letter(score_col)
-        cell_ref = f"{col_letter}{row_idx}"
-        
-        batch_updates.append({
-            'range': cell_ref,
-            'values': [[score_data['score']]]
-        })
+        score_val = score_data['score']
+        score_col_letter = _col_index_to_letter(score_col)
+
+        if lost_col is not None:
+            is_lost = bool(score_data.get('clear_type') == ClearType.TRACK_LOST.value)
+            lost_col_letter = _col_index_to_letter(lost_col)
+            if lost_col == score_col + 1:
+                # Adjacent: combine score and lost into a single range
+                cell_ref = f"{score_col_letter}{row_idx}:{lost_col_letter}{row_idx}"
+                batch_updates.append({
+                    'range': cell_ref,
+                    'values': [[score_val, is_lost]]
+                })
+            else:
+                # Non-adjacent: separate updates
+                batch_updates.append({
+                    'range': f"{score_col_letter}{row_idx}",
+                    'values': [[score_val]]
+                })
+                batch_updates.append({
+                    'range': f"{lost_col_letter}{row_idx}",
+                    'values': [[is_lost]]
+                })
+        else:
+            cell_ref = f"{score_col_letter}{row_idx}"
+            batch_updates.append({
+                'range': cell_ref,
+                'values': [[score_val]]
+            })
         matched_count += 1
     
     if batch_updates:
@@ -789,10 +821,11 @@ def save_to_db(data):
             song_id = resolve_song_id(cursor, title)
             
             # 2. Insert/Update Chart
+            is_inscribed = 1 if difficulty_str == 'INS' else 0
             cursor.execute('''
                 INSERT INTO charts
-                (song_id, difficulty, level, bp, perceived_bp, s_bp, note_count, cut_200, ignore_chart, skill_issues, hard_bpm)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (song_id, difficulty, level, bp, perceived_bp, s_bp, note_count, cut_200, ignore_chart, skill_issues, hard_bpm, is_inscribed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(song_id, difficulty) DO UPDATE SET
                     level=excluded.level,
                     bp=excluded.bp,
@@ -802,7 +835,8 @@ def save_to_db(data):
                     cut_200=excluded.cut_200,
                     ignore_chart=excluded.ignore_chart,
                     skill_issues=excluded.skill_issues,
-                    hard_bpm=excluded.hard_bpm
+                    hard_bpm=excluded.hard_bpm,
+                    is_inscribed=CASE WHEN excluded.is_inscribed = 1 THEN 1 ELSE charts.is_inscribed END
             ''', (
                 song_id,
                 difficulty,
@@ -814,7 +848,8 @@ def save_to_db(data):
                 parse_int(entry['cut_200']),
                 parse_bool(entry['ignore_chart']),
                 parse_bool(entry['skill_issues']),
-                parse_bool(entry['hard_bpm'])
+                parse_bool(entry['hard_bpm']),
+                is_inscribed
             ))
             updated_count += 1
             

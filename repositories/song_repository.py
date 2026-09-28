@@ -90,6 +90,7 @@ def init_songs_db():
             ignore_chart INTEGER,
             skill_issues INTEGER,
             hard_bpm INTEGER,
+            is_inscribed INTEGER DEFAULT 0,
             UNIQUE(song_id, difficulty),
             FOREIGN KEY(song_id) REFERENCES songs(id)
         )
@@ -116,6 +117,8 @@ def init_songs_db():
         cursor.execute("ALTER TABLE charts ADD COLUMN skill_issues INTEGER")
     if 'hard_bpm' not in columns:
         cursor.execute("ALTER TABLE charts ADD COLUMN hard_bpm INTEGER")
+    if 'is_inscribed' not in columns:
+        cursor.execute("ALTER TABLE charts ADD COLUMN is_inscribed INTEGER DEFAULT 0")
 
     conn.commit()
     conn.close()
@@ -351,10 +354,14 @@ def get_all_songs_with_charts():
     conn = sqlite3.connect(songs_db_path)
     try:
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute("PRAGMA table_info(charts)")
+        has_ins_col = any(col[1] == 'is_inscribed' for col in cursor.fetchall())
+        ins_select = "c.is_inscribed" if has_ins_col else "0"
+
+        cursor.execute(f"""
             SELECT s.arcaea_id, s.canonical_title, s.title_en, s.title_jp, s.artist, s.length, s.bpm,
                    c.difficulty, c.level, c.bp, c.s_bp, c.perceived_bp, c.note_count,
-                   c.ignore_chart, c.skill_issues, c.hard_bpm, s.id, c.cut_200
+                   c.ignore_chart, c.skill_issues, c.hard_bpm, s.id, c.cut_200, {ins_select}
             FROM songs s
             LEFT JOIN charts c ON s.id = c.song_id
             WHERE s.arcaea_id IS NOT NULL AND s.arcaea_id != ''
@@ -388,6 +395,7 @@ def get_all_songs_with_charts():
                     'skill_issues': bool(row[14]),
                     'hard_bpm': bool(row[15]),
                     'cut_200': row[17] or 0,
+                    'is_inscribed': bool(row[18]),
                 }
 
         return result
@@ -441,3 +449,23 @@ def get_song_title(arcaea_id, difficulty=None, song_title_language='en'):
         return None
     finally:
         conn.close()
+
+
+def update_chart_inscribed_flag(cursor, song_id: int, difficulty: int, is_inscribed: int | bool) -> bool:
+    """
+    특정 차트의 is_inscribed 플래그를 갱신한다.
+
+    Args:
+        cursor: SQLite cursor
+        song_id: songs.id
+        difficulty: 난이도 (기본적으로 3/BYD)
+        is_inscribed: 1 (True) 또는 0 (False)
+
+    Returns:
+        bool: 업데이트 성공(영향받은 행 > 0) 여부
+    """
+    cursor.execute(
+        "UPDATE charts SET is_inscribed = ? WHERE song_id = ? AND difficulty = ?",
+        (1 if is_inscribed else 0, int(song_id), int(difficulty)),
+    )
+    return cursor.rowcount > 0

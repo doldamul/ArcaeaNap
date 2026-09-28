@@ -104,6 +104,7 @@ QtObject {
     property color diffFtr: isDarkMode ? "#B888FF" : "#A060FF"
     property color diffEtr: isDarkMode ? "#A0A0A0" : "#808080"
     property color diffByd: isDarkMode ? "#F06060" : "#E04040"
+    property color diffIns: isDarkMode ? "#7470FF" : "#3E3CA8"
 
     // Score / Potential Colors
     property color scoreFar: isDarkMode ? "#E8B020" : "#E0A000"
@@ -123,6 +124,7 @@ QtObject {
     property color rankBronze: isDarkMode ? "#C06838" : "#A0522D"
     property color rankPurple: isDarkMode ? "#B070E0" : "#984AD0"
     property color bestPotentialMark: isDarkMode ? "#B8B0D0" : "#6A6A8A"
+    property color bestPotential10Mark: isDarkMode ? "#FFE082" : "#A07800"
 
     // Score rank colors
     property color scoreRankPm: isDarkMode ? "#55D6D6" : "#00AAAA"
@@ -160,11 +162,13 @@ QtObject {
     property color dcBgFtr: isDarkMode ? "#362C41" : "#F8F0FF"
     property color dcBgByd: isDarkMode ? "#3B2C2C" : "#FFF5F5"
     property color dcBgEtr: isDarkMode ? "#343236" : "#F5F0F5"
+    property color dcBgIns: isDarkMode ? "#2B2A3E" : "#F4F4FD"
     property color dcBgPstSelected: isDarkMode ? "#315164" : "#E3F6FF"
     property color dcBgPrsSelected: isDarkMode ? "#315535" : "#E2F7E2"
     property color dcBgFtrSelected: isDarkMode ? "#503464" : "#F0E3FF"
     property color dcBgBydSelected: isDarkMode ? "#5F3333" : "#FFE3E3"
     property color dcBgEtrSelected: isDarkMode ? "#49404B" : "#EEE5EE"
+    property color dcBgInsSelected: isDarkMode ? "#3A3860" : "#E4E3FA"
 
     // Badges / Misc
     property color badgeBpm: isDarkMode ? "#B388FF" : "#6A0DAD"
@@ -190,11 +194,13 @@ QtObject {
     property color dcBgFtrFiltered: isDarkMode ? "#332A3D" : "#FAF8FC"
     property color dcBgBydFiltered: isDarkMode ? "#382A2A" : "#FAF8F8"
     property color dcBgEtrFiltered: isDarkMode ? "#302D33" : "#F8F8F8"
+    property color dcBgInsFiltered: isDarkMode ? "#2A2B3D" : "#F8F8FC"
     property color dcBorderPstFiltered: isDarkMode ? "#4D6074" : "#50A0C5"
     property color dcBorderPrsFiltered: isDarkMode ? "#4F6B52" : "#78B078"
     property color dcBorderFtrFiltered: isDarkMode ? "#675274" : "#A080D0"
     property color dcBorderBydFiltered: isDarkMode ? "#755154" : "#C07070"
     property color dcBorderEtrFiltered: isDarkMode ? "#5F5967" : "#909090"
+    property color dcBorderInsFiltered: isDarkMode ? "#58558A" : "#7B77C2"
     property color filteredCardStripe: isDarkMode ? "#B6A8C9" : "#000000"
     property real filteredCardStripeOpacity: isDarkMode ? 0.14 : 0.03
     property real filteredCardContentOpacity: isDarkMode ? 0.60 : 0.72
@@ -206,6 +212,7 @@ QtObject {
         if (d === "ftr" || d === "future" || d === "2") return diffFtr;
         if (d === "byd" || d === "beyond" || d === "3") return diffByd;
         if (d === "etr" || d === "eternal" || d === "4") return diffEtr;
+        if (d === "ins" || d === "inscribed" || d === "???") return diffIns;
         return textMuted;
     }
 
@@ -217,6 +224,7 @@ QtObject {
             if (d === "ftr" || d === "future" || d === "2") return dcBgFtrFiltered;
             if (d === "byd" || d === "beyond" || d === "3") return dcBgBydFiltered;
             if (d === "etr" || d === "eternal" || d === "4") return dcBgEtrFiltered;
+            if (d === "ins" || d === "inscribed" || d === "???") return dcBgInsFiltered;
             return bgCard;
         }
 
@@ -225,6 +233,7 @@ QtObject {
         if (d === "ftr" || d === "future" || d === "2") return isSelected ? dcBgFtrSelected : dcBgFtr;
         if (d === "byd" || d === "beyond" || d === "3") return isSelected ? dcBgBydSelected : dcBgByd;
         if (d === "etr" || d === "eternal" || d === "4") return isSelected ? dcBgEtrSelected : dcBgEtr;
+        if (d === "ins" || d === "inscribed" || d === "???") return isSelected ? dcBgInsSelected : dcBgIns;
         return bgCard;
     }
 
@@ -235,6 +244,7 @@ QtObject {
         if (d === "ftr" || d === "future" || d === "2") return dcBorderFtrFiltered;
         if (d === "byd" || d === "beyond" || d === "3") return dcBorderBydFiltered;
         if (d === "etr" || d === "eternal" || d === "4") return dcBorderEtrFiltered;
+        if (d === "ins" || d === "inscribed" || d === "???") return dcBorderInsFiltered;
         return borderDivider;
     }
     
@@ -259,13 +269,13 @@ QtObject {
     function getPotentialColor(rating) {
         if (rating === undefined || rating === null || isNaN(Number(rating))) return textMuted;
         var p = Number(rating);
-        if (p >= 1300) return potentialTripleStar;
-        if (p >= 1250) return potentialDoubleStar;
-        if (p >= 1200) return potentialStar;
-        if (p >= 1100) return potentialRed;
-        if (p >= 1000) return potentialPurple;
-        if (p >= 700) return potentialPurpleLow;
-        if (p >= 300) return potentialGreen;
+        if (p >= 13000) return potentialTripleStar;
+        if (p >= 12500) return potentialDoubleStar;
+        if (p >= 12000) return potentialStar;
+        if (p >= 11000) return potentialRed;
+        if (p >= 10000) return potentialPurple;
+        if (p >= 7000) return potentialPurpleLow;
+        if (p >= 3000) return potentialGreen;
         return potentialBlue;
     }
     

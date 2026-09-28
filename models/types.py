@@ -13,6 +13,7 @@ class Difficulty(IntEnum):
     FTR = 2
     ETR = 4  # 주의: 3이 아닌 4
     BYD = 3  # 주의: 4가 아닌 3
+    INS = 3  # Arcaea 7.0 Inscribed 난이도 (BYD와 내부 코드 3 공유)
 
 
 class ClearType(IntEnum):

@@ -267,7 +267,7 @@ Item {
 
                                 // Rating Value (floating directly on background)
                                 Text {
-                                    text: potentialContainer.hasRating ? (profileData.rating / 100).toFixed(2) : "—"
+                                    text: potentialContainer.hasRating ? (profileData.rating / 1000).toFixed(3) : "—"
                                     color: potentialContainer.hasRating ? Theme.textPotential : Theme.textLight
                                     font.pixelSize: 42
                                     font.bold: true
@@ -832,7 +832,7 @@ Item {
                                         text: model.difficultyName || ""
                                         font.pixelSize: 13
                                         font.bold: true
-                                        color: Theme.getDiffColor(model.thumbnailDifficulty !== undefined ? model.thumbnailDifficulty : model.difficulty)
+                                        color: Theme.getDiffColor(model.diffColorTag || (model.thumbnailDifficulty !== undefined ? model.thumbnailDifficulty : model.difficulty))
                                         visible: !!model.difficultyName
                                         anchors.bottom: titleLabel.bottom
                                         anchors.bottomMargin: 2

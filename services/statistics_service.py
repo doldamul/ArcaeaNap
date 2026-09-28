@@ -8,7 +8,7 @@ import math
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from models.potential import calculate_potential
+from models.potential import calculate_potential, calculate_total_potential
 from services.score_query_service import (
     get_best_scores_per_chart, get_play_counts,
     get_this_year_play_counts
@@ -36,6 +36,7 @@ class FilterParams:
     score_min_rank: int
     score_max_rank: int
     clear_types: list  # [int]
+    include_inscribed: bool = True
 
 
 class StatisticsService:
@@ -62,6 +63,8 @@ class StatisticsService:
 
         # 전역 potential 순위 맵: (arcaea_id, difficulty) → rank (1-based, 0=미플레이)
         self._potential_rank_map: dict = {}
+        # Arcaea 7.0 상위 10개 슬롯 (Best 10) 튜플 집합: {(arcaea_id, difficulty), ...}
+        self._best10_slots: set = set()
 
     @staticmethod
     def _normalize_level(level) -> str:
@@ -179,7 +182,7 @@ class StatisticsService:
         self.invalidate_caches()
 
     def _rebuild_potential_ranks(self):
-        """전체 플레이 기록을 potential 내림차순으로 dense ranking한다."""
+        """전체 플레이 기록을 potential 및 타이브레이커 기준 내림차순 정렬하여 순위를 매기고 Best 10 슬롯을 판정한다."""
         entries = []
         for song_data in self.songs_data.values():
             arcaea_id = song_data.get('arcaea_id', '')
@@ -189,25 +192,80 @@ class StatisticsService:
                 score_data = self.scores_data.get((arcaea_id, diff), {})
                 if not score_data or score_data.get('time_played', 0) <= 0:
                     continue
+                clear_type = score_data.get('clear_type', 0)
                 potential = calculate_potential(
                     chart_data.get('bp', 0),
                     chart_data.get('note_count', 0),
                     score_data.get('score', 0),
                     score_data.get('shiny_perfect', 0),
+                    is_cleared=(clear_type != 0),
                 )
                 if potential is not None:
-                    entries.append((arcaea_id, diff, potential))
+                    entries.append((
+                        arcaea_id,
+                        diff,
+                        potential,
+                        score_data.get('score', 0),
+                        score_data.get('time_played', 0),
+                    ))
 
-        entries.sort(key=lambda x: x[2], reverse=True)
+        # 타이브레이커: potential 내림차순 -> score 내림차순 -> time_played 내림차순 -> arcaea_id 오름차순 -> diff 오름차순
+        entries.sort(key=lambda x: (-x[2], -x[3], -x[4], x[0], x[1]))
 
         self._potential_rank_map = {}
-        current_rank = 0
-        last_potential = None
-        for arcaea_id, diff, potential in entries:
-            if potential != last_potential:
-                current_rank += 1
-                last_potential = potential
-            self._potential_rank_map[(arcaea_id, diff)] = current_rank
+        self._best10_slots = set((e[0], e[1]) for e in entries[:10])
+
+        for idx, entry in enumerate(entries):
+            arcaea_id, diff, *_ = entry
+            self._potential_rank_map[(arcaea_id, diff)] = idx + 1
+
+    def is_inscribed_unlocked(self) -> bool:
+        """
+        DEINOS PHAINEIN의 Inscribed(BYD, difficulty=3) 차트에 플레이 기록이 존재하는지 확인한다.
+        """
+        score_data = self.scores_data.get(('deinosphainein', 3), {})
+        return (score_data.get('score', 0) > 0) or (score_data.get('time_played', 0) > 0)
+
+    def has_any_inscribed_played(self) -> bool:
+        """
+        Inscribed 차트(difficulty=3, is_inscribed=1) 중 하나라도 플레이 기록(score > 0 또는 time_played > 0)이 존재하는지 확인한다.
+        """
+        for song_data in self.songs_data.values():
+            arcaea_id = song_data.get('arcaea_id', '')
+            if not arcaea_id:
+                continue
+            chart_3 = song_data.get('charts', {}).get(3, {})
+            if chart_3.get('is_inscribed', 0):
+                score_data = self.scores_data.get((arcaea_id, 3), {})
+                if (score_data.get('score', 0) > 0) or (score_data.get('time_played', 0) > 0):
+                    return True
+        return False
+
+    def get_user_total_potential(self, fixed_denominator: bool = True) -> float:
+        """
+        현재 사용자의 최고 성적 기반 Arcaea 7.0 최종 포텐셜 (B50 + B10)을 반환한다.
+        """
+        potentials = []
+        for song_data in self.songs_data.values():
+            arcaea_id = song_data.get('arcaea_id', '')
+            if not arcaea_id:
+                continue
+            for diff, chart_data in song_data.get('charts', {}).items():
+                score_data = self.scores_data.get((arcaea_id, diff), {})
+                if not score_data or score_data.get('time_played', 0) <= 0:
+                    continue
+                clear_type = score_data.get('clear_type', 0)
+                pot = calculate_potential(
+                    chart_data.get('bp', 0),
+                    chart_data.get('note_count', 0),
+                    score_data.get('score', 0),
+                    score_data.get('shiny_perfect', 0),
+                    is_cleared=(clear_type != 0),
+                )
+                if pot is not None and pot >= 0.0:
+                    potentials.append(pot)
+
+        return calculate_total_potential(potentials, fixed_denominator=fixed_denominator)
 
     def invalidate_caches(self):
         """중간 결과 캐시를 모두 무효화한다."""
@@ -325,6 +383,7 @@ class StatisticsService:
             int(filters.score_min_rank),
             int(filters.score_max_rank),
             tuple(sorted(int(v) for v in (filters.clear_types or []))),
+            bool(getattr(filters, 'include_inscribed', True)),
         )
 
     def _build_all_chart_items(self) -> list:
@@ -385,7 +444,15 @@ class StatisticsService:
     def _item_matches_chart_filter(self, item: dict, filters: FilterParams) -> bool:
         """Chart 아이템(dict) 기준 필터링."""
         difficulty = item.get('difficulty')
-        if difficulty not in filters.difficulties:
+        if difficulty == 3:
+            is_ins = bool(item.get('isInscribed', False))
+            if is_ins:
+                if not getattr(filters, 'include_inscribed', True):
+                    return False
+            else:
+                if 3 not in filters.difficulties:
+                    return False
+        elif difficulty not in filters.difficulties:
             return False
 
         if filters.bp_mode:
@@ -452,8 +519,16 @@ class StatisticsService:
 
     def _matches_filter(self, chart_data, score_data, difficulty, filters: FilterParams) -> bool:
         """Check if a chart matches the given filters."""
-        # Difficulty filter
-        if difficulty not in filters.difficulties:
+        # Difficulty filter (Arcaea 7.0 Inscribed 호환)
+        if difficulty == 3:
+            is_ins = bool(chart_data.get('is_inscribed', False))
+            if is_ins:
+                if not getattr(filters, 'include_inscribed', True):
+                    return False
+            else:
+                if 3 not in filters.difficulties:
+                    return False
+        elif difficulty not in filters.difficulties:
             return False
 
         # Level/BP range filter
@@ -579,6 +654,16 @@ class StatisticsService:
         has_score = time_played > 0
         rank = calculate_rank(score) if has_score else ""
         best_clear_type = score_data.get('best_clear_type', 0)
+        clear_type = score_data.get('clear_type', 0)
+
+        is_inscribed = bool(chart_data.get('is_inscribed', False)) and difficulty == 3
+        is_unlocked = self.is_inscribed_unlocked()
+        if is_inscribed:
+            diff_name = 'INS' if is_unlocked else '???'
+            diff_color_tag = 'ins'
+        else:
+            diff_name = DIFFICULTY_NAMES.get(difficulty, '')
+            diff_color_tag = DIFFICULTY_NAMES.get(difficulty, '').lower()
 
         return {
             'songDbId': song_db_id,
@@ -591,7 +676,9 @@ class StatisticsService:
             'length': song_data['length'],
             'bpm': song_data['bpm'],
             'difficulty': difficulty,
-            'difficultyName': DIFFICULTY_NAMES.get(difficulty, ''),
+            'difficultyName': diff_name,
+            'diffColorTag': diff_color_tag,
+            'isInscribed': is_inscribed,
             'level': chart_data.get('level', ''),
             'bp': chart_data.get('bp', 0),
             's_bp': chart_data.get('s_bp', 0),
@@ -606,6 +693,7 @@ class StatisticsService:
             'shinyPure': score_data.get('shiny_perfect', 0),
             'far': score_data.get('near', 0),
             'lost': score_data.get('miss', 0),
+            'clearType': clear_type,
             'bestClearType': best_clear_type,
             'timePlayed': time_played,
             'lastPlayedDate': self._format_full_datetime(time_played),
@@ -622,22 +710,38 @@ class StatisticsService:
                 chart_data.get('note_count', 0),
                 score,
                 score_data.get('shiny_perfect', 0),
+                is_cleared=(clear_type != 0),
             ) if has_score else None,
             'potentialRank': self._potential_rank_map.get((arcaea_id, difficulty), 0),
+            'isBest10': (arcaea_id, difficulty) in self._best10_slots,
             'displayValue': '',  # Will be set based on sort mode
         }
 
-    def _build_difficulty_summary(self, difficulty, chart_data, score_data: dict) -> dict:
+    def _build_difficulty_summary(self, difficulty, chart_data, score_data: dict, arcaea_id: str = '') -> dict:
         """Build lightweight difficulty summary for song list delegate."""
         has_score = score_data.get('time_played', 0) > 0
+        is_inscribed = bool(chart_data.get('is_inscribed', False)) and difficulty == 3
+        is_unlocked = self.is_inscribed_unlocked()
+        if is_inscribed:
+            diff_name = 'INS' if is_unlocked else '???'
+            diff_color_tag = 'ins'
+        else:
+            diff_name = DIFFICULTY_NAMES.get(difficulty, '')
+            diff_color_tag = DIFFICULTY_NAMES.get(difficulty, '').lower()
+
         return {
             'difficulty': difficulty,
+            'difficultyName': diff_name,
+            'diffColorTag': diff_color_tag,
+            'isInscribed': is_inscribed,
             'level': chart_data.get('level', ''),
             'ignoreChart': chart_data.get('ignore_chart', False),
             'skillIssues': chart_data.get('skill_issues', False),
             'hardBpm': chart_data.get('hard_bpm', False),
             'score': score_data.get('score', 0),
             'hasScore': has_score,
+            'potentialRank': self._potential_rank_map.get((arcaea_id, difficulty), 0),
+            'isBest10': bool(arcaea_id) and (arcaea_id, difficulty) in self._best10_slots,
         }
 
     def _build_song_item(self, song_db_id, arcaea_id, song_data, filtered_difficulties, filters: FilterParams = None) -> dict:
@@ -697,7 +801,7 @@ class StatisticsService:
             play_count = self.play_counts.get((arcaea_id, diff), 0)
             this_year_play_count = self.this_year_play_counts.get((arcaea_id, diff), 0)
 
-            diff_details.append(self._build_difficulty_summary(diff, chart_data, score_data))
+            diff_details.append(self._build_difficulty_summary(diff, chart_data, score_data, arcaea_id=arcaea_id))
 
             # Track best potential
             if has_score:
@@ -706,6 +810,7 @@ class StatisticsService:
                     chart_data.get('note_count', 0),
                     score,
                     shiny_pure,
+                    is_cleared=(score_data.get('clear_type', 0) != 0),
                 )
                 if p is not None and (best_potential is None or p > best_potential):
                     best_potential = p
@@ -989,8 +1094,8 @@ class StatisticsService:
             has_score = item.get('hasScore', False)
             if not has_score or potential is None:
                 return "-"
-            # 4자리 버림 (round가 아닌 truncate)
-            return f"{math.floor(potential * 10000) / 10000:.4f}"
+            # 4자리 버림 (부동소수점 오차 보정)
+            return f"{math.floor(potential * 10000 + 1e-6) / 10000:.4f}"
         elif sort_mode == "length":
             length = item.get('length', 0)
             if length <= 0:

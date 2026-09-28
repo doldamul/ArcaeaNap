@@ -9,6 +9,7 @@ Column {
     property bool checked: true
     property string text: ""
     property color diffColor: Theme.textTitle
+    property real diamondScale: 1.0
     
     spacing: 8
     
@@ -20,6 +21,8 @@ Column {
         Shape {
             anchors.fill: parent
             antialiasing: true
+            scale: diffCheckRoot.diamondScale
+            transformOrigin: Item.Center
             
             ShapePath {
                 strokeWidth: 2

@@ -1658,7 +1658,7 @@ Window {
                                         color: Theme.textSecondary
                                     }
                                     Text {
-                                        text: "PTT: " + (profileInfoLayout.profileData.rating !== undefined && profileInfoLayout.profileData.rating >= 0 ? (profileInfoLayout.profileData.rating / 100).toFixed(2) : "-")
+                                        text: "PTT: " + (profileInfoLayout.profileData.rating !== undefined && profileInfoLayout.profileData.rating >= 0 ? (profileInfoLayout.profileData.rating / 1000).toFixed(3) : "-")
                                         font.pixelSize: 13
                                         color: Theme.textSecondary
                                     }

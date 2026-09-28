@@ -12,6 +12,8 @@ Rectangle {
 
     property string diffName: "FTR"
     property string diffLevel: "11"
+    property string diffColorTag: ""
+    property bool isInscribed: false
     property int score: 0
     property string rank: ""
     property int pure: 0
@@ -37,6 +39,7 @@ Rectangle {
     property string clearTypeText: ""  // Pre-computed clear type full text from Python
     property string clearTypeAbbr: ""  // Pre-computed clear type abbreviation from Python
     property int bestPotentialRank: 0
+    property bool isBest10: false
     // PM/MAX records render FRAME and MAX as two additional rows.
     property int frameLineCount: hasScore && score >= 10000000 ? 2 : 0
 
@@ -50,8 +53,8 @@ Rectangle {
     Layout.preferredHeight: 342 + frameLineCount * 18
     Layout.minimumHeight: 342 + frameLineCount * 18
     radius: 15
-    color: Theme.getDiffCardBackground(difficulty, isSelected, isFiltered)
-    border.color: isFiltered ? Theme.getFilteredDiffCardBorder(difficulty) : (isSelected ? Theme.getDiffColor(difficulty) : Theme.borderCard)
+    color: Theme.getDiffCardBackground(diffColorTag || difficulty, isSelected, isFiltered)
+    border.color: isFiltered ? Theme.getFilteredDiffCardBorder(diffColorTag || difficulty) : (isSelected ? Theme.getDiffColor(diffColorTag || difficulty) : Theme.borderCard)
     border.width: (isSelected && !isFiltered) ? 2 : 1
     clip: true  // Prevent content from overflowing card boundaries
     
@@ -106,7 +109,7 @@ Rectangle {
             Text { 
                 id: diffTitleText
                 text: diffName + " " + diffLevel
-                color: Theme.getDiffColor(difficulty); font.bold: true; font.pixelSize: 18
+                color: Theme.getDiffColor(diffColorTag || difficulty); font.bold: true; font.pixelSize: 18
                 
                 Layout.alignment: Qt.AlignVCenter | Qt.AlignLeft
                 // Allow shrinking to prevent layout blowout, ensuring proper width reporting
@@ -244,7 +247,7 @@ Rectangle {
                     text: "BEST "
                     font.bold: true
                     font.pixelSize: 11
-                    color: Theme.bestPotentialMark
+                    color: (isBest10 && bestPotentialRank > 0) ? Theme.bestPotential10Mark : Theme.bestPotentialMark
                     anchors.baseline: rankNum.baseline
                     anchors.right: rankNum.left
                 }
@@ -253,7 +256,7 @@ Rectangle {
                     text: bestPotentialRank.toString()
                     font.bold: true
                     font.pixelSize: 14
-                    color: Theme.bestPotentialMark
+                    color: (isBest10 && bestPotentialRank > 0) ? Theme.bestPotential10Mark : Theme.bestPotentialMark
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                 }
@@ -303,9 +306,9 @@ Rectangle {
             Text { text: "Potential"; color: Theme.textSecondary; font.pixelSize: 12 }
             Text {
                 text: (potential !== null && hasScore)
-                      ? (Math.floor(potential * 10000) / 10000).toFixed(4)
+                      ? (Math.floor(potential * 10000 + 1e-6) / 10000).toFixed(4)
                       : "-"
-                color: Theme.textPrimary
+                color: (isBest10 && bestPotentialRank > 0) ? Theme.bestPotential10Mark : Theme.textPrimary
                 font.bold: true
                 font.pixelSize: 12
                 Layout.fillWidth: true

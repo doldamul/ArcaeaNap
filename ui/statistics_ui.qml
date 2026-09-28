@@ -460,17 +460,36 @@ Item {
                             // Formatting Components for Filters
                             Component {
                                 id: diffComp
-                                Row {
-                                    spacing: 0
+                                Item {
+                                    implicitWidth: diffRow.implicitWidth
+                                    implicitHeight: diffRow.implicitHeight
                                     anchors.verticalCenter: parent.verticalCenter
-                                    Repeater {
-                                        model: filterData ? filterData.data : []
-                                        Text {
-                                            text: modelData.active ? "◆" : "◇"
-                                            color: Theme.getDiffColor(modelData.diff)
-                                            font.pixelSize: 11
-                                            anchors.verticalCenter: parent.verticalCenter
+
+                                    Row {
+                                        id: diffRow
+                                        spacing: 0
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        Repeater {
+                                            model: filterData ? filterData.data : []
+                                            Text {
+                                                text: modelData.active ? "◆" : "◇"
+                                                color: Theme.getDiffColor(modelData.diff)
+                                                font.pixelSize: 11
+                                                anchors.verticalCenter: parent.verticalCenter
+                                            }
                                         }
+                                    }
+
+                                    Text {
+                                        id: insMark
+                                        visible: filterData ? filterData.showInsMark : false
+                                        text: (filterData && filterData.insActive) ? "◆" : "◇"
+                                        color: Theme.diffIns
+                                        font.pixelSize: 9
+                                        anchors.horizontalCenter: diffRow.right
+                                        anchors.horizontalCenterOffset: 8
+                                        anchors.verticalCenter: diffRow.verticalCenter
+                                        anchors.verticalCenterOffset: -0.5
                                     }
                                 }
                             }
@@ -655,7 +674,7 @@ Item {
                                             Rectangle { 
                                                 id: thumbRect
                                                 width: 48; height: 48; radius: 6
-                                                color: Theme.getDiffColor(rowModel.thumbnailDifficulty !== undefined ? rowModel.thumbnailDifficulty : rowModel.difficulty)
+                                                color: Theme.getDiffColor(rowModel.diffColorTag || (rowModel.thumbnailDifficulty !== undefined ? rowModel.thumbnailDifficulty : rowModel.difficulty))
                                                 clip: true
                                                 
                                                 Image {
@@ -837,7 +856,7 @@ Item {
                                                                     text: String(modelData.level || "")
                                                                     font.bold: true
                                                                     font.pixelSize: difficultyRow.isStandaloneMode ? 13 : 11
-                                                                    color: isHighlighted ? Theme.getDiffColor(modelData.difficulty) : Theme.textDimmed
+                                                                    color: isHighlighted ? Theme.getDiffColor(modelData.diffColorTag || modelData.difficulty) : Theme.textDimmed
                                                                 }
                                                                 // Floating badge overlay
                                                                 Row {
@@ -908,14 +927,14 @@ Item {
                                                                 text: (rowModel.difficultyName ? rowModel.difficultyName + " " : "")
                                                                 font.bold: true
                                                                 font.pixelSize: parent.parent.isStandaloneMode ? 13 : 11
-                                                                color: Theme.getDiffColor(rowModel.difficulty)
+                                                                color: Theme.getDiffColor(rowModel.diffColorTag || rowModel.difficulty)
                                                             }
                                                             Text {
                                                                 id: chartLevelNumText
                                                                 text: String(rowModel.level || "")
                                                                 font.bold: true
                                                                 font.pixelSize: parent.parent.isStandaloneMode ? 13 : 11
-                                                                color: Theme.getDiffColor(rowModel.difficulty)
+                                                                color: Theme.getDiffColor(rowModel.diffColorTag || rowModel.difficulty)
                                                             }
                                                         }
 
@@ -1173,7 +1192,7 @@ Item {
                                         id: mainThumbRect
                                         anchors.fill: parent
                                         radius: 15
-                                        color: currentSong ? Theme.getDiffColor(currentSong.thumbnailDifficulty !== undefined ? currentSong.thumbnailDifficulty : currentSong.difficulty) : Theme.accent
+                                        color: currentSong ? Theme.getDiffColor(currentSong.diffColorTag || (currentSong.thumbnailDifficulty !== undefined ? currentSong.thumbnailDifficulty : currentSong.difficulty)) : Theme.accent
                                         border.color: Theme.bgCard; border.width: 2
                                         clip: true
                                         
@@ -1305,6 +1324,8 @@ Item {
                                             DiffCard {
                                                 diffName: modelData.difficultyName || ""
                                                 diffLevel: modelData.level || ""
+                                                diffColorTag: modelData.diffColorTag || ""
+                                                isInscribed: modelData.isInscribed || false
                                                 score: modelData.bestScore || 0
                                                 rank: modelData.rank || ""
                                                 clearTypeText: modelData.clearTypeText || ""
@@ -1333,6 +1354,7 @@ Item {
                                                     var r = modelData.potentialRank || 0
                                                     return (statsRoot.bestPotentialMarkLimit > 0 && r > 0 && r <= statsRoot.bestPotentialMarkLimit) ? r : 0
                                                 }
+                                                isBest10: (statsRoot.bestPotentialMarkLimit > 0 && Boolean(modelData.isBest10) && bestPotentialRank > 0)
 
                                                 onClicked: function(diff) {
                                                     if (statisticsHandler) {
@@ -1379,6 +1401,8 @@ Item {
                                             Layout.maximumWidth: desktopRow.cardMaxWidth
                                             diffName: modelData.difficultyName || ""
                                             diffLevel: modelData.level || ""
+                                            diffColorTag: modelData.diffColorTag || ""
+                                            isInscribed: modelData.isInscribed || false
                                             score: modelData.bestScore || 0
                                             rank: modelData.rank || ""
                                             clearTypeText: modelData.clearTypeText || ""
@@ -1407,6 +1431,7 @@ Item {
                                                 var r = modelData.potentialRank || 0
                                                 return (statsRoot.bestPotentialMarkLimit > 0 && r > 0 && r <= statsRoot.bestPotentialMarkLimit) ? r : 0
                                             }
+                                            isBest10: (statsRoot.bestPotentialMarkLimit > 0 && Boolean(modelData.isBest10) && bestPotentialRank > 0)
 
                                             onClicked: function(diff) {
                                                 if (statisticsHandler) {
@@ -1445,6 +1470,7 @@ Item {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         
         property bool initialized: false  // Prevent filter updates during initialization
+        property bool syncingBydIns: false
         
         x: (parent.width - width) / 2
         y: (parent.height - height) / 2
@@ -1521,6 +1547,7 @@ Item {
                             // Reset all filters
                             if (statisticsHandler) {
                                 statisticsHandler.setFilter("difficulties", [0, 1, 2, 3, 4])
+                                statisticsHandler.setFilter("include_inscribed", true)
                                 statisticsHandler.setFilter("clear_types", [0, 1, 2, 3, 4, 5])
                             }
                             pstCheck.checked = true
@@ -1528,6 +1555,7 @@ Item {
                             ftrCheck.checked = true
                             etrCheck.checked = true
                             bydCheck.checked = true
+                            insCheck.checked = true
                             
                             // Reset Level/BP Range Slider
                             rangeSlider.bpMode = false
@@ -1610,12 +1638,35 @@ Item {
                                 checked: true
                                 onCheckedChanged: filterPopup.updateDifficultyFilter()
                             }
-                            DiffFilterCheckbox {
-                                id: bydCheck
-                                text: "BYD"
-                                diffColor: Theme.diffByd
-                                checked: true
-                                onCheckedChanged: filterPopup.updateDifficultyFilter()
+                            RowLayout {
+                                spacing: 15
+                                DiffFilterCheckbox {
+                                    id: bydCheck
+                                    text: "BYD"
+                                    diffColor: Theme.diffByd
+                                    checked: true
+                                    onCheckedChanged: {
+                                        if (insCheck.visible && !filterPopup.syncingBydIns) {
+                                            filterPopup.syncingBydIns = true
+                                            insCheck.checked = bydCheck.checked
+                                            filterPopup.syncingBydIns = false
+                                        }
+                                        filterPopup.updateDifficultyFilter()
+                                    }
+                                }
+                                DiffFilterCheckbox {
+                                    id: insCheck
+                                    visible: statisticsHandler ? statisticsHandler.hasInscribedScore : false
+                                    text: (statisticsHandler && statisticsHandler.isInscribedUnlocked) ? "INS" : "???"
+                                    diffColor: Theme.diffIns
+                                    diamondScale: 0.72
+                                    checked: true
+                                    onCheckedChanged: {
+                                        if (!filterPopup.syncingBydIns) {
+                                            filterPopup.updateDifficultyFilter()
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -2829,6 +2880,7 @@ Item {
             
             if (statisticsHandler) {
                 statisticsHandler.setFilter("difficulties", diffs)
+                statisticsHandler.setFilter("include_inscribed", insCheck.checked)
             }
         }
         

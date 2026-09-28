@@ -8,7 +8,7 @@ ArcaeaNap 공통 상수 정의.
 
 # 난이도 코드 문자열 → 정수 매핑
 DIFFICULTY_CODE_TO_INT: dict[str, int] = {
-    'pst': 0, 'prs': 1, 'ftr': 2, 'byd': 3, 'etr': 4
+    'pst': 0, 'prs': 1, 'ftr': 2, 'byd': 3, 'etr': 4, 'ins': 3
 }
 
 # 난이도 정수 → 약칭 매핑
@@ -62,14 +62,14 @@ def calculate_rank(score: int | None) -> str:
 # 내림차순 정렬. 조회 시 rating >= threshold 인 첫 항목을 사용한다.
 # 뱃지/별의 분기점이 각각 다르므로, 모든 고유 분기점을 병합한 통합 테이블이다.
 POTENTIAL_GRADES: list[tuple[int, str, int]] = [
-    (1300, 'TRIPLE STAR', 3),
-    (1250, 'DOUBLE STAR', 2),
-    (1200, 'STAR',        1),
-    (1100, 'RED',         0),
-    (1000, 'PURPLE',      0),
-    (700,  'PURPLE',      0),
-    (300,  'GREEN',       0),
-    (0,    'BLUE',        0),
+    (13000, 'TRIPLE STAR', 3),
+    (12500, 'DOUBLE STAR', 2),
+    (12000, 'STAR',        1),
+    (11000, 'RED',         0),
+    (10000, 'PURPLE',      0),
+    (7000,  'PURPLE',      0),
+    (3000,  'GREEN',       0),
+    (0,     'BLUE',        0),
 ]
 
 

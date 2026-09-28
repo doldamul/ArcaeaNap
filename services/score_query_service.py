@@ -98,7 +98,7 @@ def get_best_scores_per_chart(cache_path: str):
     Returns:
         dict: {(arcaea_id, difficulty): {
             'score', 'shiny_perfect', 'perfect', 'near', 'miss',
-            'best_clear_type', 'time_played', 'score_below_max'
+            'clear_type', 'best_clear_type', 'time_played', 'score_below_max'
         }}
     """
     scores_db_path = _get_scores_db_path(cache_path)
@@ -113,13 +113,13 @@ def get_best_scores_per_chart(cache_path: str):
                 SELECT
                     arcaea_id, difficulty, score,
                     shiny_perfect_count, perfect_count, near_count, miss_count,
-                    best_clear_type, time_played, score_below_max,
-                    ROW_NUMBER() OVER (PARTITION BY arcaea_id, difficulty ORDER BY score DESC) as rn
+                    clear_type, best_clear_type, time_played, score_below_max,
+                    ROW_NUMBER() OVER (PARTITION BY arcaea_id, difficulty ORDER BY score DESC, time_played DESC) as rn
                 FROM scores
             )
             SELECT arcaea_id, difficulty, score,
                    shiny_perfect_count, perfect_count, near_count, miss_count,
-                   best_clear_type, time_played, score_below_max
+                   clear_type, best_clear_type, time_played, score_below_max
             FROM ranked WHERE rn = 1
         """)
 
@@ -132,9 +132,10 @@ def get_best_scores_per_chart(cache_path: str):
                 'perfect': row[4] or 0,
                 'near': row[5] or 0,
                 'miss': row[6] or 0,
-                'best_clear_type': row[7] or 0,
-                'time_played': row[8] or 0,
-                'score_below_max': row[9] or 0,
+                'clear_type': row[7] if row[7] is not None else 0,
+                'best_clear_type': row[8] or 0,
+                'time_played': row[9] or 0,
+                'score_below_max': row[10] or 0,
             }
 
         return result
@@ -293,14 +294,19 @@ def get_top_10_most_played(
     conn = sqlite3.connect(songs_db_path)
     try:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT s.id, s.arcaea_id, c.difficulty, s.title_en, s.title_jp, s.canonical_title, s.artist "
-            "FROM songs s "
-            "JOIN charts c ON c.song_id = s.id"
-        )
+        cursor.execute("PRAGMA table_info(charts)")
+        has_ins_col = any(col[1] == 'is_inscribed' for col in cursor.fetchall())
+
+        ins_select = "IFNULL(c.is_inscribed, 0)" if has_ins_col else "0"
+        cursor.execute(f"""
+            SELECT s.id, s.arcaea_id, c.difficulty, s.title_en, s.title_jp, s.canonical_title, s.artist,
+                   {ins_select}
+            FROM songs s
+            JOIN charts c ON c.song_id = s.id
+        """)
         chart_meta = {}
         lang = str(song_title_language or 'en').lower()
-        for sid, aid, diff, title_en, title_jp, canonical_title, artist in cursor.fetchall():
+        for sid, aid, diff, title_en, title_jp, canonical_title, artist, is_inscribed in cursor.fetchall():
             if lang == 'jp':
                 display_title = title_jp or title_en or canonical_title or 'Unknown Title'
             else:
@@ -310,15 +316,26 @@ def get_top_10_most_played(
                 'arcaea_id': aid,
                 'title': display_title,
                 'artist': artist or 'Unknown Artist',
+                'is_inscribed': bool(is_inscribed),
             }
 
         if grouping_criteria == 'chart':
+            is_unlocked = is_deinos_inscribed_played(cache_path)
             sorted_charts = sorted(filtered.items(), key=lambda x: -x[1])[:10]
             results = []
             for (arcaea_id, difficulty), play_count in sorted_charts:
                 meta = chart_meta.get((arcaea_id, difficulty))
                 if not meta:
                     continue
+
+                is_ins = meta.get('is_inscribed', False) and difficulty == 3
+                if is_ins:
+                    diff_name = 'INS' if is_unlocked else '???'
+                    diff_color_tag = 'ins'
+                else:
+                    diff_name = DIFFICULTY_NAMES.get(difficulty, '')
+                    diff_color_tag = DIFFICULTY_NAMES.get(difficulty, '').lower()
+
                 results.append({
                     'title': meta['title'],
                     'artist': meta['artist'],
@@ -327,7 +344,9 @@ def get_top_10_most_played(
                     'arcaeaId': meta['arcaea_id'] or '',
                     'difficulty': difficulty,
                     'thumbnailDifficulty': difficulty,
-                    'difficultyName': DIFFICULTY_NAMES.get(difficulty, ''),
+                    'difficultyName': diff_name,
+                    'diffColorTag': diff_color_tag,
+                    'isInscribed': is_ins,
                 })
             return results
 
@@ -372,10 +391,42 @@ def get_top_10_most_played(
                 'difficulty': -1,
                 'thumbnailDifficulty': info['thumbnailDifficulty'],
                 'difficultyName': '',
+                'diffColorTag': '',
+                'isInscribed': False,
             })
         return results
     except Exception as e:
         print(f"Error fetching top 10: {e}")
         return []
+    finally:
+        conn.close()
+
+
+def is_deinos_inscribed_played(cache_path: str) -> bool:
+    """
+    DEINOS PHAINEIN의 Inscribed(BYD, difficulty=3) 차트에 플레이 기록(score > 0)이 존재하는지 확인한다.
+
+    Args:
+        cache_path: user_scores.db가 위치한 캐시 디렉토리 경로
+
+    Returns:
+        bool: 플레이 기록 존재 여부
+    """
+    scores_db_path = _get_scores_db_path(cache_path)
+    if not os.path.exists(scores_db_path):
+        return False
+
+    conn = sqlite3.connect(scores_db_path)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT 1 FROM scores
+            WHERE arcaea_id = 'deinosphainein' AND difficulty = 3 AND score > 0
+            LIMIT 1
+        """)
+        return cursor.fetchone() is not None
+    except Exception as e:
+        print(f"Error checking deinos inscribed play record: {e}")
+        return False
     finally:
         conn.close()
