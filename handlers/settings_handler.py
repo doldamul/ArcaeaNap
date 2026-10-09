@@ -2,6 +2,7 @@
 from utils.configuration import config, resolve_cache_path
 import os
 import threading
+import webbrowser
 import time
 from datetime import datetime
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant, pyqtProperty, QUrl
@@ -40,6 +41,11 @@ class SettingsHandler(QObject):
     sheetBindingChanged = pyqtSignal()
     sendDataStatusChanged = pyqtSignal()
     sheetVersionsChanged = pyqtSignal()
+    # Consultant Sheet hyperlink signals
+    consultantSheetTargetChanged = pyqtSignal(str, arguments=['target'])
+    isSearchingSheetChanged = pyqtSignal(bool, arguments=['searching'])
+    showTitlebarShortcutChanged = pyqtSignal(bool, arguments=['show'])
+    showSongHeaderShortcutChanged = pyqtSignal(bool, arguments=['show'])
     # Song database update signals
     songDatabaseUpdateStarting = pyqtSignal()
     songDatabaseUpdateFinished = pyqtSignal(bool, str, arguments=['success', 'message'])
@@ -59,6 +65,8 @@ class SettingsHandler(QObject):
         self._is_arcaea_connecting = False
         self._is_binding_sheet = False
         self._is_sending_data = False
+        self._is_searching_sheet = False
+        self._cached_sheet_urls = {}  # (sheet_id, target) -> worksheet URL (session cache)
         self._is_updating_song_db = False
         self._google_cancellation_context = None
         self._bind_cancellation_context = None
@@ -593,6 +601,125 @@ class SettingsHandler(QObject):
             import webbrowser
             url = f"https://docs.google.com/spreadsheets/d/{bound_id}"
             webbrowser.open(url)
+
+    # --- Consultant Sheet hyperlinks (titlebar link / detailed-view search) ---
+    @staticmethod
+    def _spawn(fn):
+        """Run fn on a daemon worker thread (overridable in tests)."""
+        threading.Thread(target=fn, daemon=True).start()
+
+    def _bound_sheet_id(self) -> str:
+        connections = self._load_connections()
+        return connections.get('google_sheet', {}).get('bound_sheet_id', '') or ''
+
+    @pyqtSlot(result=str)
+    def getConsultantSheetTarget(self) -> str:
+        return config['sheet']['titlebar_link_target']
+
+    @pyqtSlot(str)
+    def setConsultantSheetTarget(self, target: str):
+        normalized = str(target or '').strip().lower()
+        if normalized not in ('main', 'dashboard', 'score', 'cc_table', 'tools'):
+            return
+        if normalized == config['sheet']['titlebar_link_target']:
+            return
+        config['sheet']['titlebar_link_target'] = normalized
+        self.consultantSheetTargetChanged.emit(normalized)
+        self.settingsChanged.emit()
+
+    @pyqtSlot(result=bool)
+    def getShowTitlebarShortcut(self) -> bool:
+        return config['sheet']['show_titlebar_shortcut']
+
+    @pyqtSlot(bool)
+    def setShowTitlebarShortcut(self, value: bool):
+        b = bool(value)
+        if b == config['sheet']['show_titlebar_shortcut']:
+            return
+        config['sheet']['show_titlebar_shortcut'] = b
+        self.showTitlebarShortcutChanged.emit(b)
+        self.settingsChanged.emit()
+
+    @pyqtSlot(result=bool)
+    def getShowSongHeaderShortcut(self) -> bool:
+        return config['sheet']['show_song_header_shortcut']
+
+    @pyqtSlot(bool)
+    def setShowSongHeaderShortcut(self, value: bool):
+        b = bool(value)
+        if b == config['sheet']['show_song_header_shortcut']:
+            return
+        config['sheet']['show_song_header_shortcut'] = b
+        self.showSongHeaderShortcutChanged.emit(b)
+        self.settingsChanged.emit()
+
+    @pyqtSlot(str, result=str)
+    def toSheetTitle(self, canonical_title: str) -> str:
+        """Official title -> Consultant Sheet title (for tooltips)."""
+        from utils import web_consultantsheet
+        return web_consultantsheet.to_sheet_title(canonical_title)
+
+    @pyqtSlot(result=bool)
+    def hasBoundSheet(self) -> bool:
+        return bool(self._bound_sheet_id())
+
+    @pyqtSlot(result=bool)
+    def isSearchingSheet(self) -> bool:
+        return self._is_searching_sheet
+
+    @pyqtSlot()
+    def openConsultantSheet(self):
+        """Open the configured Consultant Sheet tab (GID cached per session)."""
+        sheet_id = self._bound_sheet_id()
+        if not sheet_id:
+            return
+        target = self.getConsultantSheetTarget()
+        key = (sheet_id, target)
+
+        cached = self._cached_sheet_urls.get(key)
+        if cached:
+            webbrowser.open(cached)
+            return
+
+        def worker():
+            from utils import web_consultantsheet
+            try:
+                url = web_consultantsheet.get_worksheet_url(sheet_id, target)
+                self._cached_sheet_urls[key] = url
+            except Exception as e:
+                print(f"[SettingsHandler] Failed to resolve Consultant Sheet tab: {e}")
+                url = f"https://docs.google.com/spreadsheets/d/{sheet_id}"
+            webbrowser.open(url)
+
+        self._spawn(worker)
+
+    @pyqtSlot(str, str)
+    def searchInConsultantSheet(self, canonical_title: str, diff_name: str):
+        """Write title/difficulty into the Search tab and open it (async, re-entrancy guarded)."""
+        if self._is_searching_sheet:
+            return
+        sheet_id = self._bound_sheet_id()
+        if not sheet_id or not canonical_title:
+            return
+
+        self._is_searching_sheet = True
+        self.isSearchingSheetChanged.emit(True)
+        is_inscribed = str(diff_name or '').strip().upper() == 'INS'
+
+        def worker():
+            from utils import web_consultantsheet
+            try:
+                url = web_consultantsheet.update_search_cells_and_get_url(
+                    sheet_id, canonical_title, diff_name, is_inscribed=is_inscribed
+                )
+                webbrowser.open(url)
+            except Exception as e:
+                print(f"[SettingsHandler] Consultant Sheet search failed: {e}")
+            finally:
+                self._is_searching_sheet = False
+                self.isSearchingSheetChanged.emit(False)
+
+        self._spawn(worker)
 
     @pyqtSlot()
     def sendData(self):

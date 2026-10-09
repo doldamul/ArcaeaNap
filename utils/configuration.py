@@ -49,6 +49,9 @@ _config_default = {
     },
     'sheet': {
         'last_synced': 0,
+        'titlebar_link_target': 'main',  # 'main' | 'dashboard' | 'score' | 'cc_table' | 'tools'
+        'show_titlebar_shortcut': True,
+        'show_song_header_shortcut': True,
     },
     'statistics': {
         'best_potential_mark': 'none',  # 'none' | '10' | '30' | '50' | '100' | 'all'
@@ -124,6 +127,16 @@ def _validate_pack_classification_mode(v: str) -> str:
         raise ValueError("pack_classification_mode must be 'strict' or 'conceptual'")
     return value
 
+TITLEBAR_LINK_TARGETS = ('main', 'dashboard', 'score', 'cc_table', 'tools')
+
+
+def _validate_titlebar_link_target(v: str) -> str:
+    value = str(v).strip().lower()
+    if value not in TITLEBAR_LINK_TARGETS:
+        raise ValueError(f"titlebar_link_target must be one of {TITLEBAR_LINK_TARGETS}")
+    return value
+
+
 def _validate_excluded_packs(v) -> list:
     if isinstance(v, list):
         return [str(x).strip() for x in v if str(x).strip()]
@@ -162,6 +175,9 @@ _converters = {
     },
     'sheet': {
         'last_synced': float,
+        'titlebar_link_target': _validate_titlebar_link_target,
+        'show_titlebar_shortcut': lambda v: str(v).lower() == 'true',
+        'show_song_header_shortcut': lambda v: str(v).lower() == 'true',
     },
     'statistics': {
         'best_potential_mark': str,

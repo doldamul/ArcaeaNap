@@ -608,6 +608,115 @@ def _col_index_to_letter(index):
     return result
 
 
+# --- Consultant Sheet hyperlink helpers (titlebar link / detailed-view search) ---
+
+def _tab_rules(target_type):
+    """Return an ordered list of (exact_title | predicate) tiers for a target tab."""
+    def has_any(*needles):
+        return lambda t: any(n in t for n in needles)
+
+    return {
+        'main': ['메인 [main]', has_any('메인', 'main')],
+        'dashboard': ['대시보드 [dashboard]', has_any('대시보드', 'dashboard')],
+        'score': [
+            '내 점수 [score] (m)',
+            lambda t: ('내 점수' in t and '(m)' in t) or ('score' in t and 'm' in t),
+            has_any('내 점수', 'score'),
+        ],
+        'cc_table': ['상수표 [cc table]', has_any('상수표', 'cc table', 'constant')],
+        'tools': ['계산기 [tools]', has_any('계산기', 'tools', 'calculator')],
+        'search': ['검색 [search]', has_any('검색', 'search', '検索')],
+    }.get(target_type)
+
+
+def find_worksheet(sheet, target_type):
+    """Find the worksheet for target_type using up to 3 fallback tiers. None if not found."""
+    tiers = _tab_rules(target_type)
+    if not tiers:
+        return None
+    worksheets = list(sheet.worksheets())
+    for tier in tiers:
+        for ws in worksheets:
+            title = str(ws.title).strip().lower()
+            matched = (title == tier) if isinstance(tier, str) else tier(title)
+            if matched:
+                return ws
+    return None
+
+
+def find_worksheet_gid(sheet, target_type):
+    """Return the gid of the worksheet matching target_type, or None."""
+    ws = find_worksheet(sheet, target_type)
+    return ws.id if ws is not None else None
+
+
+_DIFF_ABBREVIATIONS = {
+    'past': 'PST', 'pst': 'PST',
+    'present': 'PRS', 'prs': 'PRS',
+    'future': 'FTR', 'ftr': 'FTR',
+    'beyond': 'BYD', 'byd': 'BYD',
+    'eternal': 'ETR', 'etr': 'ETR',
+    'inscribed': 'INS', 'ins': 'INS',
+}
+
+
+def normalize_diff_name(diff_name, is_inscribed=False):
+    """Normalize a difficulty name to the Consultant Sheet abbreviation (Inscribed -> 'INS')."""
+    if is_inscribed:
+        return 'INS'
+    raw = str(diff_name or '').strip()
+    return _DIFF_ABBREVIATIONS.get(raw.lower(), raw.upper())
+
+
+def to_sheet_title(canonical_title):
+    """Convert an official (DB) title to the simplified Consultant Sheet title."""
+    title = str(canonical_title or '').strip()
+    return REVERSE_ALIAS_MAP.get(title, title)
+
+
+def build_sheet_url(sheet_id, gid=None, cell_range=None):
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}"
+    if gid is None:
+        return url
+    url += f"/edit#gid={gid}"
+    if cell_range:
+        url += f"&range={cell_range}"
+    return url
+
+
+def _open_spreadsheet(sheet_id, cancellation_context=None):
+    creds = get_creds(cancellation_context)
+    if not creds:
+        raise Exception("Google authentication failed")
+    return gspread.authorize(creds).open_by_key(sheet_id)
+
+
+def get_worksheet_url(sheet_id, target_type, cancellation_context=None):
+    """URL of the target tab. Falls back to the spreadsheet root when the tab is not found."""
+    sheet = _open_spreadsheet(sheet_id, cancellation_context)
+    return build_sheet_url(sheet_id, find_worksheet_gid(sheet, target_type))
+
+
+def update_search_cells_and_get_url(sheet_id, canonical_title, diff_name,
+                                    is_inscribed=False, cancellation_context=None):
+    """Write the search inputs (D3: title, C4: 'title [diff]') and return the Search tab URL."""
+    sheet = _open_spreadsheet(sheet_id, cancellation_context)
+    search_ws = find_worksheet(sheet, 'search')
+    if search_ws is None:
+        raise Exception("Could not find '검색 [Search]' tab in the sheet")
+
+    sheet_title = to_sheet_title(canonical_title)
+    diff = normalize_diff_name(diff_name, is_inscribed)
+    search_ws.batch_update(
+        [
+            {'range': 'D3', 'values': [[sheet_title]]},
+            {'range': 'C4', 'values': [[f"{sheet_title} [{diff}]"]]},
+        ],
+        value_input_option='RAW',
+    )
+    return build_sheet_url(sheet_id, search_ws.id, 'C4')
+
+
 def open_sheet():
     creds = get_creds()
     

@@ -105,6 +105,9 @@ ApplicationWindow {
         if (typeof updateNotice !== "undefined" && updateNotice && updateNotice.visible) {
             interactiveItems.push(updateNotice);
         }
+        if (typeof sheetLinkButton !== "undefined" && sheetLinkButton && sheetLinkButton.visible) {
+            interactiveItems.push(sheetLinkButton);
+        }
         if (typeof tabRepeater !== "undefined" && tabRepeater) {
             for (let i = 0; i < tabRepeater.count; i++) {
                 if (i !== window.currentTab) {
@@ -289,6 +292,84 @@ ApplicationWindow {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: window.showAboutWindow()
+            }
+        }
+
+        // 1-c. Consultant Sheet 바로가기 (Google Sheet 연동 + 시트 바인딩 시에만 표시)
+        Rectangle {
+            id: sheetLinkButton
+            property bool sheetAvailable: false
+            property bool showShortcut: settingsHandler ? settingsHandler.getShowTitlebarShortcut() : true
+            property string targetKey: "main"
+            readonly property string targetDisplayName: ({
+                "main": "Main", "dashboard": "Dashboard", "score": "Score",
+                "cc_table": "CC Table", "tools": "Tools"
+            })[targetKey] || "Main"
+
+            function refresh() {
+                sheetAvailable = !!settingsHandler
+                                 && settingsHandler.isGoogleSheetConnected()
+                                 && settingsHandler.hasBoundSheet()
+                targetKey = settingsHandler ? settingsHandler.getConsultantSheetTarget() : "main"
+                showShortcut = settingsHandler ? settingsHandler.getShowTitlebarShortcut() : true
+            }
+
+            Component.onCompleted: refresh()
+
+            Connections {
+                target: settingsHandler
+                function onGoogleSheetConnectionChanged() { sheetLinkButton.refresh() }
+                function onSheetBindingChanged() { sheetLinkButton.refresh() }
+                function onConsultantSheetTargetChanged(target) { sheetLinkButton.targetKey = target }
+                function onShowTitlebarShortcutChanged(show) { sheetLinkButton.showShortcut = show }
+            }
+
+            visible: sheetAvailable && window.width > 800 && showShortcut
+            anchors.left: parent.left
+            anchors.leftMargin: {
+                var base = updateNotice.visible ? (updateNotice.x + updateNotice.width)
+                         : (brandContainer.visible ? (brandContainer.x + brandContainer.width) : brandContainer.x)
+                return base + 12
+            }
+            anchors.verticalCenter: navBarContent.verticalCenter
+            width: sheetLinkRow.implicitWidth + 16
+            height: 28
+            radius: 8
+            color: "transparent"
+
+            Row {
+                id: sheetLinkRow
+                anchors.centerIn: parent
+                spacing: 4
+
+                Image {
+                    width: 16
+                    height: 16
+                    anchors.verticalCenter: parent.verticalCenter
+                    source: (typeof consultantFaviconSource === "string" && consultantFaviconSource !== "") ? consultantFaviconSource : Qt.resolvedUrl("../resources/consultant_favicon.png")
+                    sourceSize.width: 32
+                    sourceSize.height: 32
+                    fillMode: Image.PreserveAspectFit
+                    mipmap: true
+                    smooth: true
+                }
+                Text {
+                    text: "Consultant Sheet \u2197"
+                    color: sheetLinkMouse.containsMouse ? Theme.accentHover : Theme.textSecondary
+                    font.bold: true
+                    font.pixelSize: 14
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                }
+            }
+
+            MouseArea {
+                id: sheetLinkMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: if (settingsHandler) settingsHandler.openConsultantSheet()
             }
         }
 

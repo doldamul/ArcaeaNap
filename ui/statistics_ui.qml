@@ -4185,6 +4185,128 @@ Item {
                                 anchors.bottom: parent.bottom
                                 anchors.margins: isNarrow ? 15 : 24
                             }
+
+                            // Consultant Sheet search link (top-right, below Pack back-bar overlay when shown)
+                            Rectangle {
+                                id: sheetSearchButton
+                                property bool sheetAvailable: false
+                                property bool showShortcut: settingsHandler ? settingsHandler.getShowSongHeaderShortcut() : true
+                                property bool searching: false
+                                // Active chart = the chart the header currently represents (Song/Chart/Pack-song views)
+                                readonly property var activeChart: {
+                                    if (!currentSong) return null
+                                    var list = difficultiesToShow || []
+                                    for (var i = 0; i < list.length; i++) {
+                                        if (list[i].difficulty === headerContainer.effectiveHeaderDiff) return list[i]
+                                    }
+                                    if (currentSong.difficultyName) return currentSong
+                                    return list.length > 0 ? list[list.length - 1] : null
+                                }
+                                readonly property string sheetDiffName: {
+                                    if (!activeChart) return ""
+                                    return activeChart.isInscribed ? "INS" : (activeChart.difficultyName || "")
+                                }
+                                readonly property string sheetTitle: {
+                                    if (!currentSong) return ""
+                                    var t = currentSong.canonical_title || currentSong.title || ""
+                                    return settingsHandler ? settingsHandler.toSheetTitle(t) : t
+                                }
+
+                                function refresh() {
+                                    sheetAvailable = !!settingsHandler
+                                                     && settingsHandler.isGoogleSheetConnected()
+                                                     && settingsHandler.hasBoundSheet()
+                                    searching = !!settingsHandler && settingsHandler.isSearchingSheet()
+                                    showShortcut = settingsHandler ? settingsHandler.getShowSongHeaderShortcut() : true
+                                }
+
+                                Component.onCompleted: refresh()
+
+                                Connections {
+                                    target: settingsHandler
+                                    function onGoogleSheetConnectionChanged() { sheetSearchButton.refresh() }
+                                    function onSheetBindingChanged() { sheetSearchButton.refresh() }
+                                    function onIsSearchingSheetChanged(searching) { sheetSearchButton.searching = searching }
+                                    function onShowSongHeaderShortcutChanged(show) { sheetSearchButton.showShortcut = show }
+                                }
+
+                                visible: currentSong !== null && sheetAvailable && sheetDiffName !== ""
+                                         && showShortcut
+                                         && !Boolean(statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.isPackDetailView)
+                                z: 40
+                                anchors.top: parent.top
+                                anchors.topMargin: headerContainer.showBackToPack ? (isNarrow ? 44 : 48) : (isNarrow ? 12 : 18)
+                                anchors.right: parent.right
+                                anchors.rightMargin: isNarrow ? 15 : 24
+                                width: sheetSearchRow.implicitWidth + 16
+                                height: 28
+                                radius: 8
+                                border.width: 0
+                                color: {
+                                    var isHovered = sheetSearchMouse.containsMouse && !searching
+                                    if (Theme.isDarkMode) {
+                                        return isHovered ? Theme.alpha("#FFFFFF", 0.30) : Theme.alpha("#FFFFFF", 0.15)
+                                    } else {
+                                        return isHovered ? Theme.alpha("#000000", 0.30) : Theme.alpha("#000000", 0.15)
+                                    }
+                                }
+
+                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                Row {
+                                    id: sheetSearchRow
+                                    anchors.centerIn: parent
+                                    spacing: 4
+
+                                    Image {
+                                        width: 16
+                                        height: 16
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        source: (typeof consultantFaviconSource === "string" && consultantFaviconSource !== "") ? consultantFaviconSource : Qt.resolvedUrl("../resources/consultant_favicon.png")
+                                        sourceSize.width: 32
+                                        sourceSize.height: 32
+                                        fillMode: Image.PreserveAspectFit
+                                        mipmap: true
+                                        smooth: true
+                                    }
+                                    Item {
+                                        width: 14
+                                        height: 14
+                                        anchors.verticalCenter: parent.verticalCenter
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            visible: !sheetSearchButton.searching
+                                            text: "\u2197"
+                                            color: Theme.detailHeaderArtist
+                                            font.bold: true
+                                            font.pixelSize: 14
+                                        }
+                                        SpinnerIndicator {
+                                            anchors.fill: parent
+                                            lineWidth: 2
+                                            radiusOffset: 1.5
+                                            strokeColor: Theme.detailHeaderArtist
+                                            running: sheetSearchButton.searching
+                                        }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: sheetSearchMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: !sheetSearchButton.searching
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (settingsHandler && sheetSearchButton.sheetTitle !== "") {
+                                            settingsHandler.searchInConsultantSheet(
+                                                currentSong.canonical_title || currentSong.title || "",
+                                                sheetSearchButton.sheetDiffName)
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         // [Body] 난이도 카드 섹션

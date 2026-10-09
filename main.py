@@ -186,6 +186,16 @@ def main():
         "appLogoSource",
         app_logo_source,
     )
+    consultant_favicon_path = os.path.join(get_app_root(), "resources", "consultant_favicon.png")
+    consultant_favicon_source = (
+        QUrl.fromLocalFile(consultant_favicon_path).toString()
+        if os.path.isfile(consultant_favicon_path)
+        else ""
+    )
+    engine.rootContext().setContextProperty(
+        "consultantFaviconSource",
+        consultant_favicon_source,
+    )
     for key, value in about_context.items():
         engine.rootContext().setContextProperty(key, value)
 

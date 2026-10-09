@@ -1133,6 +1133,94 @@ Window {
                             }
                         }
                     }
+
+                    // Titlebar & Song Header Consultant Sheet Shortcuts (placed below card without divider)
+                    ColumnLayout {
+                        id: titlebarLinkTargetGroup
+                        Layout.fillWidth: true
+                        Layout.topMargin: 2
+                        spacing: 8
+                        property string currentTarget: settingsHandler ? settingsHandler.getConsultantSheetTarget() : "main"
+                        property bool isSheetReady: Boolean(settingsHandler && settingsHandler.isGoogleSheetConnected() && settingsHandler.hasBoundSheet())
+
+                        Connections {
+                            target: settingsHandler
+                            function onConsultantSheetTargetChanged(target) {
+                                titlebarLinkTargetGroup.currentTarget = target
+                            }
+                            function onShowTitlebarShortcutChanged(show) {
+                                showWebsiteShortcutCheckBox.checked = show
+                            }
+                            function onShowSongHeaderShortcutChanged(show) {
+                                showSongHeaderShortcutCheckBox.checked = show
+                            }
+                        }
+
+                        ThemedCheckBox {
+                            id: showWebsiteShortcutCheckBox
+                            text: "Show Website Shortcut in Titlebar"
+                            enabled: titlebarLinkTargetGroup.isSheetReady
+                            opacity: enabled ? 1.0 : 0.4
+                            checked: settingsHandler ? settingsHandler.getShowTitlebarShortcut() : true
+                            onCheckedChanged: if (settingsHandler) settingsHandler.setShowTitlebarShortcut(checked)
+
+                            Behavior on opacity {
+                                NumberAnimation { duration: 150 }
+                            }
+                        }
+
+                        Flow {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 4
+                            spacing: 10
+                            enabled: titlebarLinkTargetGroup.isSheetReady && showWebsiteShortcutCheckBox.checked
+                            opacity: enabled ? 1.0 : 0.4
+
+                            Behavior on opacity {
+                                NumberAnimation { duration: 150 }
+                            }
+
+                            ThemedRadioButton {
+                                text: "Main"
+                                checked: titlebarLinkTargetGroup.currentTarget === "main"
+                                onToggled: if (checked && settingsHandler) settingsHandler.setConsultantSheetTarget("main")
+                            }
+                            ThemedRadioButton {
+                                text: "Dashboard"
+                                checked: titlebarLinkTargetGroup.currentTarget === "dashboard"
+                                onToggled: if (checked && settingsHandler) settingsHandler.setConsultantSheetTarget("dashboard")
+                            }
+                            ThemedRadioButton {
+                                text: "Score"
+                                checked: titlebarLinkTargetGroup.currentTarget === "score"
+                                onToggled: if (checked && settingsHandler) settingsHandler.setConsultantSheetTarget("score")
+                            }
+                            ThemedRadioButton {
+                                text: "CC Table"
+                                checked: titlebarLinkTargetGroup.currentTarget === "cc_table"
+                                onToggled: if (checked && settingsHandler) settingsHandler.setConsultantSheetTarget("cc_table")
+                            }
+                            ThemedRadioButton {
+                                text: "Tools"
+                                checked: titlebarLinkTargetGroup.currentTarget === "tools"
+                                onToggled: if (checked && settingsHandler) settingsHandler.setConsultantSheetTarget("tools")
+                            }
+                        }
+
+                        ThemedCheckBox {
+                            id: showSongHeaderShortcutCheckBox
+                            Layout.topMargin: 4
+                            text: "Show Search Shortcut in Song Header"
+                            enabled: titlebarLinkTargetGroup.isSheetReady
+                            opacity: enabled ? 1.0 : 0.4
+                            checked: settingsHandler ? settingsHandler.getShowSongHeaderShortcut() : true
+                            onCheckedChanged: if (settingsHandler) settingsHandler.setShowSongHeaderShortcut(checked)
+
+                            Behavior on opacity {
+                                NumberAnimation { duration: 150 }
+                            }
+                        }
+                    }
                     
                     Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
 
