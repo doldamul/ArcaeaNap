@@ -18,6 +18,9 @@ Item {
     // Cache migration state - prevents image load errors during migration
     property bool isMigrating: false
 
+    // Real-time thumbnail updates when background hydration completes
+    property int thumbnailVersion: statsHandler ? statsHandler.thumbnailVersion : 0
+
     // Profile data from account_connections.json
     property var profileData: ({})
 
@@ -606,6 +609,8 @@ Item {
                             Image {
                                 id: profileImageHome
                                 anchors.fill: parent
+                                asynchronous: true
+                                cache: true
                                 source: profileImagePath ? ("file:///" + profileImagePath.replace(/\\/g, '/')) : ""
                                 fillMode: Image.PreserveAspectFit
                                 mipmap: true
@@ -779,13 +784,18 @@ Item {
                                     Image {
                                         id: thumbnailImage
                                         anchors.fill: parent
-                                        source: (statsHandler && !homeRoot.isMigrating)
-                                            ? ((model.thumbnailDifficulty !== undefined)
-                                                ? statsHandler.getThumbnailPathForDifficulty(model.arcaeaId, model.thumbnailDifficulty)
-                                                : (model.difficultyName
-                                                ? statsHandler.getThumbnailPathForDifficulty(model.arcaeaId, model.difficulty)
-                                                : statsHandler.getThumbnailPath(model.arcaeaId)))
-                                            : ""
+                                        asynchronous: true
+                                        cache: true
+                                        source: {
+                                            var _v = homeRoot.thumbnailVersion;
+                                            return (statsHandler && !homeRoot.isMigrating)
+                                                ? ((model.thumbnailDifficulty !== undefined)
+                                                    ? statsHandler.getThumbnailPathForDifficulty(model.arcaeaId, model.thumbnailDifficulty)
+                                                    : (model.difficultyName
+                                                    ? statsHandler.getThumbnailPathForDifficulty(model.arcaeaId, model.difficulty)
+                                                    : statsHandler.getThumbnailPath(model.arcaeaId)))
+                                                : ""
+                                        }
                                         fillMode: Image.PreserveAspectCrop
                                         mipmap: true
                                         antialiasing: true

@@ -437,19 +437,32 @@ ApplicationWindow {
                 hoverEnabled: true 
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                    if (settingsWindowLoader.item && settingsWindowLoader.item.visible) {
-                        settingsWindowLoader.item.raise()
-                        settingsWindowLoader.item.requestActivate()
-                    } else {
-                        settingsWindowLoader.active = true
-                        settingsWindowLoader.item.show()
-                    }
+                    window.openSettingsWindow()
                 }
             }
         }
     }
 
     // --- Settings Window (별도 윈도우) ---
+    function openSettingsWindow(section) {
+        if (!settingsWindowLoader.item || !settingsWindowLoader.item.visible) {
+            settingsWindowLoader.active = true
+            if (settingsWindowLoader.item) {
+                settingsWindowLoader.item.show()
+            }
+        } else {
+            settingsWindowLoader.item.raise()
+            settingsWindowLoader.item.requestActivate()
+        }
+        if (section) {
+            Qt.callLater(function() {
+                if (settingsWindowLoader.item && typeof settingsWindowLoader.item.scrollToSection === "function") {
+                    settingsWindowLoader.item.scrollToSection(section)
+                }
+            })
+        }
+    }
+
     Loader {
         id: settingsWindowLoader
         source: "settings_ui.qml"
@@ -523,9 +536,29 @@ ApplicationWindow {
 
         // 탭 전환 애니메이션 컴포넌트 정의
         component TabPage: Loader {
+            id: tabLoader
             property int tabIndex: 0 // 이 탭의 고유 번호
+            property bool wasLoaded: false
             
             anchors.fill: parent
+            
+            // 첫 진입 시점까지 로드를 지연하고, 한 번 로드된 이후에는 언로드하지 않고 유지
+            active: window.currentTab === tabIndex || wasLoaded
+            
+            Connections {
+                target: window
+                function onCurrentTabChanged() {
+                    if (window.currentTab === tabLoader.tabIndex) {
+                        tabLoader.wasLoaded = true
+                    }
+                }
+            }
+
+            Component.onCompleted: {
+                if (window.currentTab === tabIndex) {
+                    wasLoaded = true
+                }
+            }
             
             // 현재 탭이면 불투명(1), 아니면 투명(0)
             opacity: window.currentTab === tabIndex ? 1 : 0

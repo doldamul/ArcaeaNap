@@ -72,7 +72,11 @@ def init_songs_db():
             artist TEXT,
             length INTEGER,
             bpm TEXT,
-            arcaea_id TEXT
+            arcaea_id TEXT,
+            pack TEXT,
+            pack_abbr TEXT,
+            version TEXT,
+            pack_color TEXT
         )
     ''')
 
@@ -91,6 +95,7 @@ def init_songs_db():
             skill_issues INTEGER,
             hard_bpm INTEGER,
             is_inscribed INTEGER DEFAULT 0,
+            version TEXT,
             UNIQUE(song_id, difficulty),
             FOREIGN KEY(song_id) REFERENCES songs(id)
         )
@@ -105,6 +110,14 @@ def init_songs_db():
         cursor.execute("ALTER TABLE songs ADD COLUMN title_en TEXT")
     if 'title_jp' not in columns:
         cursor.execute("ALTER TABLE songs ADD COLUMN title_jp TEXT")
+    if 'pack' not in columns:
+        cursor.execute("ALTER TABLE songs ADD COLUMN pack TEXT")
+    if 'pack_abbr' not in columns:
+        cursor.execute("ALTER TABLE songs ADD COLUMN pack_abbr TEXT")
+    if 'version' not in columns:
+        cursor.execute("ALTER TABLE songs ADD COLUMN version TEXT")
+    if 'pack_color' not in columns:
+        cursor.execute("ALTER TABLE songs ADD COLUMN pack_color TEXT")
 
     cursor.execute("PRAGMA table_info(charts)")
     columns = [info[1] for info in cursor.fetchall()]
@@ -119,6 +132,8 @@ def init_songs_db():
         cursor.execute("ALTER TABLE charts ADD COLUMN hard_bpm INTEGER")
     if 'is_inscribed' not in columns:
         cursor.execute("ALTER TABLE charts ADD COLUMN is_inscribed INTEGER DEFAULT 0")
+    if 'version' not in columns:
+        cursor.execute("ALTER TABLE charts ADD COLUMN version TEXT")
 
     conn.commit()
     conn.close()
@@ -169,6 +184,17 @@ def update_song_metadata(cursor, song_id, artist, length, bpm=None):
         SET artist = ?, length = ?, bpm = ?
         WHERE id = ?
     ''', (artist, length, bpm, song_id))
+
+
+def update_song_wiki_metadata(cursor, song_id, artist, length, bpm=None, pack=None, pack_abbr=None, version=None, pack_color=None):
+    """
+    Updates artist, length, bpm, pack, pack_abbr, version, and pack_color for a given song_id.
+    """
+    cursor.execute('''
+        UPDATE songs
+        SET artist = ?, length = ?, bpm = ?, pack = ?, pack_abbr = ?, version = ?, pack_color = ?
+        WHERE id = ?
+    ''', (artist, length, bpm, pack, pack_abbr, version, pack_color, song_id))
 
 
 def resolve_song_id_for_ao(cursor, ao_id, ao_title):
@@ -298,9 +324,7 @@ def fill_song_titles_from_scores():
                     NULLIF(songs.title_en, ''),
                     (SELECT us.title_en
                      FROM user_db.scores us
-                     JOIN charts c ON c.song_id = songs.id
                      WHERE us.arcaea_id = songs.arcaea_id
-                       AND us.difficulty = c.difficulty
                        AND us.title_en IS NOT NULL AND us.title_en != ''
                      LIMIT 1)
                 ),
@@ -308,10 +332,16 @@ def fill_song_titles_from_scores():
                     NULLIF(songs.title_jp, ''),
                     (SELECT us.title_jp
                      FROM user_db.scores us
-                     JOIN charts c ON c.song_id = songs.id
                      WHERE us.arcaea_id = songs.arcaea_id
-                       AND us.difficulty = c.difficulty
                        AND us.title_jp IS NOT NULL AND us.title_jp != ''
+                     LIMIT 1)
+                ),
+                artist = COALESCE(
+                    NULLIF(NULLIF(songs.artist, ''), 'Unknown'),
+                    (SELECT us.artist
+                     FROM user_db.scores us
+                     WHERE us.arcaea_id = songs.arcaea_id
+                       AND us.artist IS NOT NULL AND us.artist != ''
                      LIMIT 1)
                 )
             WHERE songs.arcaea_id IS NOT NULL AND songs.arcaea_id != ''
@@ -322,7 +352,7 @@ def fill_song_titles_from_scores():
         restored_count = songs_cursor.execute(
             "SELECT COUNT(*) FROM songs WHERE (title_en IS NOT NULL AND title_en != '') OR (title_jp IS NOT NULL AND title_jp != '')"
         ).fetchone()[0]
-        print(f"[fill_song_titles_from_scores] Restored title_en/title_jp for {restored_count} songs")
+        print(f"[fill_song_titles_from_scores] Restored title_en/title_jp/artist for {restored_count} songs")
 
     except Exception as e:
         print(f"Error filling song titles from scores: {e}")
@@ -355,13 +385,23 @@ def get_all_songs_with_charts():
     try:
         cursor = conn.cursor()
         cursor.execute("PRAGMA table_info(charts)")
-        has_ins_col = any(col[1] == 'is_inscribed' for col in cursor.fetchall())
+        chart_cols = {col[1] for col in cursor.fetchall()}
+        has_ins_col = 'is_inscribed' in chart_cols
         ins_select = "c.is_inscribed" if has_ins_col else "0"
+        c_ver_select = "c.version" if 'version' in chart_cols else "''"
+
+        cursor.execute("PRAGMA table_info(songs)")
+        song_cols = {col[1] for col in cursor.fetchall()}
+        pack_select = "s.pack" if "pack" in song_cols else "''"
+        pack_abbr_select = "s.pack_abbr" if "pack_abbr" in song_cols else "''"
+        version_select = "s.version" if "version" in song_cols else "''"
+        pack_color_select = "s.pack_color" if "pack_color" in song_cols else "''"
 
         cursor.execute(f"""
             SELECT s.arcaea_id, s.canonical_title, s.title_en, s.title_jp, s.artist, s.length, s.bpm,
                    c.difficulty, c.level, c.bp, c.s_bp, c.perceived_bp, c.note_count,
-                   c.ignore_chart, c.skill_issues, c.hard_bpm, s.id, c.cut_200, {ins_select}
+                   c.ignore_chart, c.skill_issues, c.hard_bpm, s.id, c.cut_200, {ins_select},
+                   {pack_select}, {pack_abbr_select}, {version_select}, {pack_color_select}, {c_ver_select}
             FROM songs s
             LEFT JOIN charts c ON s.id = c.song_id
             WHERE s.arcaea_id IS NOT NULL AND s.arcaea_id != ''
@@ -381,10 +421,15 @@ def get_all_songs_with_charts():
                     'artist': row[4] or 'Unknown',
                     'length': row[5] or 0,
                     'bpm': row[6] or '',
+                    'pack': row[19] or '',
+                    'pack_abbr': row[20] or '',
+                    'version': row[21] or '',
+                    'pack_color': row[22] or '',
                     'charts': {}
                 }
 
             if row[7] is not None:
+                chart_ver = row[23] or row[21] or ''
                 result[song_id]['charts'][row[7]] = {
                     'level': row[8] or '',
                     'bp': row[9] or 0.0,
@@ -396,6 +441,7 @@ def get_all_songs_with_charts():
                     'hard_bpm': bool(row[15]),
                     'cut_200': row[17] or 0,
                     'is_inscribed': bool(row[18]),
+                    'version': chart_ver,
                 }
 
         return result
@@ -469,3 +515,76 @@ def update_chart_inscribed_flag(cursor, song_id: int, difficulty: int, is_inscri
         (1 if is_inscribed else 0, int(song_id), int(difficulty)),
     )
     return cursor.rowcount > 0
+
+
+def update_chart_version(cursor, song_id: int, difficulty: int, version: str) -> bool:
+    """
+    특정 차트의 version 정보를 갱신한다. (예: Beyond 난이도 추가 버전)
+
+    Args:
+        cursor: SQLite cursor
+        song_id: songs.id
+        difficulty: 난이도 (diff_num)
+        version: 버전 문자열 (예: '3.10.0')
+
+    Returns:
+        bool: 업데이트 성공(영향받은 행 > 0) 여부
+    """
+    if not version:
+        return False
+    cursor.execute(
+        "UPDATE charts SET version = ? WHERE song_id = ? AND difficulty = ?",
+        (str(version).strip(), int(song_id), int(difficulty)),
+    )
+    return cursor.rowcount > 0
+
+
+import re
+
+_WE_PATTERN = re.compile(r"^World\s+Extend(?:\s+(\d+))?$", re.IGNORECASE)
+_EA_PATTERN = re.compile(r"^Extend\s+Archive(?:\s+(\d+))?$", re.IGNORECASE)
+
+
+def sort_pack_names(packs: list[str]) -> list[str]:
+    """Arcaea, Memory Archive, World Extend [N], Extend Archive [N]을 최상단 우선순위(최신순)로 배치하고 나머지는 대소문자 무시 알파벳순으로 정렬한다."""
+    def sort_key(name: str):
+        target = str(name or '').strip()
+        if target.lower() == "arcaea":
+            return (0, 0, "")
+        if target.lower() == "memory archive":
+            return (1, 0, "")
+
+        m_we = _WE_PATTERN.match(target)
+        if m_we:
+            n = int(m_we.group(1)) if m_we.group(1) else 0
+            return (2, -n, "")
+
+        m_ea = _EA_PATTERN.match(target)
+        if m_ea:
+            n = int(m_ea.group(1)) if m_ea.group(1) else 0
+            return (3, -n, "")
+
+        return (4, 0, target.lower())
+
+    return sorted(packs, key=sort_key)
+
+
+def get_all_packs(conn=None) -> list[str]:
+    """songs.db로부터 감지된 모든 고유 팩 목록을 고정 우선순위 및 알파벳순으로 정렬하여 반환한다."""
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT pack FROM songs WHERE pack IS NOT NULL AND pack != ''")
+        packs = [row[0] for row in cursor.fetchall() if row[0]]
+        return sort_pack_names(packs)
+    except Exception as e:
+        print(f"Error fetching all packs: {e}")
+        return []
+    finally:
+        if should_close:
+            conn.close()
+
+

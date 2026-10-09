@@ -36,6 +36,7 @@ class StatisticsListModel(QAbstractListModel):
     DiffColorTagRole = Qt.ItemDataRole.UserRole + 29
     IsInscribedRole = Qt.ItemDataRole.UserRole + 30
     IsBest10Role = Qt.ItemDataRole.UserRole + 31
+    BestDiffForNoteCountRole = Qt.ItemDataRole.UserRole + 32
 
     _ROLE_KEY_MAP = {
         ArcaeaIdRole: "arcaeaId",
@@ -63,6 +64,7 @@ class StatisticsListModel(QAbstractListModel):
         DiffColorTagRole: "diffColorTag",
         IsInscribedRole: "isInscribed",
         IsBest10Role: "isBest10",
+        BestDiffForNoteCountRole: "bestDiffForNoteCount",
     }
 
     def __init__(self, parent=None):

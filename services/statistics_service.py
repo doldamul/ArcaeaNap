@@ -5,6 +5,7 @@ Statistics 탭 비즈니스 로직.
 PyQt6 의존 없이 순수 Python으로 구현된다.
 """
 import math
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -13,12 +14,14 @@ from services.score_query_service import (
     get_best_scores_per_chart, get_play_counts,
     get_this_year_play_counts
 )
-from repositories.song_repository import get_all_songs_with_charts
+from repositories.song_repository import get_all_songs_with_charts, get_db_path
 from models.constants import (
     calculate_rank,
     DIFFICULTY_ORDER, DIFFICULTY_NAMES, SCORE_RANKS,
     CLEAR_TYPE_TEXTS, CLEAR_TYPE_ABBREVIATIONS
 )
+from utils.configuration import config
+from services.pack_service import PackService
 
 
 @dataclass
@@ -39,6 +42,29 @@ class FilterParams:
     include_inscribed: bool = True
 
 
+class _ReverseCompare:
+    """Helper class to invert comparison order of wrapped values in descending sorts."""
+    __slots__ = ('val',)
+
+    def __init__(self, val):
+        self.val = val
+
+    def __lt__(self, other):
+        return self.val > other.val
+
+    def __gt__(self, other):
+        return self.val < other.val
+
+    def __eq__(self, other):
+        return self.val == other.val
+
+    def __le__(self, other):
+        return self.val >= other.val
+
+    def __ge__(self, other):
+        return self.val <= other.val
+
+
 class StatisticsService:
     """Statistics 탭 비즈니스 로직: 데이터 로딩, 필터링, 정렬, 아이템 빌드."""
 
@@ -49,12 +75,21 @@ class StatisticsService:
         self.scores_data = {}
         self.play_counts = {}
         self.this_year_play_counts = {}
+        self.is_songs_db_available = True
 
         # 중간 결과 캐시
         self._full_items_cache = None
         self._full_items_cache_key = None
         self._filtered_items_cache = None
         self._filtered_cache_key = None
+        self._pack_items_cache = None
+        self._pack_cache_key = None
+        self._base_pack_items_cache = None
+        self._base_pack_cache_key = None
+
+        # 팩 서비스 연동
+        self.pack_service = PackService()
+        self._main_pack_index = None
 
         # Level/BP 경계
         self.available_levels = []
@@ -88,6 +123,25 @@ class StatisticsService:
         if len(vals) >= 2:
             return min(vals) if ascending else max(vals)
         return vals[0]
+
+    @staticmethod
+    def _parse_version_for_sort(version_str, ascending: bool = True) -> tuple:
+        """Extract numeric version tuple for sorting.
+
+        - No version: sorts last (inf ascending, -inf descending)
+        - Normal e.g. "7.0.0", "3.12.10", "1.5": parses as tuple of integers padded to 3 parts.
+        """
+        if not version_str:
+            last = float('inf') if ascending else float('-inf')
+            return (last, last, last)
+        nums = re.findall(r'\d+', str(version_str))
+        if not nums:
+            last = float('inf') if ascending else float('-inf')
+            return (last, last, last)
+        int_nums = [int(n) for n in nums]
+        while len(int_nums) < 3:
+            int_nums.append(0)
+        return tuple(int_nums)
 
     @staticmethod
     def _effective_note_count(chart_data: dict, score_data: dict) -> int:
@@ -171,6 +225,101 @@ class StatisticsService:
                 self.this_year_play_counts[(aid, int(diff))] = count
             except:
                 self.this_year_play_counts[(aid, diff)] = count
+
+        # Check songs.db availability
+        try:
+            db_path = get_db_path()
+            db_exists = bool(db_path and os.path.exists(db_path))
+        except Exception:
+            db_exists = False
+        self.is_songs_db_available = bool(db_exists and raw_songs)
+
+        # In-memory artist 백필 및 동적 가상 차트(Virtual Chart) 합성
+        aid_to_songs = {}
+        for s in self.songs_data.values():
+            aid = s.get('arcaea_id')
+            if aid:
+                aid_to_songs.setdefault(aid, []).append(s)
+
+        # Fallback/신곡 보완: scores_data에는 존재하지만 songs_data에 없는 arcaea_id가 있다면 가상 악곡 합성
+        next_synth_id = (max([k for k in self.songs_data.keys() if isinstance(k, int)], default=0) + 1)
+        for (aid, diff), scdata in self.scores_data.items():
+            if aid not in aid_to_songs:
+                t_en = str(scdata.get('title_en') or '').strip()
+                t_jp = str(scdata.get('title_jp') or '').strip()
+                artist = str(scdata.get('artist') or '').strip() or 'Unknown'
+                title = (t_jp or t_en) if lang == 'jp' else (t_en or t_jp)
+                if not title:
+                    title = aid
+                synth_song = {
+                    'song_db_id': next_synth_id,
+                    'arcaea_id': aid,
+                    'canonical_title': title,
+                    'title_en': t_en or aid,
+                    'title_jp': t_jp,
+                    'title': title,
+                    'artist': artist,
+                    'length': 0,
+                    'bpm': '-',
+                    'pack': 'Uncategorized',
+                    'pack_abbr': '???',
+                    'version': '-',
+                    'charts': {}
+                }
+                self.songs_data[next_synth_id] = synth_song
+                self.songs_by_db_id[next_synth_id] = synth_song
+                aid_to_songs[aid] = [synth_song]
+                next_synth_id += 1
+
+        for (aid, diff), scdata in self.scores_data.items():
+            songs_for_aid = aid_to_songs.get(aid, [])
+            if not songs_for_aid:
+                continue
+
+            for song_item in songs_for_aid:
+                # 1. Artist 백필 (songs.db artist 결측 시 user_scores.db의 artist 주입)
+                curr_artist = str(song_item.get('artist') or '').strip()
+                sc_artist = str(scdata.get('artist') or '').strip()
+                if (not curr_artist or curr_artist.lower() == 'unknown') and sc_artist:
+                    song_item['artist'] = sc_artist
+
+                # 1.1 Title 백필 (title이 결측이거나 arcaea_id인 경우 user_scores.db의 title_en/title_jp 주입)
+                curr_title = str(song_item.get('title') or '').strip()
+                sc_en = str(scdata.get('title_en') or '').strip()
+                sc_jp = str(scdata.get('title_jp') or '').strip()
+                sc_title = (sc_jp or sc_en) if lang == 'jp' else (sc_en or sc_jp)
+                if (not curr_title or curr_title == aid or curr_title.lower() == 'unknown') and sc_title:
+                    song_item['title'] = sc_title
+                    song_item['canonical_title'] = sc_title
+                    if sc_en:
+                        song_item['title_en'] = sc_en
+                    if sc_jp:
+                        song_item['title_jp'] = sc_jp
+
+            # 2. 동적 가상 차트 합성 (charts 테이블에 없는 신곡 난이도 보완)
+            # 동일 arcaea_id를 공유하는 악곡들(예: ignotus 본편 vs BYD) 중 어느 한 악곡이라도 해당 diff를 소유하고 있다면 가상 차트 합성 건너뜀
+            has_chart_already = any(diff in s.get('charts', {}) for s in songs_for_aid)
+            if not has_chart_already:
+                target_song = songs_for_aid[0]
+                charts = target_song.setdefault('charts', {})
+                perfect = scdata.get('perfect', 0) or 0
+                near = scdata.get('near', 0) or 0
+                miss = scdata.get('miss', 0) or 0
+                note_cnt = perfect + near + miss
+                charts[diff] = {
+                    'level': '?',
+                    'bp': 0.0,
+                    's_bp': 0.0,
+                    'perceived_bp': 0.0,
+                    'note_count': note_cnt,
+                    'ignore_chart': False,
+                    'skill_issues': False,
+                    'hard_bpm': False,
+                    'cut_200': 0,
+                    'is_inscribed': False,
+                    'version': target_song.get('version') or '',
+                    'is_virtual': True,
+                }
 
         # Calculate Level/BP boundaries
         self._calculate_level_bp_boundaries()
@@ -273,6 +422,11 @@ class StatisticsService:
         self._full_items_cache_key = None
         self._filtered_items_cache = None
         self._filtered_cache_key = None
+        self._pack_items_cache = None
+        self._pack_cache_key = None
+        self._base_pack_items_cache = None
+        self._base_pack_cache_key = None
+        self._main_pack_index = None
 
     def build_filtered_sorted_list(
         self, display_mode, sort_mode, sort_ascending,
@@ -285,16 +439,217 @@ class StatisticsService:
         self.apply_display_values(sorted_items, sort_mode, display_mode)
         return sorted_items
 
+    def get_pack_items(
+        self,
+        filters: FilterParams = None,
+        sort_mode: str = "version",
+        sort_ascending: bool = False,
+        song_sort_mode: str = None,
+        song_sort_ascending: bool = None,
+        search_text: str = "",
+        classification_mode: str = None
+    ) -> list:
+        """
+        Pack 모드용 팩 집계 아이템 리스트 반환 (캐싱, 정렬, 검색 지원).
+        """
+        if classification_mode is None:
+            try:
+                classification_mode = config['general']['pack_classification_mode']
+            except Exception:
+                classification_mode = "strict"
+
+        # sort_mode 정규화
+        PACK_SORT_MODES = {
+            'version', 'title', 'score', 'potential', 'max', 'play_count',
+            'total_play_count', 'this_year_play_count', 'recent_played',
+            'level', 'bp', 's_bp', 'perceived_bp', 'note_count', 'bpm', 'length'
+        }
+        norm_sort_mode = (sort_mode or "version").strip().lower()
+        if norm_sort_mode in ('total_play', 'total_plays', 'play_count'):
+            norm_sort_mode = 'total_play_count'
+        elif norm_sort_mode in ('bp',):
+            norm_sort_mode = 'level'
+        elif norm_sort_mode not in PACK_SORT_MODES:
+            norm_sort_mode = 'version'
+
+        # version 정렬 시 팩 내 악곡은 bp 내림차순 정렬, 대표곡 정렬 시에도 동기화
+        if song_sort_mode is not None:
+            eff_song_sort_mode = song_sort_mode
+            eff_song_sort_asc = bool(song_sort_ascending) if song_sort_ascending is not None else False
+        elif norm_sort_mode == "version":
+            eff_song_sort_mode = "bp"
+            eff_song_sort_asc = False
+        else:
+            eff_song_sort_mode = norm_sort_mode
+            eff_song_sort_asc = sort_ascending
+
+        # 캐시 키 검사
+        filter_hash = self._make_filter_hash(filters) if filters else None
+        clean_search = (search_text or "").strip().lower()
+        excluded_packs, _ = self._get_pack_exclusion_settings()
+        excluded_packs_tuple = tuple(sorted(excluded_packs))
+        base_cache_key = (
+            filter_hash,
+            norm_sort_mode,
+            bool(sort_ascending),
+            eff_song_sort_mode,
+            bool(eff_song_sort_asc),
+            classification_mode,
+            excluded_packs_tuple,
+        )
+        cache_key = (
+            filter_hash,
+            norm_sort_mode,
+            bool(sort_ascending),
+            eff_song_sort_mode,
+            bool(eff_song_sort_asc),
+            clean_search,
+            classification_mode,
+            excluded_packs_tuple,
+        )
+
+        # 1. Base packs 캐시 확인 및 집계
+        if self._base_pack_cache_key == base_cache_key and self._base_pack_items_cache is not None:
+            packs = self._base_pack_items_cache
+        else:
+            packs = self.pack_service.get_packs(
+                songs_data=self.songs_data,
+                scores_data=self.scores_data,
+                play_counts=self.play_counts,
+                this_year_play_counts=self.this_year_play_counts,
+                classification_mode=classification_mode,
+                active_filters=filters,
+                sort_mode=norm_sort_mode,
+                is_desc=(not sort_ascending),
+                song_sort_mode=eff_song_sort_mode,
+                song_is_desc=(not eff_song_sort_asc),
+                potential_rank_map=self._potential_rank_map,
+                excluded_packs=excluded_packs,
+            )
+            self._base_pack_items_cache = packs
+            self._base_pack_cache_key = base_cache_key
+
+        # 2. 검색어가 없으면 Base packs 캐시 결과를 그대로 반환
+        if not clean_search:
+            self._pack_items_cache = packs
+            self._pack_cache_key = cache_key
+            return packs
+
+        # 3. 검색어가 있는 경우 검색 캐시 확인
+        if self._pack_cache_key == cache_key and self._pack_items_cache is not None:
+            return self._pack_items_cache
+
+        # 4. In-memory 빠른 검색 필터링 (팩명 매칭 또는 수록곡 매칭 팩 보존)
+        filtered_packs = []
+        for pack in packs:
+            pack_name = str(pack.get('name') or '').lower()
+            pack_abbr = str(pack.get('abbr') or '').lower()
+            if clean_search in pack_name or clean_search in pack_abbr:
+                filtered_packs.append(pack)
+                continue
+
+            song_matched = False
+            for s in pack.get('songs', []):
+                title = str(s.get('title') or '').lower()
+                artist = str(s.get('artist') or '').lower()
+                song_id = str(s.get('id') or s.get('song_id') or '').lower()
+                raw = s.get('raw_data') or {}
+                raw_canonical = str(raw.get('canonical_title') or '').lower()
+                raw_en = str(raw.get('title_en') or '').lower()
+                raw_jp = str(raw.get('title_jp') or '').lower()
+                if (
+                    clean_search in title
+                    or clean_search in artist
+                    or clean_search in song_id
+                    or clean_search in raw_canonical
+                    or clean_search in raw_en
+                    or clean_search in raw_jp
+                ):
+                    song_matched = True
+                    break
+
+            if song_matched:
+                filtered_packs.append(pack)
+
+        self._pack_items_cache = filtered_packs
+        self._pack_cache_key = cache_key
+        return filtered_packs
+
+    def build_song_item(self, song_data: dict, filters: FilterParams = None) -> dict:
+        """단일 곡에 대한 Song 모드 아이템을 빌드한다."""
+        if not song_data:
+            return None
+        song_db_id = song_data.get('song_db_id') or song_data.get('id')
+        arcaea_id = song_data.get('arcaea_id')
+        if not arcaea_id:
+            return None
+
+        filtered_diffs = []
+        for diff, chart_data in song_data.get('charts', {}).items():
+            if filters is None:
+                filtered_diffs.append(diff)
+                continue
+            score_data = self.scores_data.get((arcaea_id, diff), {})
+            if self._matches_filter(chart_data, score_data, diff, filters):
+                filtered_diffs.append(diff)
+
+        # 필터 매칭 난이도가 없을 경우 전체 난이도로 fallback
+        if not filtered_diffs:
+            filtered_diffs = list(song_data.get('charts', {}).keys())
+
+        return self._build_song_item(song_db_id, arcaea_id, song_data, filtered_diffs, filters)
+
+    def _get_pack_exclusion_settings(self):
+        """설정에서 제외 팩 세트와 팩 분류 모드를 가져온다."""
+        try:
+            classification_mode = config['general']['pack_classification_mode']
+        except Exception:
+            classification_mode = 'strict'
+        try:
+            excluded_packs = set(config['general']['excluded_packs'])
+        except Exception:
+            excluded_packs = set()
+        return excluded_packs, classification_mode
+
+    @property
+    def main_pack_index(self):
+        if not hasattr(self, '_main_pack_index') or self._main_pack_index is None:
+            if self.songs_data:
+                self._main_pack_index = self.pack_service.build_main_pack_index(self.songs_data)
+            else:
+                self._main_pack_index = {}
+        return self._main_pack_index
+
+    def _is_pack_excluded(self, song_data: dict, excluded_packs: set, classification_mode: str) -> bool:
+        """곡의 팩이 제외 대상인지 판정 (Strict 및 Conceptual 모드 종속 Append 팩 포함)."""
+        if not excluded_packs or not song_data:
+            return False
+        raw_pack = song_data.get('pack', '')
+        if raw_pack in excluded_packs:
+            return True
+        if classification_mode == 'conceptual':
+            raw_abbr = song_data.get('pack_abbr', '')
+            norm_name, _ = self.pack_service.parse_pack_info(
+                raw_pack, raw_abbr, 'conceptual', main_pack_index=self.main_pack_index
+            )
+            if norm_name in excluded_packs:
+                return True
+        return False
+
     def build_full_items(self, display_mode: str, filters: FilterParams = None) -> list:
         """필터 전(Chart) 또는 필터 반영 집계(Song) 기준의 전체 아이템을 빌드한다."""
-        cache_key = self._make_full_items_cache_key(display_mode, filters)
+        excluded_packs, classification_mode = self._get_pack_exclusion_settings()
+        excluded_packs_tuple = tuple(sorted(excluded_packs))
+        cache_key = self._make_full_items_cache_key(
+            display_mode, filters, excluded_packs_tuple, classification_mode
+        )
         if self._full_items_cache_key == cache_key and self._full_items_cache is not None:
             return self._full_items_cache
 
         if display_mode == "chart":
-            items = self._build_all_chart_items()
+            items = self._build_all_chart_items(excluded_packs, classification_mode)
         else:
-            items = self._build_all_song_items(filters)
+            items = self._build_all_song_items(filters, excluded_packs, classification_mode)
 
         self._full_items_cache = items
         self._full_items_cache_key = cache_key
@@ -361,11 +716,14 @@ class StatisticsService:
                 item, sort_mode, display_mode
             )
 
-    def _make_full_items_cache_key(self, display_mode: str, filters: FilterParams):
+    def _make_full_items_cache_key(
+        self, display_mode: str, filters: FilterParams,
+        excluded_packs: tuple = (), classification_mode: str = "strict"
+    ):
         """Song 모드는 필터에 따라 집계가 달라지므로 필터 해시를 캐시 키에 포함한다."""
         if display_mode == "song":
-            return (display_mode, self._make_filter_hash(filters))
-        return (display_mode,)
+            return (display_mode, self._make_filter_hash(filters), excluded_packs, classification_mode)
+        return (display_mode, excluded_packs, classification_mode)
 
     def _make_filter_hash(self, filters: FilterParams):
         if filters is None:
@@ -386,10 +744,15 @@ class StatisticsService:
             bool(getattr(filters, 'include_inscribed', True)),
         )
 
-    def _build_all_chart_items(self) -> list:
-        """Chart 모드용 전체 차트 아이템을 빌드한다 (필터 비의존)."""
+    def _build_all_chart_items(
+        self, excluded_packs: set = None, classification_mode: str = None
+    ) -> list:
+        """Chart 모드용 전체 차트 아이템을 빌드한다 (필터 비의존, 제외 팩 반영)."""
         items = []
         for song_db_id, song_data in self.songs_data.items():
+            if self._is_pack_excluded(song_data, excluded_packs, classification_mode):
+                continue
+
             arcaea_id = song_data.get('arcaea_id')
             if not arcaea_id:
                 continue
@@ -414,10 +777,16 @@ class StatisticsService:
                 )
         return items
 
-    def _build_all_song_items(self, filters: FilterParams = None) -> list:
-        """Song 모드용 집계 아이템을 빌드한다."""
+    def _build_all_song_items(
+        self, filters: FilterParams = None,
+        excluded_packs: set = None, classification_mode: str = None
+    ) -> list:
+        """Song 모드용 집계 아이템을 빌드한다 (제외 팩 반영)."""
         items = []
         for song_db_id, song_data in self.songs_data.items():
+            if self._is_pack_excluded(song_data, excluded_packs, classification_mode):
+                continue
+
             arcaea_id = song_data.get('arcaea_id')
             if not arcaea_id:
                 continue
@@ -455,26 +824,27 @@ class StatisticsService:
         elif difficulty not in filters.difficulties:
             return False
 
-        if filters.bp_mode:
-            bp = item.get('bp', 0)
-            if bp < filters.bp_min or bp > filters.bp_max:
-                return False
-        else:
-            level_str = item.get('level', '0')
-            if level_str in self.available_levels:
-                level_idx = self.available_levels.index(level_str)
-                min_idx = (
-                    self.available_levels.index(filters.level_min_str)
-                    if filters.level_min_str in self.available_levels
-                    else 0
-                )
-                max_idx = (
-                    self.available_levels.index(filters.level_max_str)
-                    if filters.level_max_str in self.available_levels
-                    else len(self.available_levels) - 1
-                )
-                if level_idx < min_idx or level_idx > max_idx:
+        level_str = item.get('level', '0')
+        if level_str != '?':
+            if filters.bp_mode:
+                bp = item.get('bp', 0)
+                if bp < filters.bp_min or bp > filters.bp_max:
                     return False
+            else:
+                if level_str in self.available_levels:
+                    level_idx = self.available_levels.index(level_str)
+                    min_idx = (
+                        self.available_levels.index(filters.level_min_str)
+                        if filters.level_min_str in self.available_levels
+                        else 0
+                    )
+                    max_idx = (
+                        self.available_levels.index(filters.level_max_str)
+                        if filters.level_max_str in self.available_levels
+                        else len(self.available_levels) - 1
+                    )
+                    if level_idx < min_idx or level_idx > max_idx:
+                        return False
 
         for flag_name, flag_value in [
             ('ignoreChart', filters.ignore_chart),
@@ -531,20 +901,21 @@ class StatisticsService:
         elif difficulty not in filters.difficulties:
             return False
 
-        # Level/BP range filter
-        if filters.bp_mode:
-            bp = chart_data.get('bp', 0)
-            if bp < filters.bp_min or bp > filters.bp_max:
-                return False
-        else:
-            level_str = chart_data.get('level', '0')
-            # Use available_levels for proper ordering comparison
-            if level_str in self.available_levels:
-                level_idx = self.available_levels.index(level_str)
-                min_idx = self.available_levels.index(filters.level_min_str) if filters.level_min_str in self.available_levels else 0
-                max_idx = self.available_levels.index(filters.level_max_str) if filters.level_max_str in self.available_levels else len(self.available_levels) - 1
-                if level_idx < min_idx or level_idx > max_idx:
+        # Level/BP range filter ('?' 레벨 차트는 범위 필터에 항상 포함)
+        level_str = chart_data.get('level', '0')
+        if level_str != '?':
+            if filters.bp_mode:
+                bp = chart_data.get('bp', 0)
+                if bp < filters.bp_min or bp > filters.bp_max:
                     return False
+            else:
+                # Use available_levels for proper ordering comparison
+                if level_str in self.available_levels:
+                    level_idx = self.available_levels.index(level_str)
+                    min_idx = self.available_levels.index(filters.level_min_str) if filters.level_min_str in self.available_levels else 0
+                    max_idx = self.available_levels.index(filters.level_max_str) if filters.level_max_str in self.available_levels else len(self.available_levels) - 1
+                    if level_idx < min_idx or level_idx > max_idx:
+                        return False
 
         # Chart flags filter
         for flag_name, flag_value in [
@@ -665,6 +1036,10 @@ class StatisticsService:
             diff_name = DIFFICULTY_NAMES.get(difficulty, '')
             diff_color_tag = DIFFICULTY_NAMES.get(difficulty, '').lower()
 
+        strict_pack, strict_abbr = PackService.parse_pack_info(
+            song_data.get('pack', ''), song_data.get('pack_abbr', ''), classification_mode="strict"
+        )
+
         return {
             'songDbId': song_db_id,
             'arcaeaId': arcaea_id,
@@ -675,6 +1050,13 @@ class StatisticsService:
             'artist': song_data['artist'],
             'length': song_data['length'],
             'bpm': song_data['bpm'],
+            'pack': strict_pack,
+            'packAbbr': strict_abbr,
+            'strictPack': strict_pack,
+            'strictPackAbbr': strict_abbr,
+            'version': chart_data.get('version') or song_data.get('version', ''),
+            'songVersion': song_data.get('version', ''),
+            'packColor': song_data.get('pack_color', ''),
             'difficulty': difficulty,
             'difficultyName': diff_name,
             'diffColorTag': diff_color_tag,
@@ -740,6 +1122,7 @@ class StatisticsService:
             'hardBpm': chart_data.get('hard_bpm', False),
             'score': score_data.get('score', 0),
             'hasScore': has_score,
+            'version': chart_data.get('version', ''),
             'potentialRank': self._potential_rank_map.get((arcaea_id, difficulty), 0),
             'isBest10': bool(arcaea_id) and (arcaea_id, difficulty) in self._best10_slots,
         }
@@ -865,6 +1248,11 @@ class StatisticsService:
         # hasScore for song: True if any chart has been played
         has_score = recent_time_played > 0
 
+        # Strict pack metadata for header and drill-down
+        strict_pack, strict_abbr = PackService.parse_pack_info(
+            song_data.get('pack', ''), song_data.get('pack_abbr', ''), classification_mode="strict"
+        )
+
         return {
             'songDbId': song_db_id,
             'arcaeaId': arcaea_id,
@@ -873,8 +1261,14 @@ class StatisticsService:
             'title_en': song_data.get('title_en', ''),
             'title_jp': song_data.get('title_jp', ''),
             'artist': song_data['artist'],
-            'length': song_data['length'],
-            'bpm': song_data['bpm'],
+            'length': song_data.get('length', 0),
+            'bpm': song_data.get('bpm', ''),
+            'pack': strict_pack,
+            'packAbbr': strict_abbr,
+            'strictPack': strict_pack,
+            'strictPackAbbr': strict_abbr,
+            'version': song_data.get('version', ''),
+            'packColor': song_data.get('pack_color', ''),
             'level': best_level,
             'bp': best_bp,
             's_bp': best_s_bp,
@@ -972,6 +1366,8 @@ class StatisticsService:
                 return _last
             return ts
         elif sort_mode == "level":
+            if item.get('level') == '?':
+                return _last
             bp = item.get('bp', 0)
             if not bp or bp <= 0:
                 return _last
@@ -1004,6 +1400,32 @@ class StatisticsService:
             if not note_count or note_count <= 0:
                 return _last
             return note_count
+        elif sort_mode == "version":
+            ver_tuple = self._parse_version_for_sort(item.get('version'), sort_ascending)
+            pack = (item.get('pack') or item.get('packAbbr') or '').strip()
+            bp = float(item.get('bp', 0) or 0)
+            title = (item.get('title') or '').strip().lower()
+
+            if not sort_ascending:
+                # Descending (reverse=True): larger key comes first
+                # 1. Version: (7, 0, 0) > (1, 0, 0)
+                # 2. Pack: A > Z -> _ReverseCompare
+                pack_key = (0, _ReverseCompare(pack.lower())) if pack else (-1, _ReverseCompare(''))
+                # 3. BP: 12.0 > 9.0
+                bp_key = bp
+                # 4. Title: A > Z -> _ReverseCompare
+                title_key = _ReverseCompare(title)
+                return (ver_tuple, pack_key, bp_key, title_key)
+            else:
+                # Ascending (reverse=False): smaller key comes first
+                # 1. Version: (1, 0, 0) < (7, 0, 0)
+                # 2. Pack: A < Z -> normal lowercase
+                pack_key = (0, pack.lower()) if pack else (1, '')
+                # 3. BP: 12.0 comes first -> -12.0 < -9.0
+                bp_key = -bp
+                # 4. Title: A comes first -> normal lowercase
+                title_key = title
+                return (ver_tuple, pack_key, bp_key, title_key)
         return item.get('title', '').lower()
 
     def get_best_diff_for_sort(self, item, sort_mode) -> int:
@@ -1026,8 +1448,6 @@ class StatisticsService:
             return item.get('bestDiffForPerceivedBp', -1)
         elif sort_mode == "potential":
             return item.get('bestDiffForPotential', -1)
-        elif sort_mode == "note_count":
-            return item.get('bestDiffForNoteCount', -1)
         return -1
 
     def _format_display_value(self, item, sort_mode, display_mode) -> str:
@@ -1107,6 +1527,9 @@ class StatisticsService:
         elif sort_mode == "note_count":
             note_count = item.get('noteCount', 0)
             return str(note_count) if note_count and note_count > 0 else "?"
+        elif sort_mode == "version":
+            ver = item.get('version')
+            return str(ver) if ver else "-"
         return ""
 
     def _format_time(self, timestamp) -> str:
@@ -1183,7 +1606,7 @@ class StatisticsService:
                 level_str = cdata.get('level', '')
                 bp = cdata.get('bp', 0)
 
-                if level_str:
+                if level_str and level_str != '?':
                     all_levels.add(level_str)
 
                 # Only add BP to sets if NOT an outlier

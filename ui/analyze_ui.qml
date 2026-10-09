@@ -567,6 +567,8 @@ Item {
                             
                             Image {
                                 anchors.fill: parent
+                                asynchronous: true
+                                cache: true
                                 source: decorationContainer.decorationImages.length >= 5 ? decorationContainer.decorationImages[0] : ""
                                 visible: decorationContainer.decorationImages.length >= 5
                                 fillMode: Image.PreserveAspectCrop
@@ -594,6 +596,8 @@ Item {
                             
                             Image {
                                 anchors.fill: parent
+                                asynchronous: true
+                                cache: true
                                 source: decorationContainer.decorationImages.length >= 5 ? decorationContainer.decorationImages[1] : ""
                                 visible: decorationContainer.decorationImages.length >= 5
                                 fillMode: Image.PreserveAspectCrop
@@ -621,6 +625,8 @@ Item {
                             
                             Image {
                                 anchors.fill: parent
+                                asynchronous: true
+                                cache: true
                                 source: decorationContainer.decorationImages.length >= 5 ? decorationContainer.decorationImages[2] : ""
                                 visible: decorationContainer.decorationImages.length >= 5
                                 fillMode: Image.PreserveAspectCrop
@@ -648,6 +654,8 @@ Item {
                             
                             Image {
                                 anchors.fill: parent
+                                asynchronous: true
+                                cache: true
                                 source: decorationContainer.decorationImages.length >= 5 ? decorationContainer.decorationImages[3] : ""
                                 visible: decorationContainer.decorationImages.length >= 5
                                 fillMode: Image.PreserveAspectCrop
@@ -675,6 +683,8 @@ Item {
                             
                             Image {
                                 anchors.fill: parent
+                                asynchronous: true
+                                cache: true
                                 source: decorationContainer.decorationImages.length >= 5 ? decorationContainer.decorationImages[4] : ""
                                 visible: decorationContainer.decorationImages.length >= 5
                                 fillMode: Image.PreserveAspectCrop
@@ -724,7 +734,7 @@ Item {
                     property var progressData: ({})
                     property var countModeData: ({})
                     property bool isPlayCountMode: false
-                    property int thumbnailDataVersion: 0
+                    property int thumbnailDataVersion: statsHandler ? statsHandler.thumbnailVersion : 0
 
                     Component.onCompleted: {
                         updatePinDates()
@@ -1021,6 +1031,8 @@ Item {
                                         Image {
                                             id: thumbnailImg
                                             anchors.fill: parent
+                                            asynchronous: true
+                                            cache: true
                                             source: {
                                                 // 바인딩 재평가용 의존성 키:
                                                 // - dataVersion: dataUpdated 시 파일 갱신 신호
@@ -1042,6 +1054,8 @@ Item {
                                         Image {
                                             id: thumbnailNew
                                             anchors.fill: parent
+                                            asynchronous: true
+                                            cache: true
                                             source: ""
                                             opacity: 0
                                             fillMode: Image.PreserveAspectCrop

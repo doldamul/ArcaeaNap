@@ -74,6 +74,18 @@ Window {
     onWidthChanged: { Qt.callLater(updateNativeDragRegions); }
     onHeightChanged: { Qt.callLater(updateNativeDragRegions); }
 
+    function scrollToSection(sectionName) {
+        if (sectionName === "excludedPacks") {
+            Qt.callLater(function() {
+                if (typeof excludedPacksSection !== "undefined" && typeof scrollView !== "undefined") {
+                    var pos = excludedPacksSection.mapToItem(scrollView.contentItem, 0, 0)
+                    var targetY = Math.max(0, Math.min(scrollView.contentHeight - scrollView.height, pos.y - 20))
+                    scrollView.contentItem.contentY = targetY
+                }
+            })
+        }
+    }
+
     // No version fetch on visibility change — versions are stored in account_connections.json
     // and loaded on init via getSheetVersions()
 
@@ -1384,49 +1396,6 @@ Window {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
 
-                    // Statistics Section
-                    Text { text: "Statistics"; font.bold: true; color: Theme.textPrimary }
-
-                    ColumnLayout {
-                        spacing: 8
-                        Text { text: "Best potential mark"; color: Theme.textPrimary }
-                        RowLayout {
-                            spacing: 10
-                            ThemedRadioButton {
-                                text: "None"
-                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === 'none' : true
-                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('none')
-                            }
-                            ThemedRadioButton {
-                                text: "B10"
-                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '10' : false
-                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('10')
-                            }
-                            ThemedRadioButton {
-                                text: "B30"
-                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '30' : false
-                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('30')
-                            }
-                            ThemedRadioButton {
-                                text: "B50"
-                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '50' : false
-                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('50')
-                            }
-                            ThemedRadioButton {
-                                text: "B100"
-                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '100' : false
-                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('100')
-                            }
-                            ThemedRadioButton {
-                                text: "All"
-                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === 'all' : false
-                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('all')
-                            }
-                        }
-                    }
-
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
-
                     // Language
                     ColumnLayout {
                         spacing: 8
@@ -1515,7 +1484,495 @@ Window {
                 }
             }
 
-            // --- 2. Profile Section ---
+            // --- 2. Statistics Section ---
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: statisticsLayout.implicitHeight + 60
+                color: Theme.bgCard
+                radius: 20
+                border.color: Theme.borderCard; border.width: 1
+
+                ColumnLayout {
+                    id: statisticsLayout
+                    anchors.fill: parent
+                    anchors.margins: 30
+                    spacing: 24
+
+                    Text { text: "Statistics"; font.bold: true; font.pixelSize: 18; color: Theme.textPrimary }
+
+                    // Best Potential Mark
+                    ColumnLayout {
+                        spacing: 8
+                        Text { text: "Best Potential Mark"; font.bold: true; color: Theme.textPrimary }
+                        RowLayout {
+                            spacing: 10
+                            ThemedRadioButton {
+                                text: "None"
+                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === 'none' : true
+                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('none')
+                            }
+                            ThemedRadioButton {
+                                text: "B10"
+                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '10' : false
+                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('10')
+                            }
+                            ThemedRadioButton {
+                                text: "B30"
+                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '30' : false
+                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('30')
+                            }
+                            ThemedRadioButton {
+                                text: "B50"
+                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '50' : false
+                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('50')
+                            }
+                            ThemedRadioButton {
+                                text: "B100"
+                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === '100' : false
+                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('100')
+                            }
+                            ThemedRadioButton {
+                                text: "All"
+                                checked: settingsHandler ? settingsHandler.getBestPotentialMark() === 'all' : false
+                                onToggled: if (checked && settingsHandler) settingsHandler.setBestPotentialMark('all')
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
+
+                    // Pack Classification Mode
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Text { text: "Pack Classification Mode"; font.bold: true; color: Theme.textPrimary }
+                        RowLayout {
+                            spacing: 10
+                            ThemedRadioButton {
+                                id: strictRadio
+                                text: "Strict"
+                                checked: settingsHandler ? settingsHandler.getPackClassificationMode() === 'strict' : true
+                                onToggled: if (checked && settingsHandler) settingsHandler.setPackClassificationMode('strict')
+                            }
+                            ThemedRadioButton {
+                                id: conceptualRadio
+                                text: "Conceptual"
+                                checked: settingsHandler ? settingsHandler.getPackClassificationMode() === 'conceptual' : false
+                                onToggled: if (checked && settingsHandler) settingsHandler.setPackClassificationMode('conceptual')
+                            }
+                        }
+                        Text {
+                            text: "Strict maintains separate packs. Conceptual merges append and associated songs into main packs."
+                            font.pixelSize: 12
+                            color: Theme.textMuted
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+
+                        Connections {
+                            target: settingsHandler
+                            function onPackClassificationModeChanged(mode) {
+                                strictRadio.checked = (mode === 'strict')
+                                conceptualRadio.checked = (mode === 'conceptual')
+                            }
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
+
+                    // Excluded Packs
+                    ColumnLayout {
+                        id: excludedPacksSection
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        Text { text: "Excluded Packs"; font.bold: true; color: Theme.textPrimary }
+
+                        Text {
+                            text: "Songs belonging to excluded packs will be hidden from the Statistics tab."
+                            font.pixelSize: 12
+                            color: Theme.textMuted
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+
+                        Rectangle {
+                            id: excludedPacksBox
+                            Layout.fillWidth: true
+                            height: 140
+                            color: Theme.bgInput
+                            border.color: Theme.borderDivider
+                            border.width: 1
+                            radius: 6
+                            clip: true
+
+                            ListView {
+                                id: excludedPacksList
+                                anchors.fill: parent
+                                anchors.margins: 4
+                                clip: true
+                                boundsBehavior: Flickable.StopAtBounds
+                                interactive: contentHeight > height
+                                spacing: 2
+                                model: settingsHandler ? settingsHandler.excludedPacks : []
+
+                                NumberAnimation {
+                                    id: parentSmoothScrollAnim
+                                    target: (typeof scrollView !== "undefined" && scrollView.contentItem) ? scrollView.contentItem : null
+                                    property: "contentY"
+                                    duration: 120
+                                    easing.type: Easing.OutQuad
+                                }
+
+                                NumberAnimation {
+                                    id: listSmoothScrollAnim
+                                    target: excludedPacksList
+                                    property: "contentY"
+                                    duration: 120
+                                    easing.type: Easing.OutQuad
+                                }
+
+                                WheelHandler {
+                                    id: packListWheelHandler
+                                    target: excludedPacksList
+                                    enabled: excludedPacksList.interactive
+                                    onWheel: function(event) {
+                                        var isPixel = (event.pixelDelta.y !== 0)
+                                        var rawDelta = isPixel ? event.pixelDelta.y : event.angleDelta.y
+                                        if (rawDelta === 0) return
+
+                                        // Native wheel 1-tick (angleDelta 120) corresponds to exactly 72px (0.6x)
+                                        var delta = isPixel ? rawDelta : (rawDelta * 0.6)
+
+                                        var isScrollable = excludedPacksList.contentHeight > excludedPacksList.height
+                                        var canScrollUp = isScrollable && !excludedPacksList.atYBeginning && delta > 0
+                                        var canScrollDown = isScrollable && !excludedPacksList.atYEnd && delta < 0
+
+                                        if (canScrollUp || canScrollDown) {
+                                            var maxY = Math.max(0, excludedPacksList.contentHeight - excludedPacksList.height)
+                                            if (isPixel) {
+                                                listSmoothScrollAnim.stop()
+                                                excludedPacksList.contentY = Math.max(0, Math.min(maxY, excludedPacksList.contentY - delta))
+                                            } else {
+                                                var currentListY = listSmoothScrollAnim.running ? listSmoothScrollAnim.to : excludedPacksList.contentY
+                                                var targetListY = Math.max(0, Math.min(maxY, currentListY - delta))
+                                                listSmoothScrollAnim.stop()
+                                                listSmoothScrollAnim.from = excludedPacksList.contentY
+                                                listSmoothScrollAnim.to = targetListY
+                                                listSmoothScrollAnim.start()
+                                            }
+                                            event.accepted = true
+                                        } else {
+                                            if (typeof scrollView !== "undefined" && scrollView.contentItem) {
+                                                var parentMaxY = Math.max(0, scrollView.contentHeight - scrollView.height)
+                                                if (isPixel) {
+                                                    parentSmoothScrollAnim.stop()
+                                                    scrollView.contentItem.contentY = Math.max(0, Math.min(parentMaxY, scrollView.contentItem.contentY - delta))
+                                                } else {
+                                                    var currentParentY = parentSmoothScrollAnim.running ? parentSmoothScrollAnim.to : scrollView.contentItem.contentY
+                                                    var targetParentY = Math.max(0, Math.min(parentMaxY, currentParentY - delta))
+                                                    parentSmoothScrollAnim.stop()
+                                                    parentSmoothScrollAnim.from = scrollView.contentItem.contentY
+                                                    parentSmoothScrollAnim.to = targetParentY
+                                                    parentSmoothScrollAnim.start()
+                                                }
+                                                event.accepted = true
+                                            } else {
+                                                event.accepted = false
+                                            }
+                                        }
+                                    }
+                                }
+
+                                delegate: Rectangle {
+                                    width: excludedPacksList.width
+                                    height: 28
+                                    color: itemMouse.containsMouse ? Theme.bgItemHover : (index % 2 === 0 ? Qt.rgba(Theme.textPrimary.r, Theme.textPrimary.g, Theme.textPrimary.b, 0.04) : "transparent")
+                                    radius: 4
+
+                                    MouseArea {
+                                        id: itemMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                    }
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 18
+                                        spacing: 8
+
+                                        Text {
+                                            text: modelData
+                                            color: Theme.textPrimary
+                                            font.pixelSize: 13
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+
+                                        // '-' remove button (centered text, theme color, no scrollbar overlap)
+                                        Rectangle {
+                                            width: 18
+                                            height: 18
+                                            radius: 9
+                                            color: removeMouse.containsMouse ? Theme.statusOff : Qt.rgba(Theme.statusOff.r, Theme.statusOff.g, Theme.statusOff.b, 0.15)
+                                            border.color: Theme.statusOff
+                                            border.width: 1
+                                            Layout.alignment: Qt.AlignVCenter
+
+                                            Text {
+                                                text: "-"
+                                                color: removeMouse.containsMouse ? "#ffffff" : Theme.statusOff
+                                                font.pixelSize: 13
+                                                font.bold: true
+                                                anchors.centerIn: parent
+                                                verticalAlignment: Text.AlignVCenter
+                                                horizontalAlignment: Text.AlignHCenter
+                                            }
+
+                                            MouseArea {
+                                                id: removeMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    if (settingsHandler) {
+                                                        settingsHandler.removeExcludedPack(modelData)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                footer: Rectangle {
+                                    id: addFooterItem
+                                    width: excludedPacksList.width
+                                    height: 28
+                                    color: addMouse.containsMouse ? Theme.bgItemHover : "transparent"
+                                    radius: 4
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 18
+                                        spacing: 8
+
+                                        Rectangle {
+                                            width: 18
+                                            height: 18
+                                            radius: 9
+                                            color: addMouse.containsMouse ? Qt.darker(Theme.accent, 1.1) : Theme.accent
+                                            Layout.alignment: Qt.AlignVCenter
+
+                                            Text {
+                                                text: "+"
+                                                color: "#ffffff"
+                                                font.pixelSize: 13
+                                                font.bold: true
+                                                anchors.centerIn: parent
+                                                verticalAlignment: Text.AlignVCenter
+                                                horizontalAlignment: Text.AlignHCenter
+                                            }
+                                        }
+
+                                        Text {
+                                            text: "Add pack to exclude..."
+                                            color: Theme.textMuted
+                                            font.pixelSize: 13
+                                            Layout.fillWidth: true
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: addMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            packDropdownPopup.openDropdown(addFooterItem)
+                                        }
+                                    }
+                                }
+
+                                ScrollBar.vertical: ScrollBar {
+                                    policy: ScrollBar.AsNeeded
+                                }
+                            }
+                        }
+
+                        // Dropdown popup with Search TextField
+                        Popup {
+                            id: packDropdownPopup
+                            parent: Overlay.overlay
+                            width: Math.min(280, Math.max(220, excludedPacksBox.width))
+                            height: Math.min(260, Math.max(80, filteredAvailableList.length * 28 + 52))
+                            padding: 6
+                            modal: false
+                            focus: true
+                            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+                            property var availableList: []
+                            property string filterText: ""
+                            readonly property var filteredAvailableList: {
+                                if (!availableList || availableList.length === 0) return []
+                                var q = filterText.trim().toLowerCase()
+                                if (!q) return availableList
+                                return availableList.filter(function(name) {
+                                    return name.toLowerCase().indexOf(q) !== -1
+                                })
+                            }
+
+                            function openDropdown(anchorItem) {
+                                if (settingsHandler) {
+                                    availableList = settingsHandler.getAvailablePacks()
+                                } else {
+                                    availableList = []
+                                }
+                                filterText = ""
+                                if (dropdownSearchField) {
+                                    dropdownSearchField.text = ""
+                                }
+                                var pos = anchorItem.mapToItem(Overlay.overlay, 0, anchorItem.height)
+                                x = Math.min(pos.x, Overlay.overlay.width - width - 8)
+                                y = Math.min(pos.y + 4, Overlay.overlay.height - height - 8)
+                                open()
+                                Qt.callLater(function() {
+                                    if (dropdownSearchField) dropdownSearchField.forceActiveFocus()
+                                })
+                            }
+
+                            background: Rectangle {
+                                color: Theme.bgCard
+                                border.color: Theme.borderDivider
+                                border.width: 1
+                                radius: 8
+                            }
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                spacing: 4
+
+                                // Search TextField
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 30
+                                    radius: 6
+                                    color: Theme.bgInput
+                                    border.color: dropdownSearchField.activeFocus ? Theme.accent : Theme.borderDivider
+                                    border.width: 1
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 8
+                                        spacing: 6
+
+                                        Text {
+                                            text: "🔍"
+                                            font.pixelSize: 11
+                                            color: Theme.textMuted
+                                        }
+
+                                        TextInput {
+                                            id: dropdownSearchField
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            color: Theme.textPrimary
+                                            font.pixelSize: 12
+                                            clip: true
+                                            text: packDropdownPopup.filterText
+                                            onTextChanged: packDropdownPopup.filterText = text
+
+                                            Text {
+                                                text: "Search pack..."
+                                                color: Theme.textMuted
+                                                font.pixelSize: 12
+                                                visible: !dropdownSearchField.text && !dropdownSearchField.activeFocus
+                                                anchors.verticalCenter: parent.verticalCenter
+                                            }
+                                        }
+
+                                        Text {
+                                            text: "✕"
+                                            font.pixelSize: 12
+                                            color: Theme.textMuted
+                                            visible: Boolean(dropdownSearchField.text)
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    dropdownSearchField.text = ""
+                                                    dropdownSearchField.forceActiveFocus()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Dropdown ListView
+                                ListView {
+                                    id: dropdownList
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    clip: true
+                                    model: packDropdownPopup.filteredAvailableList
+                                    boundsBehavior: Flickable.StopAtBounds
+                                    spacing: 2
+
+                                    delegate: Rectangle {
+                                        width: dropdownList.width
+                                        height: 28
+                                        color: dropItemMouse.containsMouse ? Theme.bgItemHover : "transparent"
+                                        radius: 4
+
+                                        Text {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 8
+                                            anchors.rightMargin: 8
+                                            verticalAlignment: Text.AlignVCenter
+                                            text: modelData
+                                            color: Theme.textPrimary
+                                            font.pixelSize: 12
+                                            elide: Text.ElideRight
+                                        }
+
+                                        MouseArea {
+                                            id: dropItemMouse
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                if (settingsHandler) {
+                                                    settingsHandler.addExcludedPack(modelData)
+                                                }
+                                                packDropdownPopup.close()
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        visible: packDropdownPopup.filteredAvailableList.length === 0
+                                        text: packDropdownPopup.availableList.length === 0 ? "No packs available" : "No matching packs"
+                                        font.pixelSize: 11
+                                        color: Theme.textMuted
+                                    }
+
+                                    ScrollBar.vertical: ScrollBar {
+                                        policy: ScrollBar.AsNeeded
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- 3. Profile Section ---
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: profileLayout.implicitHeight + 60

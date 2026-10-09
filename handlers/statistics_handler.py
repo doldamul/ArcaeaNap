@@ -1,4 +1,5 @@
-"""Statistics 탭 핸들러: QML 브릿지, UI 상태 관리."""
+import os
+from typing import Any
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, pyqtProperty, QVariant
 
 from utils.configuration import config, get_cache_dir
@@ -10,17 +11,34 @@ from handlers.statistics_list_model import StatisticsListModel
 class StatisticsHandler(QObject):
     dataChanged = pyqtSignal()
     selectedItemChanged = pyqtSignal()
+    currentPackChanged = pyqtSignal()
+    isPackDetailViewChanged = pyqtSignal()
+    packItemsChanged = pyqtSignal()
+    expandedPackIdsChanged = pyqtSignal()
+    isSongsDbAvailableChanged = pyqtSignal()
+    thumbnailVersionChanged = pyqtSignal()
 
-    def __init__(self, service: StatisticsService | None = None):
+    def __init__(self, service: StatisticsService | None = None, settings_handler: Any = None):
         super().__init__()
         self._service = service if service is not None else StatisticsService()
 
         # UI 상태
-        self._display_mode = "song"  # "song" or "chart"
+        self._display_mode = "song"  # "song", "chart", or "pack"
         self._sort_mode = "title"
         self._sort_ascending = False
         self._search_text = ""
         self._selected_index = -1
+
+        # Pack Mode UI 상태
+        self._expanded_pack_ids = set()
+        self._current_pack = None
+        self._is_pack_detail_view = True
+        self._pack_items = []
+        self._pack_items_dirty = True
+        self._settings_handler = None
+        from services.thumbnail_service import ThumbnailService
+        self._thumbnail_service = ThumbnailService.get_instance()
+        self._thumbnail_service.thumbnailVersionChanged.connect(self.thumbnailVersionChanged)
 
         # Filters
         self._filter_difficulties = [0, 1, 2, 3, 4]  # All difficulties
@@ -50,6 +68,9 @@ class StatisticsHandler(QObject):
             config['general']['song_title_language'],
         )
         self._full_rebuild('first')
+
+        if settings_handler is not None:
+            self.set_settings_handler(settings_handler)
 
     def _get_filter_params(self) -> FilterParams:
         """현재 필터 상태를 FilterParams로 변환."""
@@ -211,8 +232,154 @@ class StatisticsHandler(QObject):
         ):
             self.selectedItemChanged.emit()
 
+    def _rebuild_pack_items(self):
+        """Pack 모드 팩 아이템 목록 재빌드 및 _current_pack 동기화."""
+        filters = self._get_filter_params()
+        self._pack_items = self._service.get_pack_items(
+            filters=filters,
+            sort_mode=self._sort_mode,
+            sort_ascending=self._sort_ascending,
+            search_text=self._search_text,
+            classification_mode=self.packClassificationMode,
+        )
+        self._pack_items_dirty = False
+
+        old_expanded_ids = set(self._expanded_pack_ids)
+        old_is_pack_detail_view = self._is_pack_detail_view
+        old_selected_item = self._selected_item
+        item_metadata_updated = False
+
+        # 악곡 식별자 추출 (곡 상세 뷰에서 곡이 선택되어 있었던 경우)
+        selected_db_id = (
+            self._selected_item.get('songDbId')
+            if self._selected_item
+            else self._selected_song_db_id
+        )
+        selected_arcaea_id = (
+            (self._selected_item.get('arcaeaId') or self._selected_item.get('id'))
+            if self._selected_item
+            else None
+        )
+        has_selected_song = (not self._is_pack_detail_view) and (
+            (selected_db_id is not None) or (selected_arcaea_id is not None)
+        )
+
+        # 1. 선택된 악곡을 포함하는 팩 탐색 (최우선)
+        target_pack_by_song = None
+        if has_selected_song:
+            for pack in self._pack_items:
+                songs = pack.get('songs', [])
+                if selected_db_id is not None:
+                    # songDbId가 고유 식별자이므로 최우선 매칭 (리믹스 곡 등의 arcaeaId 중복 방지)
+                    if any(s.get('songDbId') == selected_db_id for s in songs):
+                        target_pack_by_song = pack
+                        break
+                elif selected_arcaea_id:
+                    if any(s.get('arcaeaId') == selected_arcaea_id or s.get('id') == selected_arcaea_id for s in songs):
+                        target_pack_by_song = pack
+                        break
+
+        new_current = None
+        current_id = self._current_pack.get('id') if self._current_pack else None
+
+        if has_selected_song and target_pack_by_song:
+            # [요구사항 1] 선택된 악곡이 새 모드/필터의 팩에 존재함 -> 해당 팩으로 전환/유지
+            new_current = target_pack_by_song
+            self._expanded_pack_ids = {target_pack_by_song['id']}
+
+            # 곡 상세 정보 메타데이터를 새 분류 체계/필터 기준으로 갱신
+            song_data = None
+            if selected_db_id is not None:
+                song_data = self._service.songs_data.get(selected_db_id) or self._service.songs_by_db_id.get(selected_db_id)
+            if not song_data and selected_arcaea_id:
+                for sdata in self._service.songs_data.values():
+                    if sdata.get('arcaea_id') == selected_arcaea_id:
+                        song_data = sdata
+                        break
+
+            if song_data:
+                self._selected_item = self._service.build_song_item(song_data, filters=filters)
+                self._selected_song_db_id = self._selected_item.get('songDbId') if self._selected_item else None
+                # 현재 팩 모드의 팩 정보(이름, 약어, 색상)로 동기화
+                if self._selected_item and target_pack_by_song:
+                    self._selected_item['pack'] = target_pack_by_song.get('name', self._selected_item.get('pack'))
+                    self._selected_item['packAbbr'] = target_pack_by_song.get('abbr', self._selected_item.get('packAbbr'))
+                    self._selected_item['packColor'] = target_pack_by_song.get('color', self._selected_item.get('packColor'))
+                self._attach_details_to_selected()
+                item_metadata_updated = True
+
+        elif has_selected_song and not target_pack_by_song:
+            # [요구사항 2] 선택된 악곡이 필터 등에 의해 제외됨
+            target_pack = next((p for p in self._pack_items if p.get('id') == current_id), None)
+            if target_pack and len(target_pack.get('songs', [])) > 0:
+                # Case A: 팩 내 다른 유효 악곡이 남아있는 경우 -> 악곡 선택 해제 및 팩 대시보드로 복귀
+                new_current = target_pack
+                self._expanded_pack_ids = {target_pack['id']}
+                self._selected_item = None
+                self._selected_song_db_id = None
+                self._is_pack_detail_view = True
+            else:
+                # Case B: 팩 내 잔여 곡이 0개가 된 경우 -> 팩 선택 해제 및 전체 팩 목록 복귀 (Task 45 연동)
+                self._expanded_pack_ids.clear()
+                self._is_pack_detail_view = True
+                self._selected_item = None
+                self._selected_song_db_id = None
+                new_current = self._pack_items[0] if self._pack_items else None
+
+        else:
+            # 악곡이 선택되지 않은 상태 (팩 대시보드 또는 팩 목록)
+            if self._expanded_pack_ids:
+                target_pack = next((p for p in self._pack_items if p.get('id') == current_id), None)
+                if target_pack and len(target_pack.get('songs', [])) > 0:
+                    new_current = target_pack
+                    self._expanded_pack_ids = {target_pack['id']}
+                else:
+                    # [요구사항 1 Fallback] 이전 팩이 사라진 경우(Strict -> Conceptual), 이전 팩의 곡들을 흡수한 부모 팩 검색
+                    fallback_parent_pack = None
+                    prev_songs = self._current_pack.get('songs', []) if self._current_pack else []
+                    for prev_s in prev_songs:
+                        prev_sid = prev_s.get('songDbId')
+                        prev_aid = prev_s.get('arcaeaId') or prev_s.get('id')
+                        for pack in self._pack_items:
+                            if any(
+                                (prev_sid is not None and s.get('songDbId') == prev_sid)
+                                or (prev_aid and (s.get('arcaeaId') == prev_aid or s.get('id') == prev_aid))
+                                for s in pack.get('songs', [])
+                            ):
+                                fallback_parent_pack = pack
+                                break
+                        if fallback_parent_pack:
+                            break
+
+                    if fallback_parent_pack and len(fallback_parent_pack.get('songs', [])) > 0:
+                        new_current = fallback_parent_pack
+                        self._expanded_pack_ids = {fallback_parent_pack['id']}
+                    else:
+                        self._expanded_pack_ids.clear()
+                        self._is_pack_detail_view = True
+                        new_current = self._pack_items[0] if self._pack_items else None
+            else:
+                new_current = self._pack_items[0] if self._pack_items else None
+
+        self._current_pack = new_current
+        self.packItemsChanged.emit()
+        self.currentPackChanged.emit()
+
+        if self._expanded_pack_ids != old_expanded_ids:
+            self.expandedPackIdsChanged.emit()
+        if self._is_pack_detail_view != old_is_pack_detail_view:
+            self.isPackDetailViewChanged.emit()
+        if item_metadata_updated or (self._selected_item is not old_selected_item):
+            self.selectedItemChanged.emit()
+
+
     def _full_rebuild(self, selection_mode: str = 'restore'):
         """전체 재빌드 (모드 전환/데이터 갱신 등)."""
+        if self._display_mode == "pack":
+            self._rebuild_pack_items()
+            self.dataChanged.emit()
+            return
+
         filters = self._get_filter_params()
         full = self._service.build_full_items(self._display_mode, filters)
         filtered = self._service.filter_items(
@@ -229,6 +396,12 @@ class StatisticsHandler(QObject):
 
     def _on_sort_mode_changed(self):
         """정렬 모드 변경: 재정렬 + displayValue 갱신만 수행."""
+        self._pack_items_dirty = True
+        if self._display_mode == "pack":
+            self._rebuild_pack_items()
+            self.dataChanged.emit()
+            return
+
         current_items = list(self._list_model.get_items())
         sorted_items = self._service.sort_items(
             current_items, self._sort_mode, self._sort_ascending
@@ -242,10 +415,17 @@ class StatisticsHandler(QObject):
     _DIRECTION_DEPENDENT_SORT_MODES = {
         "bpm", "score", "max", "recent_played",
         "level", "s_bp", "perceived_bp", "potential", "length", "note_count",
+        "version",
     }
 
     def _on_sort_order_changed(self):
         """정렬 방향 변경: 방향 의존 키 모드는 전체 재정렬, 그 외는 reverse."""
+        self._pack_items_dirty = True
+        if self._display_mode == "pack":
+            self._rebuild_pack_items()
+            self.dataChanged.emit()
+            return
+
         current_items = list(self._list_model.get_items())
         if self._sort_mode in self._DIRECTION_DEPENDENT_SORT_MODES:
             sorted_items = self._service.sort_items(
@@ -262,6 +442,22 @@ class StatisticsHandler(QObject):
 
     def _on_filter_changed(self, selection_mode: str = 'adjacent_fallback'):
         """필터 변경: 빌드(Song 모드 시) → 필터링 → 정렬 → 리스트 갱신."""
+        self._pack_items_dirty = True
+        if self._display_mode == "pack":
+            self._rebuild_pack_items()
+            if not self._is_pack_detail_view and self._selected_item:
+                song_db_id = self._selected_item.get('songDbId') or self._selected_song_db_id
+                song_data = None
+                if song_db_id is not None:
+                    song_data = self._service.songs_data.get(song_db_id) or self._service.songs_by_db_id.get(song_db_id)
+                if song_data:
+                    filters = self._get_filter_params()
+                    self._selected_item = self._service.build_song_item(song_data, filters=filters)
+                    self._attach_details_to_selected()
+                    self.selectedItemChanged.emit()
+            self.dataChanged.emit()
+            return
+
         filters = self._get_filter_params()
         full = self._service.build_full_items(self._display_mode, filters)
         filtered = self._service.filter_items(
@@ -278,6 +474,11 @@ class StatisticsHandler(QObject):
 
     def _on_search_changed(self):
         """검색어 변경: 빌드 캐시 히트 → 필터링 → 정렬 → 리스트 갱신."""
+        self._pack_items_dirty = True
+        if self._display_mode == "pack":
+            self._rebuild_pack_items()
+            self.dataChanged.emit()
+            return
         self._on_filter_changed(selection_mode='first')
 
     def _on_display_mode_changed(self):
@@ -286,10 +487,16 @@ class StatisticsHandler(QObject):
 
     def _on_data_refreshed(self):
         """데이터 갱신: 캐시 무효화 → 전체 재빌드."""
+        self._pack_items_dirty = True
         self._service.invalidate_caches()
+        self.isSongsDbAvailableChanged.emit()
         self._full_rebuild(selection_mode='first')
 
     # === QML Properties ===
+    @pyqtProperty(bool, notify=isSongsDbAvailableChanged)
+    def isSongsDbAvailable(self):
+        return bool(getattr(self._service, 'is_songs_db_available', True))
+
     @pyqtProperty(QObject, constant=True)
     def listModel(self):
         return self._list_model
@@ -297,6 +504,34 @@ class StatisticsHandler(QObject):
     @pyqtProperty(str, notify=dataChanged)
     def displayMode(self):
         return self._display_mode
+
+    @pyqtProperty('QVariantMap', notify=currentPackChanged)
+    def currentPack(self):
+        return self._current_pack or {}
+
+    @pyqtProperty(bool, notify=isPackDetailViewChanged)
+    def isPackDetailView(self):
+        return self._is_pack_detail_view
+
+    @pyqtProperty(str, notify=dataChanged)
+    def packClassificationMode(self):
+        try:
+            return config['general']['pack_classification_mode']
+        except Exception:
+            return "strict"
+
+    @pyqtProperty('QVariantList', notify=packItemsChanged)
+    def packItems(self):
+        items = []
+        for pack in self._pack_items:
+            p = dict(pack)
+            p['expanded'] = bool(pack.get('id') in self._expanded_pack_ids)
+            items.append(p)
+        return items
+
+    @pyqtProperty('QVariantList', notify=expandedPackIdsChanged)
+    def expandedPackIds(self):
+        return list(self._expanded_pack_ids)
 
     @pyqtProperty(str, notify=dataChanged)
     def sortMode(self):
@@ -435,9 +670,55 @@ class StatisticsHandler(QObject):
     # === QML Slots ===
     @pyqtSlot(str)
     def setDisplayMode(self, mode):
-        if mode in ["song", "chart"] and mode != self._display_mode:
+        if mode in ["song", "chart", "pack"] and mode != self._display_mode:
+            old_mode = self._display_mode
             self._display_mode = mode
-            self._on_display_mode_changed()
+
+            if mode == "pack":
+                self._is_pack_detail_view = True
+
+                # 1. 팩 아이템 목록 캐시 유효성 검사 후 최신화
+                if self._pack_items_dirty or not self._pack_items:
+                    filters = self._get_filter_params()
+                    self._pack_items = self._service.get_pack_items(
+                        filters=filters,
+                        sort_mode=self._sort_mode,
+                        sort_ascending=self._sort_ascending,
+                        search_text=self._search_text,
+                        classification_mode=self.packClassificationMode,
+                    )
+                    self._pack_items_dirty = False
+
+                # 2. 직전 선택 곡이 속한 팩 사전 계산 및 expandedPackIds 확정
+                target_pack = None
+                if old_mode in ["song", "chart"] and self._selected_item:
+                    selected_song_id = self._selected_item.get('arcaeaId') or self._selected_item.get('id')
+                    selected_db_id = self._selected_item.get('songDbId') or self._selected_song_db_id
+                    for pack in self._pack_items:
+                        if any(
+                            (selected_db_id is not None and s.get('songDbId') == selected_db_id)
+                            or (selected_song_id and (s.get('arcaeaId') == selected_song_id or s.get('id') == selected_song_id))
+                            for s in pack.get('songs', [])
+                        ):
+                            target_pack = pack
+                            break
+
+                if target_pack:
+                    self._current_pack = target_pack
+                    self._expanded_pack_ids = {target_pack['id']}
+                else:
+                    self._expanded_pack_ids.clear()
+                    self._current_pack = self._pack_items[0] if self._pack_items else None
+
+                # 3. 모든 상태가 완전히 세팅된 후 원자적으로 시그널 일괄 방출 (중간 불일치 상태 0%)
+                self.currentPackChanged.emit()
+                self.expandedPackIdsChanged.emit()
+                self.packItemsChanged.emit()
+                self.isPackDetailViewChanged.emit()
+                self.dataChanged.emit()
+            else:
+                self._on_display_mode_changed()
+
 
     @pyqtSlot(str)
     def setSortMode(self, mode):
@@ -577,3 +858,234 @@ class StatisticsHandler(QObject):
             config['general']['song_title_language'],
         )
         self._on_data_refreshed()
+
+    # === Pack Mode Slots & Methods ===
+    @pyqtSlot(str)
+    def togglePackExpansion(self, pack_id: str):
+        """팩 선택/해제 토글, 대상 팩 드릴다운 및 대시보드 뷰 활성화."""
+        if not pack_id:
+            return
+
+        target_pack = next((p for p in self._pack_items if p.get('id') == pack_id), None)
+        if not target_pack:
+            return
+
+        if pack_id in self._expanded_pack_ids:
+            self._expanded_pack_ids.clear()
+            self._is_pack_detail_view = True
+            self._selected_item = None
+            self._selected_song_db_id = None
+            self.selectedItemChanged.emit()
+            self.isPackDetailViewChanged.emit()
+            self.expandedPackIdsChanged.emit()
+            return
+
+        self._expanded_pack_ids = {pack_id}
+        self._current_pack = target_pack
+        self._is_pack_detail_view = True
+        self._selected_item = None
+        self._selected_song_db_id = None
+
+        self.currentPackChanged.emit()
+        self.isPackDetailViewChanged.emit()
+        self.expandedPackIdsChanged.emit()
+        self.selectedItemChanged.emit()
+        self.packItemsChanged.emit()
+
+    @pyqtSlot()
+    def clearPackSelection(self):
+        """팩 선택 해제 -> 전체 팩 목록으로 복귀."""
+        self._expanded_pack_ids.clear()
+        self._is_pack_detail_view = True
+        self._selected_item = None
+        self._selected_song_db_id = None
+        self.selectedItemChanged.emit()
+        self.isPackDetailViewChanged.emit()
+        self.expandedPackIdsChanged.emit()
+
+    @pyqtSlot(str, int)
+    @pyqtSlot(str, 'QVariant')
+    def selectPackSong(self, pack_id: str, song_db_id):
+        """팩 내 수록곡 선택 -> 곡 상세 뷰 전환 및 해당 곡 정보 바인딩."""
+        self._is_pack_detail_view = False
+
+        if pack_id and (not self._current_pack or self._current_pack.get('id') != pack_id):
+            target_pack = next((p for p in self._pack_items if p.get('id') == pack_id), None)
+            if target_pack:
+                self._current_pack = target_pack
+                self._expanded_pack_ids = {pack_id}
+                self.currentPackChanged.emit()
+                self.expandedPackIdsChanged.emit()
+
+        if hasattr(song_db_id, 'toVariant'):
+            song_db_id = song_db_id.toVariant()
+
+        try:
+            sid_int = int(song_db_id)
+        except (ValueError, TypeError):
+            sid_int = None
+
+        song_data = None
+        if sid_int is not None and sid_int in self._service.songs_data:
+            song_data = self._service.songs_data[sid_int]
+        elif sid_int is not None and sid_int in self._service.songs_by_db_id:
+            song_data = self._service.songs_by_db_id[sid_int]
+        elif song_db_id in self._service.songs_data:
+            song_data = self._service.songs_data[song_db_id]
+        elif song_db_id in self._service.songs_by_db_id:
+            song_data = self._service.songs_by_db_id[song_db_id]
+
+        if not song_data and isinstance(song_db_id, str):
+            for sdata in self._service.songs_data.values():
+                if sdata.get('arcaea_id') == song_db_id:
+                    song_data = sdata
+                    break
+
+        if not song_data:
+            for pack in self._pack_items:
+                if pack_id and pack.get('id') != pack_id:
+                    continue
+                for s in pack.get('songs', []):
+                    raw = s.get('raw_data', {})
+                    if (
+                        raw.get('song_db_id') == song_db_id
+                        or raw.get('id') == song_db_id
+                        or s.get('id') == str(song_db_id)
+                        or s.get('song_id') == str(song_db_id)
+                        or raw.get('arcaea_id') == str(song_db_id)
+                    ):
+                        song_data = raw
+                        break
+                if song_data:
+                    break
+
+        if song_data:
+            filters = self._get_filter_params()
+            song_item = self._service.build_song_item(song_data, filters=filters)
+            self._selected_item = song_item
+            self._selected_song_db_id = song_item.get('songDbId') if song_item else None
+
+            best_diff = self._service.get_best_diff_for_sort(
+                self._selected_item, self._sort_mode
+            )
+            if best_diff >= 0:
+                self._selected_difficulty = best_diff
+            else:
+                all_diffs = self._get_item_detail_difficulties(self._selected_item)
+                for diff_num in [3, 4, 2, 1, 0]:
+                    if any(d.get('difficulty') == diff_num and not d.get('isFiltered', False) for d in all_diffs):
+                        self._selected_difficulty = diff_num
+                        break
+
+            self._attach_details_to_selected()
+
+        self.isPackDetailViewChanged.emit()
+        self.selectedItemChanged.emit()
+
+    @pyqtSlot()
+    def returnToPackDashboard(self):
+        """곡 상세 뷰에서 팩 종합 대시보드로 복귀."""
+        self._is_pack_detail_view = True
+        self._selected_item = None
+        self._selected_song_db_id = None
+        self.selectedItemChanged.emit()
+        self.isPackDetailViewChanged.emit()
+
+    @pyqtSlot(str, result=bool)
+    def selectPackByName(self, pack_name: str) -> bool:
+        """곡 상세 뷰 헤더의 팩 알약 클릭 시 해당 팩의 대시보드로 이동."""
+        if not pack_name:
+            return False
+
+        # 1. 팩 모드로 전환
+        if self._display_mode != "pack":
+            self.setDisplayMode("pack")
+
+        # 2. 팩 목록에서 대상 팩 탐색 (Full Name 또는 Abbr 매칭)
+        target_pack = None
+        for p in self._pack_items:
+            if (
+                p.get('name') == pack_name
+                or p.get('abbr') == pack_name
+                or p.get('id') == pack_name
+                or str(p.get('name', '')).lower() == pack_name.lower()
+                or str(p.get('abbr', '')).lower() == pack_name.lower()
+            ):
+                target_pack = p
+                break
+
+        # 3. 직접 매칭 실패 시 수록곡 기반 Fallback (Conceptual 모드에서 어펜드 팩명/약어로 검색된 경우)
+        if not target_pack:
+            pack_name_lower = pack_name.lower()
+            for p in self._pack_items:
+                songs = p.get('songs', [])
+                if any(
+                    str(s.get('strictPack', '')).lower() == pack_name_lower
+                    or str(s.get('strictPackAbbr', '')).lower() == pack_name_lower
+                    or str(s.get('pack', '')).lower() == pack_name_lower
+                    or str(s.get('packAbbr', '')).lower() == pack_name_lower
+                    for s in songs
+                ):
+                    target_pack = p
+                    break
+
+        if target_pack:
+            self._current_pack = target_pack
+            self._expanded_pack_ids = {target_pack['id']}
+            self._is_pack_detail_view = True
+            self.currentPackChanged.emit()
+            self.expandedPackIdsChanged.emit()
+            self.packItemsChanged.emit()
+            self.isPackDetailViewChanged.emit()
+            self.dataChanged.emit()
+            return True
+
+        return False
+
+    @pyqtProperty(int, notify=thumbnailVersionChanged)
+    def thumbnailVersion(self) -> int:
+        return self._thumbnail_service.thumbnail_version
+
+    @pyqtSlot(str, int, result=str)
+    def getThumbnailPathForDifficulty(self, arcaea_id: str, difficulty: int) -> str:
+        """ThumbnailService를 통한 난이도별 자켓 썸네일 경로 조회 (QML 바인딩 호환용)."""
+        return self._thumbnail_service.get_path_for_difficulty(arcaea_id, difficulty)
+
+
+
+    def set_settings_handler(self, settings_handler):
+        """Connect to SettingsHandler for pack classification mode and excluded packs changes."""
+        if self._settings_handler:
+            try:
+                self._settings_handler.packClassificationModeChanged.disconnect(
+                    self._on_settings_classification_or_exclusion_changed
+                )
+            except Exception:
+                pass
+            try:
+                self._settings_handler.excludedPacksChanged.disconnect(
+                    self._on_settings_classification_or_exclusion_changed
+                )
+            except Exception:
+                pass
+        self._settings_handler = settings_handler
+        if settings_handler:
+            settings_handler.packClassificationModeChanged.connect(
+                self._on_settings_classification_or_exclusion_changed
+            )
+            settings_handler.excludedPacksChanged.connect(
+                self._on_settings_classification_or_exclusion_changed
+            )
+
+    @pyqtSlot()
+    @pyqtSlot(str)
+    @pyqtSlot(list)
+    def _on_settings_classification_or_exclusion_changed(self, *args):
+        """설정에서 팩 분류 체계(Strict vs Conceptual) 또는 제외 팩 변경 시 캐시 무효화 및 재빌드."""
+        self._pack_items_dirty = True
+        self._service.invalidate_caches()
+        if self._display_mode == "pack":
+            self._rebuild_pack_items()
+            self.dataChanged.emit()
+        else:
+            self._full_rebuild(selection_mode='adjacent_fallback')

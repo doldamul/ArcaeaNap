@@ -30,6 +30,8 @@ _config_default = {
         'cache_path': './arcaea_nap_data/',
         'song_title_language': 'en',  # 'en' or 'jp'
         'theme_mode': 'system',  # 'system', 'light', or 'dark'
+        'pack_classification_mode': 'strict',  # 'strict' or 'conceptual'
+        'excluded_packs': '',  # JSON list of excluded pack names, e.g. '[]'
     },
     'profile': {
         'show_friend_code': True,
@@ -115,11 +117,34 @@ def _validate_theme_mode(v: str) -> str:
         raise ValueError("theme_mode must be 'system', 'light', or 'dark'")
     return value
 
+
+def _validate_pack_classification_mode(v: str) -> str:
+    value = str(v).strip().lower()
+    if value not in ('strict', 'conceptual'):
+        raise ValueError("pack_classification_mode must be 'strict' or 'conceptual'")
+    return value
+
+def _validate_excluded_packs(v) -> list:
+    if isinstance(v, list):
+        return [str(x).strip() for x in v if str(x).strip()]
+    if not v:
+        return []
+    import json
+    try:
+        data = json.loads(v)
+        if isinstance(data, list):
+            return [str(x).strip() for x in data if str(x).strip()]
+    except Exception:
+        pass
+    return [x.strip() for x in str(v).split(',') if x.strip()]
+
 _converters = {
     'general': {
         'cache_path': _validate_cache_path,
         'song_title_language': _validate_song_title_language,
         'theme_mode': _validate_theme_mode,
+        'pack_classification_mode': _validate_pack_classification_mode,
+        'excluded_packs': _validate_excluded_packs,
     },
     'profile': {
         'show_friend_code': lambda v: v.lower() == 'true',

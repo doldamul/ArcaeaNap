@@ -126,11 +126,16 @@ QtObject {
     property color bestPotentialMark: isDarkMode ? "#B8B0D0" : "#6A6A8A"
     property color bestPotential10Mark: isDarkMode ? "#FFE082" : "#A07800"
 
-    // Score rank colors
+    // Score rank colors (PM, EX+, EX, AA, A, B, C, D, -)
     property color scoreRankPm: isDarkMode ? "#55D6D6" : "#00AAAA"
-    property color scoreRankEx: isDarkMode ? "#8E9BFF" : "#5865F2"
-    property color scoreRankAa: isDarkMode ? "#D0A0F0" : "#9050B0"
-    property color scoreRankLow: isDarkMode ? "#FF7777" : "#D04040"
+    property color scoreRankExPlus: isDarkMode ? "#48B2E8" : "#2B88C4"
+    property color scoreRankEx: isDarkMode ? "#5C7CFA" : "#4364D8"
+    property color scoreRankAa: isDarkMode ? "#C060D8" : "#9642B0"
+    property color scoreRankA: isDarkMode ? "#C655BA" : "#9C389E"
+    property color scoreRankB: isDarkMode ? "#DF3C36" : "#BF2626"
+    property color scoreRankC: isDarkMode ? "#D83232" : "#B82020"
+    property color scoreRankD: isDarkMode ? "#A81818" : "#881010"
+    property color scoreRankNone: isDarkMode ? "#60808088" : "#60888890"
 
     // Potential grade colors
     property color potentialTripleStar: isDarkMode ? "#F48FB1" : "#D14A6B"
@@ -173,6 +178,25 @@ QtObject {
     // Badges / Misc
     property color badgeBpm: isDarkMode ? "#B388FF" : "#6A0DAD"
     property color badgeLen: isDarkMode ? "#5AA0E8" : "#4A90E2"
+
+    // Detail Header Glass Pill Chips
+    property color badgePackBg: isDarkMode ? "#2E243D" : "#F5EDFC"
+    property color badgePackBorder: isDarkMode ? "#5A447A" : "#D8B4FE"
+    property color badgePackText: isDarkMode ? "#D8B4FE" : "#7E22CE"
+
+    property color badgeVerBg: isDarkMode ? "#1B332B" : "#ECFDF5"
+    property color badgeVerBorder: isDarkMode ? "#2F6B55" : "#A7F3D0"
+    property color badgeVerText: isDarkMode ? "#6EE7B7" : "#065F46"
+
+    property color badgeBpmBg: isDarkMode ? "#242542" : "#EEF2FF"
+    property color badgeBpmBorder: isDarkMode ? "#484A80" : "#C7D2FE"
+    property color badgeBpmText: isDarkMode ? "#A5B4FC" : "#3730A3"
+
+    property color badgeLenBg: isDarkMode ? "#1C2E3D" : "#F0F9FF"
+    property color badgeLenBorder: isDarkMode ? "#345C7A" : "#BAE6FD"
+    property color badgeLenText: isDarkMode ? "#7DD3FC" : "#075985"
+
+    property color badgePillSep: isDarkMode ? "#444450" : "#B0B4C0"
     // Preserve the distinct legacy colors for the PM score-tier markers.
     property color frameHighlight: "#5AB8E0"
     property color maxHighlight: "#85D5F5"
@@ -251,9 +275,14 @@ QtObject {
     function getRankColor(rank) {
         var r = String(rank || "").toLowerCase();
         if (r === "pm") return scoreRankPm;
-        if (r === "ex+" || r === "ex") return scoreRankEx;
-        if (r === "aa" || r === "a") return scoreRankAa;
-        if (r === "b" || r === "c" || r === "d") return scoreRankLow;
+        if (r === "ex+") return scoreRankExPlus;
+        if (r === "ex") return scoreRankEx;
+        if (r === "aa") return scoreRankAa;
+        if (r === "a") return scoreRankA;
+        if (r === "b") return scoreRankB;
+        if (r === "c") return scoreRankC;
+        if (r === "d") return scoreRankD;
+        if (r === "-" || r === "none") return scoreRankNone;
         return textSecondary;
     }
 
@@ -311,5 +340,15 @@ QtObject {
     property color hoverOverlay: isDarkMode ? "#1AFFFFFF" : "#EFEFEF"
     
     property color borderOverlay: isDarkMode ? "#331A1A1E" : "#33FFFFFF"
+
+    function alpha(colorVal, alphaVal) {
+        if (!colorVal) return "transparent"
+        try {
+            var c = Qt.color(colorVal)
+            return Qt.rgba(c.r, c.g, c.b, alphaVal)
+        } catch (e) {
+            return colorVal
+        }
+    }
 
 }

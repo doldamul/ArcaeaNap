@@ -108,18 +108,26 @@ def get_best_scores_per_chart(cache_path: str):
     conn = sqlite3.connect(scores_db_path)
     try:
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute("PRAGMA table_info(scores)")
+        cols = {c[1] for c in cursor.fetchall()}
+        t_en_col = "title_en" if "title_en" in cols else "'' AS title_en"
+        t_jp_col = "title_jp" if "title_jp" in cols else "'' AS title_jp"
+        art_col = "artist" if "artist" in cols else "'' AS artist"
+
+        cursor.execute(f"""
             WITH ranked AS (
                 SELECT
                     arcaea_id, difficulty, score,
                     shiny_perfect_count, perfect_count, near_count, miss_count,
                     clear_type, best_clear_type, time_played, score_below_max,
+                    {t_en_col}, {t_jp_col}, {art_col},
                     ROW_NUMBER() OVER (PARTITION BY arcaea_id, difficulty ORDER BY score DESC, time_played DESC) as rn
                 FROM scores
             )
             SELECT arcaea_id, difficulty, score,
                    shiny_perfect_count, perfect_count, near_count, miss_count,
-                   clear_type, best_clear_type, time_played, score_below_max
+                   clear_type, best_clear_type, time_played, score_below_max,
+                   title_en, title_jp, artist
             FROM ranked WHERE rn = 1
         """)
 
@@ -136,6 +144,9 @@ def get_best_scores_per_chart(cache_path: str):
                 'best_clear_type': row[8] or 0,
                 'time_played': row[9] or 0,
                 'score_below_max': row[10] or 0,
+                'title_en': row[11] or '',
+                'title_jp': row[12] or '',
+                'artist': row[13] or '',
             }
 
         return result

@@ -28,6 +28,8 @@ class SettingsHandler(QObject):
     cachePathApplied = pyqtSignal()
     analyzeModeChanged = pyqtSignal(bool, arguments=['enabled'])
     bestPotentialMarkChanged = pyqtSignal()
+    packClassificationModeChanged = pyqtSignal(str, arguments=['mode'])
+    excludedPacksChanged = pyqtSignal(list, arguments=['packs'])
     # Migration signals
     cacheMigrationStarting = pyqtSignal()  # Emitted before migration - QML should release file handles
     cacheMigrationFinished = pyqtSignal(str, arguments=['error'])  # Emitted after migration with error message (empty if success)
@@ -128,6 +130,70 @@ class SettingsHandler(QObject):
         config['general']['song_title_language'] = normalized
         self.songTitleLanguageChanged.emit()
         self.settingsChanged.emit()
+
+    @pyqtSlot(result=str)
+    def getPackClassificationMode(self) -> str:
+        return config['general']['pack_classification_mode']
+
+    @pyqtSlot(str)
+    def setPackClassificationMode(self, mode: str):
+        normalized = str(mode or '').strip().lower()
+        if normalized not in ('strict', 'conceptual'):
+            return
+        if normalized == config['general']['pack_classification_mode']:
+            return
+        config['general']['pack_classification_mode'] = normalized
+        self.packClassificationModeChanged.emit(normalized)
+        self.settingsChanged.emit()
+
+    @pyqtProperty('QVariantList', notify=excludedPacksChanged)
+    def excludedPacks(self) -> list:
+        try:
+            from repositories.song_repository import sort_pack_names
+            raw = config['general']['excluded_packs']
+            return sort_pack_names(list(raw))
+        except Exception:
+            return []
+
+    @pyqtSlot(result='QVariantList')
+    def getAvailablePacks(self) -> list:
+        """제외 목록에 없는 사용 가능한 팩 목록을 우선순위 및 알파벳 정렬하여 반환한다."""
+        from repositories.song_repository import get_all_packs
+        all_packs = get_all_packs()
+        excluded = set(self.excludedPacks)
+        return [p for p in all_packs if p not in excluded]
+
+    @pyqtSlot(str)
+    def addExcludedPack(self, pack_name: str):
+        """제외 팩 목록에 팩명을 추가한다."""
+        pack = str(pack_name or '').strip()
+        if not pack:
+            return
+        import json
+        from repositories.song_repository import sort_pack_names
+        current = list(self.excludedPacks)
+        if pack not in current:
+            current.append(pack)
+            current = sort_pack_names(current)
+            config['general']['excluded_packs'] = json.dumps(current)
+            self.excludedPacksChanged.emit(current)
+            self.settingsChanged.emit()
+
+    @pyqtSlot(str)
+    def removeExcludedPack(self, pack_name: str):
+        """제외 팩 목록에서 팩명을 제거한다."""
+        pack = str(pack_name or '').strip()
+        if not pack:
+            return
+        import json
+        from repositories.song_repository import sort_pack_names
+        current = list(self.excludedPacks)
+        if pack in current:
+            current.remove(pack)
+            current = sort_pack_names(current)
+            config['general']['excluded_packs'] = json.dumps(current)
+            self.excludedPacksChanged.emit(current)
+            self.settingsChanged.emit()
 
     @staticmethod
     def _to_local_path(value: str) -> str:

@@ -1,7 +1,7 @@
 """Home 탭 통계 핸들러: 플레이 통계, Most Played, 썸네일."""
 import os
 
-from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QVariant
+from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, pyqtProperty, QVariant
 
 from utils.configuration import config, get_cache_dir
 from models.constants import DIFFICULTY_ORDER, DIFFICULTY_NAMES
@@ -11,14 +11,22 @@ from services.thumbnail_service import ThumbnailService
 
 class StatsHandler(QObject):
     statsChanged = pyqtSignal()
+    thumbnailVersionChanged = pyqtSignal()
+    thumbnailLoaded = pyqtSignal(str, int)
 
     def __init__(self):
         super().__init__()
         self._total_count = 0
         self._total_time_str = "0h 0m"
         self._difficulty_stats = []
-        self._thumbnail_service = ThumbnailService(self._thumbnails_dir)
+        self._thumbnail_service = ThumbnailService.get_instance(self._thumbnails_dir)
+        self._thumbnail_service.thumbnailHydrated.connect(self.thumbnailLoaded)
+        self._thumbnail_service.thumbnailVersionChanged.connect(self.thumbnailVersionChanged)
         self.refreshStats()
+
+    @pyqtProperty(int, notify=thumbnailVersionChanged)
+    def thumbnailVersion(self) -> int:
+        return self._thumbnail_service.thumbnail_version
 
     @property
     def _thumbnails_dir(self):
@@ -50,7 +58,6 @@ class StatsHandler(QObject):
 
     @pyqtSlot(str, result=str)
     def getThumbnailPath(self, arcaea_id: str) -> str:
-        self._thumbnail_service.thumbnails_dir = self._thumbnails_dir
         return self._thumbnail_service.get_path(arcaea_id)
 
     @pyqtSlot(str, result=str)
@@ -81,17 +88,14 @@ class StatsHandler(QObject):
 
     @pyqtSlot(str, int, result=str)
     def getThumbnailPathForDifficulty(self, arcaea_id: str, difficulty: int) -> str:
-        self._thumbnail_service.thumbnails_dir = self._thumbnails_dir
         return self._thumbnail_service.get_path_for_difficulty(arcaea_id, difficulty)
 
     @pyqtSlot(str, int, result=str)
     def getExactThumbnailPathForDifficulty(self, arcaea_id: str, difficulty: int) -> str:
-        self._thumbnail_service.thumbnails_dir = self._thumbnails_dir
         return self._thumbnail_service.get_exact_path_for_difficulty(arcaea_id, difficulty)
 
     @pyqtSlot(str, int, result=str)
     def getThumbnailColor(self, arcaea_id: str, difficulty: int) -> str:
-        self._thumbnail_service.thumbnails_dir = self._thumbnails_dir
         return self._thumbnail_service.get_representative_color(arcaea_id, difficulty)
 
     @pyqtSlot()

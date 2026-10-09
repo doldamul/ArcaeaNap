@@ -208,6 +208,7 @@ def main():
     settings_handler.set_theme_handler(theme_handler)
     settings_handler.set_analyzer(analysis_handler.analyzer)
     analysis_handler.set_settings_handler(settings_handler)  # Enable connection status updates
+    statistics_handler.set_settings_handler(settings_handler)  # Enable pack classification mode updates
     engine.rootContext().setContextProperty("settingsHandler", settings_handler)
 
     update_handler = UpdateHandler()

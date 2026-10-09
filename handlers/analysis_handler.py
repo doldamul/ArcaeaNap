@@ -240,8 +240,19 @@ class AnalysisHandler(QObject):
             if len(files) < 5:
                 return []
 
-            selected = random.sample(files, 5)
-            return [QUrl.fromLocalFile(os.path.join(thumbnails_dir, f)).toString() for f in selected]
+            from services.thumbnail_service import is_file_hydrated
+            random.shuffle(files)
+            hydrated = []
+            for f in files:
+                full_path = os.path.join(thumbnails_dir, f)
+                if is_file_hydrated(full_path):
+                    hydrated.append(QUrl.fromLocalFile(full_path).toString())
+                    if len(hydrated) == 5:
+                        break
+
+            if len(hydrated) < 5:
+                return []
+            return hydrated
         except Exception as e:
             print(f"Error getting random thumbnails: {e}")
             return []
