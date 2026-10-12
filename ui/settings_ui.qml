@@ -916,35 +916,25 @@ Window {
                         property bool isSending: settingsHandler ? settingsHandler.isSendingData() : false
                         property real lastSynced: settingsHandler ? settingsHandler.getLastSyncedTime() : 0
                         property var sheetVersions: settingsHandler ? settingsHandler.getSheetVersions() : ({})
-                        property string parsedSheetVer: "?"
-                        property string parsedArcaeaVer: "?"
+                        property string parsedSheetVer: (sheetVersions && sheetVersions.sheet_ver) ? String(sheetVersions.sheet_ver) : "?"
+                        property string parsedArcaeaVer: (sheetVersions && sheetVersions.arcaea_ver) ? String(sheetVersions.arcaea_ver) : "?"
+                        property bool hasBoundSheet: !!(boundSheetInfo && boundSheetInfo.sheet_id && boundSheetInfo.sheet_id !== "")
+                        property string boundSheetName: (boundSheetInfo && boundSheetInfo.sheet_name) ? boundSheetInfo.sheet_name : ""
                         
-                        onSheetVersionsChanged: {
-                            var v = sheetVersions
-                            parsedSheetVer = (v && v.sheet_ver) ? String(v.sheet_ver) : '?'
-                            parsedArcaeaVer = (v && v.arcaea_ver) ? String(v.arcaea_ver) : '?'
-                        }
-                        
-                        property bool hasBoundSheet: false
-                        property string boundSheetName: ""
-                        
-                        // Explicitly update derived properties when boundSheetInfo changes
-                        // (JavaScript block bindings may fail to re-evaluate after imperative assignment)
                         onBoundSheetInfoChanged: {
-                            var info = boundSheetInfo
-                            hasBoundSheet = !!(info && info.sheet_id && info.sheet_id !== "")
-                            boundSheetName = (info && info.sheet_name) ? info.sheet_name : ""
+                            if (hasBoundSheet && (parsedSheetVer === '?' || parsedArcaeaVer === '?')) {
+                                if (settingsHandler && !settingsHandler.isFetchingSheetVersions()) {
+                                    settingsHandler.refreshSheetVersions()
+                                }
+                            }
                         }
                         
                         Component.onCompleted: {
-                            // Compute initial derived properties
-                            var info = boundSheetInfo
-                            hasBoundSheet = !!(info && info.sheet_id && info.sheet_id !== "")
-                            boundSheetName = (info && info.sheet_name) ? info.sheet_name : ""
-
-                            var v = sheetVersions
-                            parsedSheetVer = (v && v.sheet_ver) ? String(v.sheet_ver) : '?'
-                            parsedArcaeaVer = (v && v.arcaea_ver) ? String(v.arcaea_ver) : '?'
+                            if (hasBoundSheet && (parsedSheetVer === '?' || parsedArcaeaVer === '?')) {
+                                if (settingsHandler && !settingsHandler.isFetchingSheetVersions()) {
+                                    settingsHandler.refreshSheetVersions()
+                                }
+                            }
                         }
                         
                         ColumnLayout {

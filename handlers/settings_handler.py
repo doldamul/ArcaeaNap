@@ -41,6 +41,7 @@ class SettingsHandler(QObject):
     sheetBindingChanged = pyqtSignal()
     sendDataStatusChanged = pyqtSignal()
     sheetVersionsChanged = pyqtSignal()
+    isFetchingSheetVersionsChanged = pyqtSignal(bool, arguments=['fetching'])
     # Consultant Sheet hyperlink signals
     consultantSheetTargetChanged = pyqtSignal(str, arguments=['target'])
     isSearchingSheetChanged = pyqtSignal(bool, arguments=['searching'])
@@ -73,8 +74,10 @@ class SettingsHandler(QObject):
         self._send_cancellation_context = None
         self._arcaea_login_instance = None
         self._sheet_versions = self._load_sheet_versions()
+        self._is_fetching_sheet_versions = False
         self._is_installing_browser = False
         self._browser_installed = None
+
 
     def set_analyzer(self, analyzer):
         """Connect to the shared analyzer owned by AnalysisHandler for play count mode control."""
@@ -485,9 +488,6 @@ class SettingsHandler(QObject):
 
     def _fetch_and_save_sheet_versions(self):
         """Fetch sheet version info from API and save to account_connections.json."""
-        self._sheet_versions = {'sheet_ver': '?', 'arcaea_ver': '?'}
-        self.sheetVersionsChanged.emit()
-
         print("[SettingsHandler] Fetching sheet versions...")
         from utils.web_consultantsheet import get_sheet_version_info
         versions = get_sheet_version_info()
@@ -518,6 +518,34 @@ class SettingsHandler(QObject):
     def getSheetVersions(self):
         """Get sheet versions (from in-memory cache, loaded from account_connections.json)."""
         return self._sheet_versions
+
+    @pyqtSlot(result=bool)
+    def isFetchingSheetVersions(self):
+        """Check if sheet versions are currently being fetched in the background."""
+        return self._is_fetching_sheet_versions
+
+    @pyqtSlot()
+    def refreshSheetVersions(self):
+        """Fetch latest sheet versions in a background daemon thread if a sheet is bound."""
+        if self._is_fetching_sheet_versions:
+            return
+
+        connections = self._load_connections()
+        bound_id = connections.get('google_sheet', {}).get('bound_sheet_id')
+        if not bound_id:
+            return
+
+        self._is_fetching_sheet_versions = True
+        self.isFetchingSheetVersionsChanged.emit(True)
+
+        def _worker():
+            try:
+                self._fetch_and_save_sheet_versions()
+            finally:
+                self._is_fetching_sheet_versions = False
+                self.isFetchingSheetVersionsChanged.emit(False)
+
+        self._spawn(_worker)
 
 
     @pyqtSlot(result=bool)

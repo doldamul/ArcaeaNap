@@ -38,6 +38,16 @@ REVERSE_ALIAS_MAP = {
     'April showers': 'April Showers',
 }
 
+# Regex patterns for Consultant Sheet version label matching (case-insensitive, smart quotes, possession drop)
+SHEET_VER_PATTERN = re.compile(
+    r'(?:현재\s*버전|現在バージョン|current\s*version)',
+    re.IGNORECASE
+)
+ARCAEA_VER_PATTERN = re.compile(
+    r'(?:대응\s*arcaea\s*버전|arcaea(?:[\'’]s)?\s*version|arcaeaバージョン)',
+    re.IGNORECASE
+)
+
 # CLIENT_CONST_BEGIN
 CLIENT = ["", "", ""]  # [0]: key, [1]: id, [2]: sec
 # CLIENT_CONST_END
@@ -805,6 +815,63 @@ def open_sheet():
     print(f"Total unique songs combined: {len(merged_data)}")
     save_to_db(merged_data.values())
 
+
+def _extract_version_value(row, col_idx, cell_value, pattern):
+    """
+    라벨 셀 또는 우측 셀들에서 버전 문자열을 추출합니다.
+    1. 라벨 셀 자체에 콜론/공백 뒤 버전이 인라인으로 기재된 경우 (예: "Current Version: 3.30b")
+    2. 우측 셀을 순회하여 첫 번째 비어있지 않은 유효 셀 값 (셀 병합 대응)
+    """
+    # 1. 인라인 버전 검사
+    match = pattern.search(cell_value)
+    if match:
+        remainder = cell_value[match.end():].strip()
+        # 콜론(:), 하이픈(-), 물결(~) 등의 구분자가 앞에 있다면 제거
+        remainder = re.sub(r'^[:\s\-~]+', '', remainder).strip()
+        if remainder:
+            return remainder
+
+    # 2. 우측 셀 스캔 (셀 병합으로 바로 우측 셀이 빈 문자열일 수 있으므로 행 끝까지 탐색)
+    for next_col in range(col_idx + 1, len(row)):
+        val = row[next_col]
+        if val is not None:
+            val_str = str(val).strip()
+            if val_str:
+                return val_str
+
+    return None
+
+
+def parse_sheet_version_data(data):
+    """
+    2D 셀 데이터(A1:Z50 등)에서 Sheet 버전과 Arcaea 버전을 추출합니다.
+    """
+    sheet_ver = '?'
+    arcaea_ver = '?'
+
+    for row_idx, row in enumerate(data):
+        for col_idx, cell_value in enumerate(row):
+            if not isinstance(cell_value, str):
+                continue
+
+            # Check for Sheet Version
+            if sheet_ver == '?' and SHEET_VER_PATTERN.search(cell_value):
+                extracted = _extract_version_value(row, col_idx, cell_value, SHEET_VER_PATTERN)
+                if extracted:
+                    sheet_ver = extracted
+
+            # Check for Arcaea Version
+            if arcaea_ver == '?' and ARCAEA_VER_PATTERN.search(cell_value):
+                extracted = _extract_version_value(row, col_idx, cell_value, ARCAEA_VER_PATTERN)
+                if extracted:
+                    arcaea_ver = extracted
+
+        if sheet_ver != '?' and arcaea_ver != '?':
+            break
+
+    return {'sheet_ver': sheet_ver, 'arcaea_ver': arcaea_ver}
+
+
 def get_sheet_version_info(sheet_id=None, cancellation_context=None):
     """
     Get version information from the bound Google Sheet's 'Main' tab.
@@ -849,41 +916,12 @@ def get_sheet_version_info(sheet_id=None, cancellation_context=None):
         # Read a reasonable chunk of data (e.g., A1:Z50) to find the labels
         # Labels are usually near the top
         data = main_tab.get('A1:Z50')
-        
-        sheet_ver = '?'
-        arcaea_ver = '?'
-        
-        # Labels to search for
-        SHEET_VER_LABELS = ['현재 버전', 'current version', '現在バージョン']
-        ARCAEA_VER_LABELS = ['대응 arcaea 버전', "arcaea's version", 'arcaeaバージョン']
-        
-        for row_idx, row in enumerate(data):
-            for col_idx, cell_value in enumerate(row):
-                if not isinstance(cell_value, str):
-                    continue
-                    
-                cell_lower = cell_value.lower().strip()
-                
-                # Check for Sheet Version
-                if sheet_ver == '?' and any(label in cell_lower for label in SHEET_VER_LABELS):
-                    # version is in the cell to the right
-                    if col_idx + 1 < len(row):
-                        sheet_ver = str(row[col_idx + 1]).strip()
-                
-                # Check for Arcaea Version
-                if arcaea_ver == '?' and any(label in cell_lower for label in ARCAEA_VER_LABELS):
-                    # version is in the cell to the right
-                    if col_idx + 1 < len(row):
-                        arcaea_ver = str(row[col_idx + 1]).strip()
-                        
-            if sheet_ver != '?' and arcaea_ver != '?':
-                break
-                
-        return {'sheet_ver': sheet_ver, 'arcaea_ver': arcaea_ver}
+        return parse_sheet_version_data(data)
         
     except Exception as e:
         print(f"Error fetching sheet version info: {e}")
         return {'sheet_ver': '?', 'arcaea_ver': '?'}
+
 
 
 def save_to_db(data):
