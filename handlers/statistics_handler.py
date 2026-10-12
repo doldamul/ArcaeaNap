@@ -6,6 +6,7 @@ from utils.configuration import config, get_cache_dir
 from models.constants import SCORE_RANKS
 from services.statistics_service import StatisticsService, FilterParams
 from handlers.statistics_list_model import StatisticsListModel
+from services.thumbnail_service import ThumbnailService
 
 
 class StatisticsHandler(QObject):
@@ -36,7 +37,6 @@ class StatisticsHandler(QObject):
         self._pack_items = []
         self._pack_items_dirty = True
         self._settings_handler = None
-        from services.thumbnail_service import ThumbnailService
         self._thumbnail_service = ThumbnailService.get_instance()
         self._thumbnail_service.thumbnailVersionChanged.connect(self.thumbnailVersionChanged)
 
@@ -853,6 +853,7 @@ class StatisticsHandler(QObject):
 
     @pyqtSlot()
     def refreshData(self):
+        self._thumbnail_service = ThumbnailService.get_instance()
         self._service.load_data(
             get_cache_dir(),
             config['general']['song_title_language'],

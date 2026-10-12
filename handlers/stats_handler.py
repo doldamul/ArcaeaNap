@@ -100,6 +100,7 @@ class StatsHandler(QObject):
 
     @pyqtSlot()
     def refreshStats(self):
+        self._thumbnail_service = ThumbnailService.get_instance(self._thumbnails_dir)
         cache_path = get_cache_dir()
         
         diff_info = [

@@ -221,6 +221,8 @@ class SettingsHandler(QObject):
     def _emit_cache_path_applied_updates(self):
         """Emit all state-refresh signals after cache path is successfully applied."""
         self._sheet_versions = self._load_sheet_versions()
+        from services.thumbnail_service import ThumbnailService
+        ThumbnailService.get_instance(os.path.join(self._get_absolute_cache_path(config['general']['cache_path']), 'thumbnails'))
         self.cachePathChanged.emit()
         self.settingsChanged.emit()
         self.arcaeaOnlineConnectionChanged.emit()

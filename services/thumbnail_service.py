@@ -57,12 +57,19 @@ class ThumbnailService(QObject):
 
     @classmethod
     def get_instance(cls, thumbnails_dir: Optional[str] = None) -> "ThumbnailService":
+        from PyQt6 import sip
+        if cls._shared_instance is not None:
+            try:
+                if sip.isdeleted(cls._shared_instance):
+                    cls._shared_instance = None
+            except Exception:
+                cls._shared_instance = None
+
+        target_dir = thumbnails_dir if thumbnails_dir is not None else os.path.join(get_cache_dir(), 'thumbnails')
         if cls._shared_instance is None:
-            if thumbnails_dir is None:
-                thumbnails_dir = os.path.join(get_cache_dir(), 'thumbnails')
-            cls._shared_instance = cls(thumbnails_dir)
-        elif thumbnails_dir is not None and cls._shared_instance.thumbnails_dir != thumbnails_dir:
-            cls._shared_instance.thumbnails_dir = thumbnails_dir
+            cls._shared_instance = cls(target_dir)
+        elif cls._shared_instance.thumbnails_dir != target_dir:
+            cls._shared_instance.thumbnails_dir = target_dir
         return cls._shared_instance
 
     def __init__(self, thumbnails_dir: str, parent: Optional[QObject] = None):
