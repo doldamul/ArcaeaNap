@@ -109,12 +109,6 @@ Item {
     }
     
     Component.onCompleted: {
-        if (statsHandler) {
-            playCountText.text = statsHandler.getTotalPlayCount()
-            playTimeText.text = statsHandler.getTotalPlayTime()
-            difficultyStatsData = statsHandler.getDifficultyStats()
-            updateTop10()
-        }
         loadProfile()
         if (settingsHandler) {
             homeRoot.showFriendCodeInProfile = settingsHandler.getShowFriendCode()
@@ -126,6 +120,16 @@ Item {
             homeRoot.showPlayCountMostPlayed = settingsHandler.getShowPlayCountMostPlayed()
             homeRoot.groupingCriteriaLabel = (settingsHandler.getGroupingCriteria() === 'chart') ? 'Chart' : 'Song'
             homeRoot.aggregationScopeLabel = (settingsHandler.getMostPlayedScope() === 'this_year') ? new Date().getFullYear().toString() : 'All time'
+        }
+        if (statsHandler) {
+            Qt.callLater(function() {
+                if (statsHandler) {
+                    playCountText.text = statsHandler.getTotalPlayCount()
+                    playTimeText.text = statsHandler.getTotalPlayTime()
+                    difficultyStatsData = statsHandler.getDifficultyStats()
+                    updateTop10()
+                }
+            })
         }
     }
 

@@ -225,6 +225,10 @@ class MacWindowController(QObject):
         except Exception as error:
             self._set_error(str(error))
 
+    @pyqtSlot()
+    def resetHoverState(self) -> None:
+        pass
+
     def _refresh_metrics(self) -> None:
         top, left, right, bottom = self._bridge.metrics()
         values = (float(top), float(left), float(right), float(bottom))

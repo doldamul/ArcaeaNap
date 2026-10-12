@@ -374,6 +374,22 @@ class NativeTitleBarController(QObject):
     def refreshMetrics(self) -> None:
         self._schedule_metrics_sync("manual")
 
+    @pyqtSlot()
+    def resetHoverState(self) -> None:
+        if sys.platform == "win32" and self._window is not None:
+            try:
+                import ctypes
+                win_id = getattr(self._window, "winId", None)
+                if callable(win_id):
+                    hwnd = int(win_id())
+                    if hwnd and ctypes.windll.user32.IsWindow(hwnd):
+                        WM_NCMOUSELEAVE = 0x02A2
+                        WM_MOUSELEAVE = 0x02A0
+                        ctypes.windll.user32.PostMessageW(hwnd, WM_NCMOUSELEAVE, 0, 0)
+                        ctypes.windll.user32.PostMessageW(hwnd, WM_MOUSELEAVE, 0, 0)
+            except Exception:
+                pass
+
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self._window and event.type() == QEvent.Type.DevicePixelRatioChange:
             self._schedule_metrics_sync("devicePixelRatioChanged")

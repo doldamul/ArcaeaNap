@@ -89,6 +89,9 @@ ApplicationWindow {
     }
 
     function showOssLicensesWindow() {
+        if (!ossLicensesWindowLoader.active) {
+            ossLicensesWindowLoader.active = true
+        }
         if (!ossLicensesWindow) {
             return
         }
@@ -525,41 +528,85 @@ ApplicationWindow {
     }
 
     // --- Settings Window (별도 윈도우) ---
+    property bool pendingOpenSettings: false
+    property string pendingSettingsSection: ""
+
     function openSettingsWindow(section) {
-        if (!settingsWindowLoader.item || !settingsWindowLoader.item.visible) {
-            settingsWindowLoader.active = true
-            if (settingsWindowLoader.item) {
+        if (settingsWindowLoader.status === Loader.Ready && settingsWindowLoader.item) {
+            if (!section && typeof settingsWindowLoader.item.resetScroll === "function") {
+                settingsWindowLoader.item.resetScroll()
+            }
+            if (!settingsWindowLoader.item.visible) {
                 settingsWindowLoader.item.show()
             }
-        } else {
             settingsWindowLoader.item.raise()
             settingsWindowLoader.item.requestActivate()
+            if (section) {
+                Qt.callLater(function() {
+                    if (settingsWindowLoader.item && typeof settingsWindowLoader.item.scrollToSection === "function") {
+                        settingsWindowLoader.item.scrollToSection(section)
+                    }
+                })
+            }
+        } else {
+            pendingOpenSettings = true
+            pendingSettingsSection = section || ""
+            if (!settingsWindowLoader.active) {
+                settingsWindowLoader.active = true
+            }
         }
-        if (section) {
-            Qt.callLater(function() {
-                if (settingsWindowLoader.item && typeof settingsWindowLoader.item.scrollToSection === "function") {
-                    settingsWindowLoader.item.scrollToSection(section)
-                }
-            })
+    }
+
+    property bool isMainRendered: false
+
+    Connections {
+        target: window
+        function onFrameSwapped() {
+            if (!window.isMainRendered) {
+                window.isMainRendered = true
+                Qt.callLater(function() {
+                    if (!settingsWindowLoader.active) {
+                        settingsWindowLoader.active = true
+                    }
+                })
+            }
         }
+    }
+
+    function prewarmSettingsWindow() {
+        settingsWindowLoader.active = false
+        Qt.callLater(function() {
+            settingsWindowLoader.active = true
+        })
     }
 
     Loader {
         id: settingsWindowLoader
         source: "settings_ui.qml"
+        asynchronous: true
         active: false
-    }
 
-    property Window settingsWindow: settingsWindowLoader.item
-
-    Connections {
-        target: settingsWindowLoader.item
-        function onVisibleChanged() {
-            if (settingsWindowLoader.item && !settingsWindowLoader.item.visible) {
-                Qt.callLater(function() { settingsWindowLoader.active = false })
+        onStatusChanged: {
+            if (status === Loader.Ready && pendingOpenSettings) {
+                pendingOpenSettings = false
+                var sec = pendingSettingsSection
+                pendingSettingsSection = ""
+                openSettingsWindow(sec)
             }
         }
     }
+
+    Connections {
+        target: settingsWindowLoader.item
+        ignoreUnknownSignals: true
+        function onClosing(close) {
+            Qt.callLater(function() {
+                window.prewarmSettingsWindow()
+            })
+        }
+    }
+
+    property Window settingsWindow: settingsWindowLoader.item
 
     Loader {
         id: aboutWindowLoader
@@ -582,9 +629,19 @@ ApplicationWindow {
         id: ossLicensesWindowLoader
         source: "oss_licenses_ui.qml"
         asynchronous: false
+        active: false
     }
 
     property Window ossLicensesWindow: ossLicensesWindowLoader.item
+
+    Connections {
+        target: ossLicensesWindowLoader.item
+        function onVisibleChanged() {
+            if (ossLicensesWindowLoader.item && !ossLicensesWindowLoader.item.visible) {
+                Qt.callLater(function() { ossLicensesWindowLoader.active = false })
+            }
+        }
+    }
 
     Connections {
         target: aboutWindow

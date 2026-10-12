@@ -37,8 +37,44 @@ Window {
         z: 999
         onPressed: settingsWindow.startSystemMove()
     }
+    property bool isBridgeAttached: false
+
+    function ensureBridgeAttached() {
+        if ((!isBridgeAttached || (nativeBridge && !nativeBridge.available)) && visible) {
+            bridgeManager.attachBridgeStyle(settingsNativeBridge, settingsWindow, 2)
+            isBridgeAttached = true
+        }
+    }
+
     Component.onCompleted: {
-        bridgeManager.attachBridgeStyle(settingsNativeBridge, settingsWindow, 2)
+        if (visible) {
+            ensureBridgeAttached()
+        }
+    }
+
+    onVisibleChanged: {
+        if (visible) {
+            ensureBridgeAttached()
+            if (isNativeBridgeReady && nativeBridge) {
+                nativeBridge.setDarkMode(Theme.isDarkMode)
+                nativeBridge.refreshMetrics()
+                updateNativeDragRegions()
+                if (typeof nativeBridge.resetHoverState === "function") {
+                    nativeBridge.resetHoverState()
+                }
+            }
+        }
+    }
+
+    onClosing: function(close) {
+        settingsWindow.hide()
+        close.accepted = true
+    }
+
+    function resetScroll() {
+        if (typeof scrollView !== "undefined" && scrollView && scrollView.contentItem) {
+            scrollView.contentItem.contentY = 0
+        }
     }
 
     Connections {
