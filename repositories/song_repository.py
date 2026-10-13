@@ -321,20 +321,30 @@ def fill_song_titles_from_scores():
         songs_cursor.execute("""
             UPDATE songs
             SET title_en = COALESCE(
-                    NULLIF(songs.title_en, ''),
                     (SELECT us.title_en
                      FROM user_db.scores us
                      WHERE us.arcaea_id = songs.arcaea_id
                        AND us.title_en IS NOT NULL AND us.title_en != ''
-                     LIMIT 1)
+                     ORDER BY
+                        CASE WHEN LOWER(us.title_en) = LOWER(songs.canonical_title) THEN 0
+                             WHEN us.difficulty IN (SELECT c.difficulty FROM charts c WHERE c.song_id = songs.id) THEN 1
+                             ELSE 2 END,
+                        us.rowid DESC
+                     LIMIT 1),
+                    NULLIF(songs.title_en, '')
                 ),
                 title_jp = COALESCE(
-                    NULLIF(songs.title_jp, ''),
                     (SELECT us.title_jp
                      FROM user_db.scores us
                      WHERE us.arcaea_id = songs.arcaea_id
                        AND us.title_jp IS NOT NULL AND us.title_jp != ''
-                     LIMIT 1)
+                     ORDER BY
+                        CASE WHEN LOWER(us.title_en) = LOWER(songs.canonical_title) THEN 0
+                             WHEN us.difficulty IN (SELECT c.difficulty FROM charts c WHERE c.song_id = songs.id) THEN 1
+                             ELSE 2 END,
+                        us.rowid DESC
+                     LIMIT 1),
+                    NULLIF(songs.title_jp, '')
                 ),
                 artist = COALESCE(
                     NULLIF(NULLIF(songs.artist, ''), 'Unknown'),
@@ -342,6 +352,11 @@ def fill_song_titles_from_scores():
                      FROM user_db.scores us
                      WHERE us.arcaea_id = songs.arcaea_id
                        AND us.artist IS NOT NULL AND us.artist != ''
+                     ORDER BY
+                        CASE WHEN LOWER(us.title_en) = LOWER(songs.canonical_title) THEN 0
+                             WHEN us.difficulty IN (SELECT c.difficulty FROM charts c WHERE c.song_id = songs.id) THEN 1
+                             ELSE 2 END,
+                        us.rowid DESC
                      LIMIT 1)
                 )
             WHERE songs.arcaea_id IS NOT NULL AND songs.arcaea_id != ''
@@ -479,7 +494,11 @@ def get_song_title(arcaea_id, difficulty=None, song_title_language='en'):
             cursor.execute(
                 "SELECT title_en, title_jp, canonical_title FROM songs "
                 "WHERE arcaea_id = ? "
-                "ORDER BY CASE WHEN title_en IS NOT NULL AND title_en != '' THEN 0 ELSE 1 END "
+                "ORDER BY "
+                "CASE WHEN LOWER(canonical_title) = LOWER(arcaea_id) THEN 0 "
+                "     WHEN EXISTS(SELECT 1 FROM charts c WHERE c.song_id = songs.id AND c.difficulty IN (0, 1, 2)) THEN 1 "
+                "     ELSE 2 END, "
+                "CASE WHEN title_en IS NOT NULL AND title_en != '' THEN 0 ELSE 1 END "
                 "LIMIT 1",
                 (arcaea_id,),
             )

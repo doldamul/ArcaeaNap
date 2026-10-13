@@ -276,24 +276,35 @@ class StatisticsService:
             if not songs_for_aid:
                 continue
 
-            for song_item in songs_for_aid:
+            # 동일 arcaea_id를 공유하는 악곡들(예: dropdead 본편 vs overdead.) 중 해당 diff를 소유한 곡을 특정
+            matching_songs = [s for s in songs_for_aid if diff in s.get('charts', {})]
+            target_songs = matching_songs if matching_songs else songs_for_aid
+
+            for song_item in target_songs:
                 # 1. Artist 백필 (songs.db artist 결측 시 user_scores.db의 artist 주입)
                 curr_artist = str(song_item.get('artist') or '').strip()
                 sc_artist = str(scdata.get('artist') or '').strip()
                 if (not curr_artist or curr_artist.lower() == 'unknown') and sc_artist:
                     song_item['artist'] = sc_artist
 
-                # 1.1 Title 백필 (title이 결측이거나 arcaea_id인 경우 user_scores.db의 title_en/title_jp 주입)
+                # 1.1 Title 백필 (title이 결측이거나 미분류 합성곡 arcaea_id인 경우 user_scores.db의 title_en/title_jp 주입)
                 curr_title = str(song_item.get('title') or '').strip()
+                curr_canonical = str(song_item.get('canonical_title') or '').strip()
                 sc_en = str(scdata.get('title_en') or '').strip()
                 sc_jp = str(scdata.get('title_jp') or '').strip()
                 sc_title = (sc_jp or sc_en) if lang == 'jp' else (sc_en or sc_jp)
-                if (not curr_title or curr_title == aid or curr_title.lower() == 'unknown') and sc_title:
+
+                is_title_missing = not curr_title or curr_title.lower() == 'unknown'
+                # 가상 합성 곡 등으로 canonical_title마저 aid인 경우에만 arcaea_id 대체로 간주
+                is_synthetic_aid = (curr_title == aid and (not curr_canonical or curr_canonical == aid))
+
+                if (is_title_missing or is_synthetic_aid) and sc_title:
                     song_item['title'] = sc_title
-                    song_item['canonical_title'] = sc_title
-                    if sc_en:
+                    if not curr_canonical or curr_canonical == aid:
+                        song_item['canonical_title'] = sc_title
+                    if sc_en and not song_item.get('title_en'):
                         song_item['title_en'] = sc_en
-                    if sc_jp:
+                    if sc_jp and not song_item.get('title_jp'):
                         song_item['title_jp'] = sc_jp
 
             # 2. 동적 가상 차트 합성 (charts 테이블에 없는 신곡 난이도 보완)
