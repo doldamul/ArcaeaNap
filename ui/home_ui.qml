@@ -624,17 +624,7 @@ Item {
 
                             Rectangle {
                                 anchors.fill: parent
-                                color: Theme.bgButton
-                                border.color: Theme.borderCard
-                                border.width: 1
-                                visible: profileImagePath !== "" && !profileImageHome.visible
-                            }
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "No Image"
-                                color: Theme.textLight
-                                font.pixelSize: 12
+                                color: "transparent"
                                 visible: profileImagePath !== "" && !profileImageHome.visible
                             }
                         }
@@ -811,9 +801,7 @@ Item {
                                     // Placeholder / border
                                     Rectangle {
                                         anchors.fill: parent
-                                        color: Theme.borderSubtle
-                                        border.color: Theme.borderCard
-                                        border.width: 1
+                                        color: "transparent"
                                         visible: thumbnailImage.status !== Image.Ready
                                         z: -1
                                     }

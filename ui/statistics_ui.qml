@@ -20,7 +20,12 @@ Item {
     // Data from statisticsHandler
     property int thumbnailVersion: statsHandler ? statsHandler.thumbnailVersion : (statisticsHandler ? statisticsHandler.thumbnailVersion : 0)
     readonly property bool isPackMode: Boolean(statisticsHandler && statisticsHandler.displayMode === "pack")
-    readonly property bool isPackSelected: Boolean(isPackMode && statisticsHandler && statisticsHandler.expandedPackIds && statisticsHandler.expandedPackIds.length > 0)
+    readonly property bool isPackDashboardTarget: Boolean(statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.isPackDetailView)
+    property bool isDetailedViewCrossfading: false
+    property bool isDeselectingPack: false
+    property bool wasPackSelectedBeforeTransition: false
+    property var cachedLastPack: null
+    readonly property bool isPackSelected: Boolean((isPackMode && statisticsHandler && statisticsHandler.expandedPackIds && statisticsHandler.expandedPackIds.length > 0) || (statsRoot.isDetailedViewCrossfading && !statsRoot.isPackDashboardTarget && statsRoot.wasPackSelectedBeforeTransition && statsRoot.cachedLastPack))
     property var currentSong: statisticsHandler ? statisticsHandler.getSelectedItem() : null
     property int currentSongIndex: statisticsHandler ? statisticsHandler.selectedIndex : -1
     property string searchText: ""  // Search text managed at root level
@@ -37,6 +42,16 @@ Item {
     readonly property string titleFontFamily: (appWindow && appWindow.titleFontFamily)
         ? appWindow.titleFontFamily
         : (appWindow ? appWindow.font.family : "")
+
+    Connections {
+        target: statisticsHandler
+        function onCurrentPackChanged() {
+            if (statsRoot.isDetailedViewCrossfading) return
+            if (statisticsHandler && statisticsHandler.currentPack && statisticsHandler.currentPack.id) {
+                statsRoot.cachedLastPack = statisticsHandler.currentPack
+            }
+        }
+    }
 
     onIsNarrowChanged: {
         if (!isNarrow) {
@@ -1013,7 +1028,7 @@ Item {
                                                             height: 30
                                                             radius: 4
                                                             clip: true
-                                                            color: (selectedPackHeaderCard.pItem && selectedPackHeaderCard.pItem.top_representative) ? Theme.getDiffColor(selectedPackHeaderCard.pItem.top_representative.diff_color_tag) : Theme.bgHover
+                                                            color: "transparent"
 
                                                             Image {
                                                                 id: selectedPackTopThumb
@@ -1028,15 +1043,6 @@ Item {
                                                                 smooth: true
                                                                 antialiasing: true
                                                                 visible: status === Image.Ready
-                                                            }
-
-                                                            Text {
-                                                                anchors.centerIn: parent
-                                                                text: (selectedPackHeaderCard.pItem && selectedPackHeaderCard.pItem.top_representative) ? (selectedPackHeaderCard.pItem.top_representative.diff_name || "") : ""
-                                                                font.pixelSize: 9
-                                                                font.bold: true
-                                                                color: Theme.bgCard
-                                                                visible: selectedPackTopThumb.status !== Image.Ready
                                                             }
                                                         }
                                                     }
@@ -1366,7 +1372,7 @@ Item {
                                             Rectangle { 
                                                 id: thumbRect
                                                 width: 48; height: 48; radius: 6
-                                                color: Theme.getDiffColor(rowModel.diffColorTag || (rowModel.thumbnailDifficulty !== undefined ? rowModel.thumbnailDifficulty : rowModel.difficulty))
+                                                color: "transparent"
                                                 clip: true
                                                 
                                                 Image {
@@ -1386,15 +1392,7 @@ Item {
                                                     visible: status === Image.Ready
                                                 }
                                                 
-                                                // Show 3-letter difficulty code ONLY when no thumbnail is loaded
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: rowModel.difficultyName || ""
-                                                    font.pixelSize: 14
-                                                    font.bold: true
-                                                    color: Theme.bgCard
-                                                    visible: thumbImage.status !== Image.Ready
-                                                }
+
                                             }
                                             
                                             Column {
@@ -1893,7 +1891,7 @@ Item {
                                                             height: 30
                                                             radius: 4
                                                             clip: true
-                                                            color: packItem.top_representative ? Theme.getDiffColor(packItem.top_representative.diff_color_tag) : Theme.bgHover
+                                                            color: "transparent"
 
                                                             Image {
                                                                 id: packTopThumb
@@ -1910,14 +1908,7 @@ Item {
                                                                 visible: status === Image.Ready
                                                             }
 
-                                                            Text {
-                                                                anchors.centerIn: parent
-                                                                text: packItem.top_representative ? (packItem.top_representative.diff_name || "") : ""
-                                                                font.pixelSize: 9
-                                                                font.bold: true
-                                                                color: Theme.bgCard
-                                                                visible: packTopThumb.status !== Image.Ready
-                                                            }
+
                                                         }
                                                     }
                                                 }
@@ -2053,7 +2044,7 @@ Item {
                                                 width: 48
                                                 height: 48
                                                 radius: 6
-                                                color: Theme.getDiffColor(songItemData.diffColorTag || (songItemData.thumbnailDifficulty !== undefined ? songItemData.thumbnailDifficulty : 2))
+                                                color: "transparent"
                                                 clip: true
 
                                                 Image {
@@ -2073,14 +2064,7 @@ Item {
                                                     visible: status === Image.Ready
                                                 }
 
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: songItemData.difficultyName || ""
-                                                    font.pixelSize: 14
-                                                    font.bold: true
-                                                    color: Theme.bgCard
-                                                    visible: thumbImage.status !== Image.Ready
-                                                }
+
                                             }
 
                                             // Title & Artist
@@ -2337,6 +2321,11 @@ Item {
             radius: isNarrow ? 0 : 20
             clip: true
             
+            // 트랜지션 중에는 캐시된 직전 곡을 공급하여 difficultiesToShow 및 하위 카드 전체 증발 차단
+            property var currentSong: (typeof detailedViewStackContainer !== "undefined" && ((detailedViewStackContainer.isCrossfading && detailedViewStackContainer.isPackDashboardTarget && detailedViewStackContainer.wasSongSelectedBeforeTransition) || detailedViewStackContainer.isDeselectingPack) && detailedViewStackContainer.cachedLastSong)
+                ? detailedViewStackContainer.cachedLastSong
+                : statsRoot.currentSong
+
             // Get ALL difficulties to display (regardless of Song/Chart mode or filter)
             // Filtered charts will be shown with isFiltered=true for gray styling
             property var difficultiesToShow: {
@@ -2372,38 +2361,333 @@ Item {
                     }
                 }
 
-                // [Pack Dashboard View]
-                ScrollView {
-                    id: packDashboardScrollView
+                // [Detailed View Stack Container (Fade-Over Overlay)]
+                Item {
+                    id: detailedViewStackContainer
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    contentWidth: availableWidth
-                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                     clip: true
-                    visible: Boolean(statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.isPackDetailView)
 
-                    property var currentPack: statisticsHandler ? statisticsHandler.currentPack : null
+                    readonly property bool isPackDashboardTarget: Boolean(statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.isPackDetailView)
+                    property bool isCrossfading: false
+                    onIsCrossfadingChanged: {
+                        statsRoot.isDetailedViewCrossfading = isCrossfading
+                    }
+                    property bool isDeselectingPack: false
+                    onIsDeselectingPackChanged: {
+                        statsRoot.isDeselectingPack = isDeselectingPack
+                    }
+                    property bool wasInPackDetailViewBeforeDeselect: true
+                    property bool wasPackSelected: false
+                    property bool wasSongSelected: false
+                    property bool wasPackSelectedBeforeTransition: false
+                    property bool wasSongSelectedBeforeTransition: false
+                    property var cachedLastSong: null
+                    property var cachedLastPack: null
+                    property bool wasInPackSubSong: false
+                    property bool isReturningFromPackSubSong: false
 
-                    ColumnLayout {
-                        width: parent.width
-                        spacing: 16
+                    function startPackSubSongDeselectTransition() {
+                        isDeselectingPack = true;
+                        wasInPackDetailViewBeforeDeselect = false;
+                        isReturningFromPackSubSong = true;
+                        statsRoot.isDetailedViewCrossfading = true;
 
-                        // Empty State if no pack is selected
-                        Text {
-                            visible: !statsRoot.isPackSelected || !packDashboardScrollView.currentPack || !packDashboardScrollView.currentPack.id
-                            text: "Select a pack from the list to view details"
-                            color: Theme.textLight
-                            font.pixelSize: 16
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.topMargin: 40
+                        if (typeof packDashboardContentFadeOut !== "undefined" && packDashboardContentFadeOut) packDashboardContentFadeOut.stop();
+                        if (typeof songDetailFadeIn !== "undefined" && songDetailFadeIn) songDetailFadeIn.stop();
+
+                        songDetailScrollView.opacity = 1.0;
+                        songDetailScrollView.z = 1;
+                        packDashboardScrollView.z = 0;
+                        songDetailScrollView.visible = true;
+                        packDashboardScrollView.visible = true;
+
+                        songDetailFadeOut.restart();
+                    }
+
+                    function startPackDashboardDeselectTransition() {
+                        isDeselectingPack = true;
+                        wasInPackDetailViewBeforeDeselect = true;
+                        isReturningFromPackSubSong = false;
+                        statsRoot.isDetailedViewCrossfading = true;
+
+                        if (typeof songDetailFadeIn !== "undefined" && songDetailFadeIn) songDetailFadeIn.stop();
+                        if (typeof songDetailFadeOut !== "undefined" && songDetailFadeOut) songDetailFadeOut.stop();
+
+                        songDetailScrollView.visible = false;
+                        songDetailScrollView.opacity = 0.0;
+                        packDashboardScrollView.visible = true;
+                        packDashboardScrollView.opacity = 1.0;
+
+                        if (typeof packDashboardContentColumn !== "undefined" && packDashboardContentColumn) {
+                            packDashboardContentColumn.opacity = 1.0;
+                        }
+                        if (typeof packDashboardContentFadeOut !== "undefined" && packDashboardContentFadeOut) {
+                            packDashboardContentFadeOut.restart();
+                        }
+                    }
+
+                    Connections {
+                        target: statsRoot
+                        function onCurrentSongChanged() {
+                            detailedViewStackContainer.wasSongSelected = Boolean(statsRoot.currentSong)
+                            if (statsRoot.currentSong) {
+                                detailedViewStackContainer.cachedLastSong = statsRoot.currentSong
+                            }
+                        }
+                    }
+
+                    Connections {
+                        target: statisticsHandler
+                        function onCurrentPackChanged() {
+                            if (detailedViewStackContainer.isDeselectingPack) return
+                            if (statisticsHandler && statisticsHandler.currentPack && statisticsHandler.currentPack.id) {
+                                detailedViewStackContainer.cachedLastPack = statisticsHandler.currentPack
+                                statsRoot.cachedLastPack = statisticsHandler.currentPack
+                            }
+                        }
+                        function onIsPackDetailViewChanged() {
+                            if (statisticsHandler && statisticsHandler.displayMode === "pack" && !statisticsHandler.isPackDetailView) {
+                                detailedViewStackContainer.wasInPackSubSong = true
+                            }
+                        }
+                        function onExpandedPackIdsChanged() {
+                            var isSelectedNow = Boolean(statisticsHandler && statisticsHandler.expandedPackIds && statisticsHandler.expandedPackIds.length > 0)
+                            if (detailedViewStackContainer.wasPackSelected && !isSelectedNow && statisticsHandler && statisticsHandler.displayMode === "pack" && !detailedViewStackContainer.isDeselectingPack) {
+                                detailedViewStackContainer.startPackDashboardDeselectTransition()
+                            }
+                            detailedViewStackContainer.wasPackSelected = isSelectedNow
+                        }
+                        function onDisplayModeChanged() {
+                            if (statisticsHandler && statisticsHandler.displayMode !== "pack") {
+                                detailedViewStackContainer.wasInPackSubSong = false
+                            }
+                        }
+                    }
+
+                    onIsPackDashboardTargetChanged: {
+                        wasPackSelectedBeforeTransition = wasPackSelected
+                        wasSongSelectedBeforeTransition = wasSongSelected
+                        statsRoot.wasPackSelectedBeforeTransition = wasPackSelected
+
+                        var isPackDeselectingNow = Boolean(wasInPackSubSong && statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.expandedPackIds && statisticsHandler.expandedPackIds.length === 0)
+                        if (isPackDeselectingNow) {
+                            startPackSubSongDeselectTransition()
+                            return
                         }
 
-                        // Content Column when currentPack is valid
+                        if (isPackDashboardTarget && wasInPackSubSong) {
+                            isReturningFromPackSubSong = true
+                        } else {
+                            isReturningFromPackSubSong = false
+                        }
+                        isCrossfading = true
+                        statsRoot.isDetailedViewCrossfading = true
+                        if (isPackDashboardTarget) {
+                            songDetailFadeIn.stop()
+                            packDashboardFadeOut.stop()
+                            packDashboardScrollView.opacity = 0.0
+                            songDetailScrollView.opacity = 1.0
+                            packDashboardScrollView.z = 1
+                            songDetailScrollView.z = 0
+                            packDashboardScrollView.visible = true
+                            songDetailScrollView.visible = true
+                            packDashboardFadeIn.restart()
+                            songDetailFadeOut.restart()
+                        } else {
+                            packDashboardFadeIn.stop()
+                            songDetailFadeOut.stop()
+                            if (typeof packDashboardContentFadeIn !== "undefined" && packDashboardContentFadeIn) {
+                                packDashboardContentFadeIn.stop()
+                            }
+                            if (typeof packDashboardContentColumn !== "undefined" && packDashboardContentColumn && wasPackSelectedBeforeTransition) {
+                                packDashboardContentColumn.opacity = 1.0
+                            }
+                            songDetailScrollView.opacity = 0.0
+                            packDashboardScrollView.opacity = 1.0
+                            songDetailScrollView.z = 1
+                            packDashboardScrollView.z = 0
+                            songDetailScrollView.visible = true
+                            packDashboardScrollView.visible = true
+                            songDetailFadeIn.restart()
+                            packDashboardFadeOut.restart()
+                            if (typeof bgImage !== "undefined" && bgImage) bgImage.ensureLoaded()
+                            if (typeof mainThumbImage !== "undefined" && mainThumbImage) mainThumbImage.ensureLoaded()
+                        }
+                    }
+
+                    Component.onCompleted: {
+                        if (statsRoot.currentSong) {
+                            cachedLastSong = statsRoot.currentSong
+                        }
+                        if (statisticsHandler && statisticsHandler.currentPack && statisticsHandler.currentPack.id) {
+                            cachedLastPack = statisticsHandler.currentPack
+                            statsRoot.cachedLastPack = statisticsHandler.currentPack
+                        }
+                        wasPackSelected = Boolean(statisticsHandler && statisticsHandler.expandedPackIds && statisticsHandler.expandedPackIds.length > 0)
+                        wasSongSelected = Boolean(statsRoot.currentSong)
+                        wasPackSelectedBeforeTransition = wasPackSelected
+                        wasSongSelectedBeforeTransition = wasSongSelected
+                        statsRoot.wasPackSelectedBeforeTransition = wasPackSelected
+                        if (isPackDashboardTarget) {
+                            packDashboardScrollView.visible = true
+                            packDashboardScrollView.opacity = 1.0
+                            songDetailScrollView.visible = false
+                            songDetailScrollView.opacity = 0.0
+                        } else {
+                            songDetailScrollView.visible = true
+                            songDetailScrollView.opacity = 1.0
+                            packDashboardScrollView.visible = false
+                            packDashboardScrollView.opacity = 0.0
+                        }
+                    }
+
+                    // [Pack Dashboard View]
+                    ScrollView {
+                        id: packDashboardScrollView
+                        anchors.fill: parent
+                        contentWidth: availableWidth
+                        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                        clip: true
+                        visible: detailedViewStackContainer.isPackDashboardTarget || detailedViewStackContainer.isCrossfading
+
+                        opacity: 1.0
+
+                        NumberAnimation {
+                            id: packDashboardFadeIn
+                            target: packDashboardScrollView
+                            property: "opacity"
+                            running: false
+                            from: 0.0
+                            to: 1.0
+                            duration: 140
+                            easing.type: Easing.OutQuad
+                            onFinished: {
+                                if (detailedViewStackContainer.isPackDashboardTarget) {
+                                    detailedViewStackContainer.isCrossfading = false
+                                    detailedViewStackContainer.isReturningFromPackSubSong = false
+                                    detailedViewStackContainer.wasInPackSubSong = false
+                                    detailedViewStackContainer.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
+                                    detailedViewStackContainer.wasSongSelectedBeforeTransition = detailedViewStackContainer.wasSongSelected
+                                    statsRoot.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
+                                    songDetailScrollView.visible = false
+                                    songDetailScrollView.opacity = 0.0
+                                    if (typeof bgImage !== "undefined" && bgImage) bgImage.reset()
+                                    if (typeof mainThumbImage !== "undefined" && mainThumbImage) mainThumbImage.reset()
+                                }
+                            }
+                        }
+
+                        NumberAnimation {
+                            id: packDashboardFadeOut
+                            target: packDashboardScrollView
+                            property: "opacity"
+                            running: false
+                            from: 1.0
+                            to: 0.0
+                            duration: 140
+                            easing.type: Easing.OutQuad
+                            onFinished: {
+                                if (!detailedViewStackContainer.isPackDashboardTarget) {
+                                    detailedViewStackContainer.isCrossfading = false
+                                    detailedViewStackContainer.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
+                                    detailedViewStackContainer.wasSongSelectedBeforeTransition = detailedViewStackContainer.wasSongSelected
+                                    statsRoot.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
+                                    packDashboardScrollView.visible = false
+                                    packDashboardScrollView.opacity = 0.0
+                                }
+                            }
+                        }
+
+                        onVisibleChanged: {
+                            if (visible) {
+                                if (!detailedViewStackContainer.isCrossfading) {
+                                    packDashboardFadeIn.restart()
+                                }
+                            }
+                        }
+
+                        property var currentPack: ((detailedViewStackContainer.isCrossfading || statsRoot.isDetailedViewCrossfading || detailedViewStackContainer.isDeselectingPack) && (detailedViewStackContainer.isDeselectingPack || (!detailedViewStackContainer.isPackDashboardTarget && detailedViewStackContainer.wasPackSelectedBeforeTransition)) && (detailedViewStackContainer.cachedLastPack || statsRoot.cachedLastPack))
+                            ? (detailedViewStackContainer.cachedLastPack || statsRoot.cachedLastPack)
+                            : (statisticsHandler ? statisticsHandler.currentPack : null)
+
                         ColumnLayout {
-                            Layout.fillWidth: true
-                            Layout.margins: isNarrow ? 12 : 20
+                            width: parent.width
                             spacing: 16
-                            visible: Boolean(statsRoot.isPackSelected && packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.id)
+
+                            // Empty State if no pack is selected
+                            Text {
+                                id: packEmptyStateText
+                                visible: (!statsRoot.isPackSelected || !packDashboardScrollView.currentPack || !packDashboardScrollView.currentPack.id) && !detailedViewStackContainer.isDeselectingPack
+                                text: "Select a pack from the list to view details"
+                                color: Theme.textLight
+                                font.pixelSize: 16
+                                Layout.alignment: Qt.AlignHCenter
+                                Layout.topMargin: 40
+                                opacity: 1.0
+                                onVisibleChanged: {
+                                    if (visible) {
+                                        packEmptyStateFadeIn.restart()
+                                    }
+                                }
+                            }
+
+                            NumberAnimation {
+                                id: packEmptyStateFadeIn
+                                target: packEmptyStateText
+                                property: "opacity"
+                                running: false
+                                from: 0.0
+                                to: 1.0
+                                duration: 140
+                                easing.type: Easing.OutQuad
+                            }
+
+                            // Content Column when currentPack is valid
+                            ColumnLayout {
+                                id: packDashboardContentColumn
+                                Layout.fillWidth: true
+                                Layout.margins: isNarrow ? 12 : 20
+                                spacing: 16
+                                visible: Boolean((statsRoot.isPackSelected || (detailedViewStackContainer.isCrossfading && !detailedViewStackContainer.isPackDashboardTarget && detailedViewStackContainer.wasPackSelectedBeforeTransition) || (detailedViewStackContainer.isDeselectingPack && detailedViewStackContainer.wasInPackDetailViewBeforeDeselect)) && packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.id)
+
+                                opacity: 1.0
+                                NumberAnimation on opacity {
+                                    id: packDashboardContentFadeIn
+                                    running: false
+                                    from: 0.0
+                                    to: 1.0
+                                    duration: 140
+                                }
+
+                                NumberAnimation {
+                                    id: packDashboardContentFadeOut
+                                    target: packDashboardContentColumn
+                                    property: "opacity"
+                                    running: false
+                                    from: 1.0
+                                    to: 0.0
+                                    duration: 140
+                                    easing.type: Easing.OutQuad
+                                    onFinished: {
+                                        if (detailedViewStackContainer.isDeselectingPack) {
+                                            detailedViewStackContainer.isDeselectingPack = false
+                                            detailedViewStackContainer.wasInPackSubSong = false
+                                            statsRoot.isDetailedViewCrossfading = false
+                                            packDashboardContentColumn.opacity = 1.0
+                                        }
+                                    }
+                                }
+
+                                onVisibleChanged: {
+                                    if (visible) {
+                                        if (!detailedViewStackContainer.isCrossfading && !statsRoot.isDetailedViewCrossfading && !detailedViewStackContainer.isDeselectingPack) {
+                                            packDashboardContentFadeIn.restart()
+                                        } else {
+                                            packDashboardContentColumn.opacity = 1.0
+                                        }
+                                    }
+                                }
 
                             // 1. Pack Hero Card
                             Rectangle {
@@ -2794,7 +3078,7 @@ Item {
                                                 Layout.preferredHeight: 56
                                                 radius: 8
                                                 clip: true
-                                                color: (bestPotCard.potRecord && (bestPotCard.potRecord.potential > 0 || bestPotCard.potRecord.value > 0)) ? Theme.getDiffColor(bestPotCard.potRecord.diff_color_tag) : Theme.bgHover
+                                                color: "transparent"
 
                                                 Image {
                                                     id: potThumbImage
@@ -2811,14 +3095,7 @@ Item {
                                                     visible: status === Image.Ready
                                                 }
 
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: (bestPotCard.potRecord && (bestPotCard.potRecord.potential > 0 || bestPotCard.potRecord.value > 0)) ? (bestPotCard.potRecord.diff_name || "") : "-"
-                                                    font.pixelSize: 11
-                                                    font.bold: true
-                                                    color: (bestPotCard.potRecord && (bestPotCard.potRecord.potential > 0 || bestPotCard.potRecord.value > 0)) ? Theme.bgCard : Theme.textMuted
-                                                    visible: potThumbImage.status !== Image.Ready
-                                                }
+
                                             }
 
                                             // Right details
@@ -2858,11 +3135,9 @@ Item {
                                         cursorShape: (bestPotCard.potRecord && bestPotCard.potRecord.song_id) ? Qt.PointingHandCursor : Qt.ArrowCursor
                                         onClicked: {
                                             var packId = packDashboardScrollView.currentPack ? packDashboardScrollView.currentPack.id : ""
+                                            var diff = (bestPotCard.potRecord && bestPotCard.potRecord.diff_index !== undefined) ? bestPotCard.potRecord.diff_index : -1
                                             if (statisticsHandler && packId && bestPotCard.potRecord && bestPotCard.potRecord.song_id) {
-                                                statisticsHandler.selectPackSong(packId, bestPotCard.potRecord.song_id)
-                                                if (bestPotCard.potRecord.diff_index !== undefined) {
-                                                    statisticsHandler.setSelectedDifficulty(bestPotCard.potRecord.diff_index)
-                                                }
+                                                statisticsHandler.selectPackSong(packId, bestPotCard.potRecord.song_id, diff)
                                                 if (typeof statsRoot !== "undefined" && statsRoot.isNarrow) {
                                                     mobileStack.push(detailPageComponent)
                                                 }
@@ -2906,7 +3181,7 @@ Item {
                                                 Layout.preferredHeight: 56
                                                 radius: 8
                                                 clip: true
-                                                color: (bestScoreCard.scoreRecord && ((bestScoreCard.scoreRecord.score !== undefined && bestScoreCard.scoreRecord.score > 0) || (bestScoreCard.scoreRecord.value !== undefined && bestScoreCard.scoreRecord.value > 0))) ? Theme.getDiffColor(bestScoreCard.scoreRecord.diff_color_tag) : Theme.bgHover
+                                                color: "transparent"
 
                                                 Image {
                                                     id: scoreThumbImage
@@ -2923,14 +3198,7 @@ Item {
                                                     visible: status === Image.Ready
                                                 }
 
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: (bestScoreCard.scoreRecord && ((bestScoreCard.scoreRecord.score !== undefined && bestScoreCard.scoreRecord.score > 0) || (bestScoreCard.scoreRecord.value !== undefined && bestScoreCard.scoreRecord.value > 0))) ? (bestScoreCard.scoreRecord.diff_name || "") : "-"
-                                                    font.pixelSize: 11
-                                                    font.bold: true
-                                                    color: (bestScoreCard.scoreRecord && ((bestScoreCard.scoreRecord.score !== undefined && bestScoreCard.scoreRecord.score > 0) || (bestScoreCard.scoreRecord.value !== undefined && bestScoreCard.scoreRecord.value > 0))) ? Theme.bgCard : Theme.textMuted
-                                                    visible: scoreThumbImage.status !== Image.Ready
-                                                }
+
                                             }
 
                                             // Right details
@@ -2970,11 +3238,9 @@ Item {
                                         cursorShape: (bestScoreCard.scoreRecord && bestScoreCard.scoreRecord.song_id) ? Qt.PointingHandCursor : Qt.ArrowCursor
                                         onClicked: {
                                             var packId = packDashboardScrollView.currentPack ? packDashboardScrollView.currentPack.id : ""
+                                            var diff = (bestScoreCard.scoreRecord && bestScoreCard.scoreRecord.diff_index !== undefined) ? bestScoreCard.scoreRecord.diff_index : -1
                                             if (statisticsHandler && packId && bestScoreCard.scoreRecord && bestScoreCard.scoreRecord.song_id) {
-                                                statisticsHandler.selectPackSong(packId, bestScoreCard.scoreRecord.song_id)
-                                                if (bestScoreCard.scoreRecord.diff_index !== undefined) {
-                                                    statisticsHandler.setSelectedDifficulty(bestScoreCard.scoreRecord.diff_index)
-                                                }
+                                                statisticsHandler.selectPackSong(packId, bestScoreCard.scoreRecord.song_id, diff)
                                                 if (typeof statsRoot !== "undefined" && statsRoot.isNarrow) {
                                                     mobileStack.push(detailPageComponent)
                                                 }
@@ -3016,7 +3282,7 @@ Item {
                                                 Layout.preferredHeight: 56
                                                 radius: 8
                                                 clip: true
-                                                color: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.most_played_thumb_diff !== undefined) ? Theme.getDiffColor(packDashboardScrollView.currentPack.most_played_thumb_diff) : Theme.bgHover
+                                                color: "transparent"
 
                                                 Image {
                                                     id: mostPlayedThumbImage
@@ -3041,14 +3307,7 @@ Item {
                                                     visible: status === Image.Ready
                                                 }
 
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.most_played_song_title) ? (packDashboardScrollView.currentPack.most_played_song_title.charAt(0) || "🎵") : "🎵"
-                                                    font.pixelSize: 14
-                                                    font.bold: true
-                                                    color: Theme.textMuted
-                                                    visible: mostPlayedThumbImage.status !== Image.Ready
-                                                }
+
                                             }
 
                                             // Right details (곡명 + 플레이수)
@@ -3084,11 +3343,9 @@ Item {
                                         cursorShape: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.most_played_song_id) ? Qt.PointingHandCursor : Qt.ArrowCursor
                                         onClicked: {
                                             var p = packDashboardScrollView.currentPack
+                                            var diff = (p && p.most_played_thumb_diff !== undefined) ? p.most_played_thumb_diff : -1
                                             if (statisticsHandler && p && p.id && p.most_played_song_id) {
-                                                statisticsHandler.selectPackSong(p.id, p.most_played_song_id)
-                                                if (p.most_played_thumb_diff !== undefined) {
-                                                    statisticsHandler.setSelectedDifficulty(p.most_played_thumb_diff)
-                                                }
+                                                statisticsHandler.selectPackSong(p.id, p.most_played_song_id, diff)
                                                 if (typeof statsRoot !== "undefined" && statsRoot.isNarrow) {
                                                     mobileStack.push(detailPageComponent)
                                                 }
@@ -3663,19 +3920,134 @@ Item {
                     }
                 }
 
-                // [Song Header]
+                // [Song Detail View]
                 ScrollView {
-                    Layout.fillWidth: true; Layout.fillHeight: true
+                    id: songDetailScrollView
+                    anchors.fill: parent
                     contentWidth: availableWidth; ScrollBar.horizontal.policy: ScrollBar.AlwaysOff; clip: true
-                    visible: !Boolean(statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.isPackDetailView)
-                    
-                    ColumnLayout {
-                        width: parent.width; spacing: 0
+                    visible: !detailedViewStackContainer.isPackDashboardTarget || detailedViewStackContainer.isCrossfading || (detailedViewStackContainer.isDeselectingPack && !detailedViewStackContainer.wasInPackDetailViewBeforeDeselect)
 
-                        // Song info header
-                        Item {
-                            id: headerContainer
-                            property bool showBackToPack: Boolean(statisticsHandler && statisticsHandler.displayMode === "pack" && !statisticsHandler.isPackDetailView)
+                    property var currentSong: (typeof detailedViewStackContainer !== "undefined" && ((detailedViewStackContainer.isCrossfading && detailedViewStackContainer.isPackDashboardTarget && detailedViewStackContainer.wasSongSelectedBeforeTransition) || detailedViewStackContainer.isDeselectingPack) && detailedViewStackContainer.cachedLastSong)
+                        ? detailedViewStackContainer.cachedLastSong
+                        : statsRoot.currentSong
+
+                    opacity: 1.0
+
+                    NumberAnimation {
+                        id: songDetailFadeIn
+                        target: songDetailScrollView
+                        property: "opacity"
+                        running: false
+                        from: 0.0
+                        to: 1.0
+                        duration: 140
+                        easing.type: Easing.OutQuad
+                        onFinished: {
+                            if (!detailedViewStackContainer.isPackDashboardTarget) {
+                                detailedViewStackContainer.isCrossfading = false
+                                detailedViewStackContainer.wasInPackSubSong = Boolean(statisticsHandler && statisticsHandler.displayMode === "pack" && !statisticsHandler.isPackDetailView)
+                                detailedViewStackContainer.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
+                                detailedViewStackContainer.wasSongSelectedBeforeTransition = detailedViewStackContainer.wasSongSelected
+                                statsRoot.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
+                                packDashboardScrollView.visible = false
+                                packDashboardScrollView.opacity = 0.0
+                            }
+                        }
+                    }
+
+                    NumberAnimation {
+                        id: songDetailFadeOut
+                        target: songDetailScrollView
+                        property: "opacity"
+                        running: false
+                        from: 1.0
+                        to: 0.0
+                        duration: 140
+                        easing.type: Easing.OutQuad
+                        onFinished: {
+                            if (detailedViewStackContainer.isPackDashboardTarget) {
+                                detailedViewStackContainer.isCrossfading = false
+                                detailedViewStackContainer.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
+                                detailedViewStackContainer.wasSongSelectedBeforeTransition = detailedViewStackContainer.wasSongSelected
+                                statsRoot.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
+                                songDetailScrollView.visible = false
+                                songDetailScrollView.opacity = 0.0
+                                if (typeof bgImage !== "undefined" && bgImage) bgImage.reset()
+                                if (typeof mainThumbImage !== "undefined" && mainThumbImage) mainThumbImage.reset()
+                            }
+                            if (detailedViewStackContainer.isDeselectingPack) {
+                                detailedViewStackContainer.isDeselectingPack = false
+                                detailedViewStackContainer.isReturningFromPackSubSong = false
+                                detailedViewStackContainer.wasInPackSubSong = false
+                                detailedViewStackContainer.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
+                                detailedViewStackContainer.wasSongSelectedBeforeTransition = detailedViewStackContainer.wasSongSelected
+                                statsRoot.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
+                                statsRoot.isDetailedViewCrossfading = false
+                                songDetailScrollView.visible = false
+                                songDetailScrollView.opacity = 0.0
+                                if (typeof bgImage !== "undefined" && bgImage) bgImage.reset()
+                                if (typeof mainThumbImage !== "undefined" && mainThumbImage) mainThumbImage.reset()
+                            }
+                        }
+                    }
+
+                    onVisibleChanged: {
+                        if (visible) {
+                            if (!detailedViewStackContainer.isCrossfading) {
+                                songDetailFadeIn.restart()
+                            }
+                            if (typeof bgImage !== "undefined" && bgImage) bgImage.ensureLoaded()
+                            if (typeof mainThumbImage !== "undefined" && mainThumbImage) mainThumbImage.ensureLoaded()
+                        }
+                    }
+
+                    ColumnLayout {
+                        width: parent.width; spacing: 16
+
+                        // 1. Empty state when no song selected (Pack placeholder 규격과 100% 통일)
+                        Text {
+                            visible: !currentSong
+                            text: (statisticsHandler && statisticsHandler.displayMode === "chart") ?
+                                  "Select a chart from the list to view details" :
+                                  "Select a song from the list to view details"
+                            color: Theme.textLight
+                            font.pixelSize: 16
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.topMargin: 40
+                        }
+
+                        // 2. Content Column when currentSong is valid
+                        ColumnLayout {
+                            id: songDetailContentColumn
+                            Layout.fillWidth: true
+                            spacing: 0
+                            visible: Boolean(currentSong)
+
+                            opacity: 1.0
+                            NumberAnimation on opacity {
+                                id: songDetailContentFadeIn
+                                running: false
+                                from: 0.0
+                                to: 1.0
+                                duration: 140
+                            }
+                            onVisibleChanged: {
+                                if (visible) {
+                                    if (!songDetailFadeIn.running) {
+                                        songDetailContentFadeIn.restart()
+                                    } else {
+                                        songDetailContentColumn.opacity = 1.0
+                                    }
+                                }
+                            }
+
+                            // Song info header
+                            Item {
+                                id: headerContainer
+                                property bool showBackToPack: Boolean(
+                                    (statisticsHandler && statisticsHandler.displayMode === "pack" && !statisticsHandler.isPackDetailView) ||
+                                    (typeof detailedViewStackContainer !== "undefined" && (detailedViewStackContainer.isCrossfading || detailedViewStackContainer.isDeselectingPack) && detailedViewStackContainer.isReturningFromPackSubSong)
+                                )
                             Layout.fillWidth: true
                             Layout.preferredHeight: showBackToPack ? (isNarrow ? 236 : 240) : (isNarrow ? 180 : 200)
                             implicitHeight: Layout.preferredHeight
@@ -3816,21 +4188,18 @@ Item {
                                     }
 
                                     // Blurred Background Image
-                                    Image {
+                                    CrossfadeImage {
                                         id: bgImage
                                         anchors.fill: parent
                                         anchors.margins: -20
-                                        asynchronous: true
-                                        cache: true
-                                        source: {
+                                        targetSource: {
                                             var _v = statsRoot.thumbnailVersion;
                                             return statsHandler && currentSong ? statsHandler.getThumbnailPathForDifficulty(currentSong.arcaeaId || "", headerContainer.effectiveHeaderDiff) : ""
                                         }
                                         fillMode: Image.PreserveAspectCrop
                                         antialiasing: true
-                                        visible: status === Image.Ready
                                         
-                                        layer.enabled: visible
+                                        layer.enabled: true
                                         layer.effect: MultiEffect {
                                             blurEnabled: true
                                             blur: 0.6
@@ -3869,6 +4238,7 @@ Item {
                                         height: mainThumbRect.height + 20
                                         anchors.centerIn: mainThumbRect
                                         anchors.verticalCenterOffset: 6
+                                        opacity: (typeof mainThumbImage !== "undefined" && mainThumbImage) ? mainThumbImage.activeOpacity : 0.0
                                         
                                         // Properties for efficient shadow updates
                                         property int diff: headerContainer.effectiveHeaderDiff
@@ -3878,6 +4248,9 @@ Item {
                                             return statsHandler ? statsHandler.getThumbnailColor(arcaeaId, diff) : Theme.bgCard
                                         }
                                         property color shadowColor: shadowColorString
+                                        Behavior on shadowColor {
+                                            ColorAnimation { duration: 140; easing.type: Easing.OutQuad }
+                                        }
                                         
                                         layer.enabled: true
                                         layer.effect: MultiEffect {
@@ -3901,22 +4274,21 @@ Item {
                                         id: mainThumbRect
                                         anchors.fill: parent
                                         radius: 15
-                                        color: currentSong ? Theme.getDiffColor(headerContainer.effectiveHeaderDiff) : Theme.accent
-                                        border.color: Theme.bgCard; border.width: 2
+                                        color: "transparent"
+                                        border.color: Qt.rgba(Theme.bgCard.r, Theme.bgCard.g, Theme.bgCard.b, (typeof mainThumbImage !== "undefined" && mainThumbImage) ? mainThumbImage.activeOpacity : 0.0)
+                                        border.width: 2
                                         clip: true
                                         
-                                        Image {
+                                        CrossfadeImage {
+                                            id: mainThumbImage
                                             anchors.fill: parent
                                             anchors.margins: -1 // Slight negative margin to avoid edge artifacts
-                                            asynchronous: true
-                                            cache: true
-                                            source: {
+                                            targetSource: {
                                                 var _v = statsRoot.thumbnailVersion;
                                                 return statsHandler && currentSong ? statsHandler.getThumbnailPathForDifficulty(currentSong.arcaeaId || "", headerContainer.effectiveHeaderDiff) : ""
                                             }
                                             fillMode: Image.PreserveAspectCrop
                                             smooth: true
-                                            visible: status === Image.Ready
                                         }
                                     }
                                 }
@@ -4471,21 +4843,14 @@ Item {
                                     }
                                 }
                             }
-
-                            // Empty state when no song selected
-                            Text {
-                                visible: !currentSong
-                                text: "Select a song from the list to view details"
-                                color: Theme.textLight
-                                font.pixelSize: 16
-                                Layout.alignment: Qt.AlignHCenter
-                            }
                         }
                     }
                 }
             }
         }
     }
+}
+}
     
     // =========================================================================
     // Filter Popup

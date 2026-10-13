@@ -61,6 +61,7 @@ class StatisticsHandler(QObject):
 
         # Selection state for mode sync
         self._selected_song_db_id = None  # songs.id of selected song
+        self._last_selected_song_db_id = None  # Cache for restoring selection when switching back from pack
         self._selected_difficulty = 2  # Default to FTR (0=PST,1=PRS,2=FTR,3=BYD,4=ETR)
 
         self._service.load_data(
@@ -319,7 +320,7 @@ class StatisticsHandler(QObject):
                 self._selected_song_db_id = None
                 self._is_pack_detail_view = True
             else:
-                # Case B: 팩 내 잔여 곡이 0개가 된 경우 -> 팩 선택 해제 및 전체 팩 목록 복귀 (Task 45 연동)
+                # Case B: 팩 내 잔여 곡이 0개가 된 경우 -> 팩 선택 해제 및 전체 팩 목록 복귀 (Task 45/Task 82 연동)
                 self._expanded_pack_ids.clear()
                 self._is_pack_detail_view = True
                 self._selected_item = None
@@ -361,16 +362,20 @@ class StatisticsHandler(QObject):
             else:
                 new_current = self._pack_items[0] if self._pack_items else None
 
+        pack_changed = (self._current_pack is not new_current)
         self._current_pack = new_current
         self.packItemsChanged.emit()
-        self.currentPackChanged.emit()
 
+        # [Task 82] QML 트랜지션 머신이 먼저 deselect 상태를 인지해 cachedLastPack을 보존하도록 선행 방출
         if self._expanded_pack_ids != old_expanded_ids:
             self.expandedPackIdsChanged.emit()
         if self._is_pack_detail_view != old_is_pack_detail_view:
             self.isPackDetailViewChanged.emit()
         if item_metadata_updated or (self._selected_item is not old_selected_item):
             self.selectedItemChanged.emit()
+
+        if pack_changed:
+            self.currentPackChanged.emit()
 
 
     def _full_rebuild(self, selection_mode: str = 'restore'):
@@ -694,6 +699,8 @@ class StatisticsHandler(QObject):
                 if old_mode in ["song", "chart"] and self._selected_item:
                     selected_song_id = self._selected_item.get('arcaeaId') or self._selected_item.get('id')
                     selected_db_id = self._selected_item.get('songDbId') or self._selected_song_db_id
+                    if selected_db_id is not None:
+                        self._last_selected_song_db_id = selected_db_id
                     for pack in self._pack_items:
                         if any(
                             (selected_db_id is not None and s.get('songDbId') == selected_db_id)
@@ -710,14 +717,28 @@ class StatisticsHandler(QObject):
                     self._expanded_pack_ids.clear()
                     self._current_pack = self._pack_items[0] if self._pack_items else None
 
+                # 팩 대시보드로 진입하므로 선택 곡 비움 (직전 곡은 _last_selected_song_db_id에 보존)
+                self._selected_item = None
+                self._selected_song_db_id = None
+
                 # 3. 모든 상태가 완전히 세팅된 후 원자적으로 시그널 일괄 방출 (중간 불일치 상태 0%)
+                # Detailed View 크로스페이드 트랜지션이 먼저 인지될 수 있도록 isPackDetailViewChanged를 선행 방출
+                self.isPackDetailViewChanged.emit()
                 self.currentPackChanged.emit()
                 self.expandedPackIdsChanged.emit()
                 self.packItemsChanged.emit()
-                self.isPackDetailViewChanged.emit()
                 self.dataChanged.emit()
+                self.selectedItemChanged.emit()
             else:
+                if old_mode == "pack" and not self._expanded_pack_ids:
+                    # 팩 목록(팩 미선택) 상태에서 Song/Chart 모드로 전환 시 이전 곡을 복원하지 않음
+                    self._selected_song_db_id = None
+                    self._last_selected_song_db_id = None
+                else:
+                    if self._selected_song_db_id is None and self._last_selected_song_db_id is not None:
+                        self._selected_song_db_id = self._last_selected_song_db_id
                 self._on_display_mode_changed()
+                self.isPackDetailViewChanged.emit()
 
 
     @pyqtSlot(str)
@@ -876,6 +897,7 @@ class StatisticsHandler(QObject):
             self._is_pack_detail_view = True
             self._selected_item = None
             self._selected_song_db_id = None
+            self._last_selected_song_db_id = None
             self.selectedItemChanged.emit()
             self.isPackDetailViewChanged.emit()
             self.expandedPackIdsChanged.emit()
@@ -900,13 +922,16 @@ class StatisticsHandler(QObject):
         self._is_pack_detail_view = True
         self._selected_item = None
         self._selected_song_db_id = None
-        self.selectedItemChanged.emit()
+        self._last_selected_song_db_id = None
         self.isPackDetailViewChanged.emit()
+        self.selectedItemChanged.emit()
         self.expandedPackIdsChanged.emit()
 
     @pyqtSlot(str, int)
+    @pyqtSlot(str, int, int)
     @pyqtSlot(str, 'QVariant')
-    def selectPackSong(self, pack_id: str, song_db_id):
+    @pyqtSlot(str, 'QVariant', int)
+    def selectPackSong(self, pack_id: str, song_db_id, target_difficulty: int = -1):
         """팩 내 수록곡 선택 -> 곡 상세 뷰 전환 및 해당 곡 정보 바인딩."""
         self._is_pack_detail_view = False
 
@@ -966,31 +991,39 @@ class StatisticsHandler(QObject):
             self._selected_item = song_item
             self._selected_song_db_id = song_item.get('songDbId') if song_item else None
 
-            best_diff = self._service.get_best_diff_for_sort(
-                self._selected_item, self._sort_mode
-            )
-            if best_diff >= 0:
-                self._selected_difficulty = best_diff
+            if target_difficulty is not None and 0 <= target_difficulty <= 4:
+                self._selected_difficulty = target_difficulty
             else:
-                all_diffs = self._get_item_detail_difficulties(self._selected_item)
-                for diff_num in [3, 4, 2, 1, 0]:
-                    if any(d.get('difficulty') == diff_num and not d.get('isFiltered', False) for d in all_diffs):
-                        self._selected_difficulty = diff_num
-                        break
+                best_diff = self._service.get_best_diff_for_sort(
+                    self._selected_item, self._sort_mode
+                )
+                if best_diff >= 0:
+                    self._selected_difficulty = best_diff
+                else:
+                    all_diffs = self._get_item_detail_difficulties(self._selected_item)
+                    for diff_num in [3, 4, 2, 1, 0]:
+                        if any(d.get('difficulty') == diff_num and not d.get('isFiltered', False) for d in all_diffs):
+                            self._selected_difficulty = diff_num
+                            break
 
             self._attach_details_to_selected()
+            if self._selected_song_db_id is not None:
+                self._last_selected_song_db_id = self._selected_song_db_id
 
-        self.isPackDetailViewChanged.emit()
         self.selectedItemChanged.emit()
+        self.isPackDetailViewChanged.emit()
 
     @pyqtSlot()
     def returnToPackDashboard(self):
         """곡 상세 뷰에서 팩 종합 대시보드로 복귀."""
         self._is_pack_detail_view = True
+        if self._selected_song_db_id is not None:
+            self._last_selected_song_db_id = self._selected_song_db_id
         self._selected_item = None
         self._selected_song_db_id = None
-        self.selectedItemChanged.emit()
+        # QML 트랜지션 머신이 먼저 가동되도록 isPackDetailViewChanged를 선행 방출
         self.isPackDetailViewChanged.emit()
+        self.selectedItemChanged.emit()
 
     @pyqtSlot(str, result=bool)
     def selectPackByName(self, pack_name: str) -> bool:
@@ -1034,11 +1067,14 @@ class StatisticsHandler(QObject):
             self._current_pack = target_pack
             self._expanded_pack_ids = {target_pack['id']}
             self._is_pack_detail_view = True
+            self._selected_item = None
+            self._selected_song_db_id = None
+            self.isPackDetailViewChanged.emit()
             self.currentPackChanged.emit()
             self.expandedPackIdsChanged.emit()
             self.packItemsChanged.emit()
-            self.isPackDetailViewChanged.emit()
             self.dataChanged.emit()
+            self.selectedItemChanged.emit()
             return True
 
         return False
