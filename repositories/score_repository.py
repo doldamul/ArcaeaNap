@@ -5,6 +5,7 @@ Provides clean separation of DB queries from business logic.
 """
 import sqlite3
 import time
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Optional
 
@@ -236,3 +237,129 @@ class PinRepository:
             return result
         except sqlite3.OperationalError:
             return {}
+
+
+class FavoriteRepository:
+    """user_scores.db의 favorites 테이블 접근"""
+
+    FAVORITES_SCHEMA = '''
+        CREATE TABLE IF NOT EXISTS favorites (
+            target_type TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            difficulty INTEGER NOT NULL,
+            created_at INTEGER NOT NULL,
+            PRIMARY KEY (target_type, target_id, difficulty)
+        )
+    '''
+    FAVORITES_INDEX = '''
+        CREATE INDEX IF NOT EXISTS idx_favorites_lookup 
+        ON favorites (target_type, target_id, difficulty)
+    '''
+
+    def ensure_table(self, cursor: sqlite3.Cursor):
+        """favorites 테이블 및 인덱스 존재 확인 및 멱등 생성"""
+        cursor.execute(self.FAVORITES_SCHEMA)
+        cursor.execute(self.FAVORITES_INDEX)
+
+    def is_favorite(self, cursor: sqlite3.Cursor, target_type: str, target_id: str, difficulty: int = -1) -> bool:
+        """해당 항목이 즐겨찾기 상태인지 확인"""
+        self.ensure_table(cursor)
+        cursor.execute(
+            'SELECT 1 FROM favorites WHERE target_type = ? AND target_id = ? AND difficulty = ? LIMIT 1',
+            (target_type, target_id, difficulty)
+        )
+        return cursor.fetchone() is not None
+
+    def toggle_pack_favorite(self, cursor: sqlite3.Cursor, pack_name: str, timestamp: Optional[int] = None) -> bool:
+        """
+        팩 즐겨찾기 토글.
+        Returns:
+            bool: 토글 후 즐겨찾기 상태 (True: 추가됨, False: 삭제됨)
+        """
+        self.ensure_table(cursor)
+        if self.is_favorite(cursor, 'pack', pack_name, -1):
+            cursor.execute(
+                'DELETE FROM favorites WHERE target_type = ? AND target_id = ? AND difficulty = ?',
+                ('pack', pack_name, -1)
+            )
+            return False
+        else:
+            if timestamp is None:
+                timestamp = int(time.time() * 1000)
+            cursor.execute(
+                'INSERT INTO favorites (target_type, target_id, difficulty, created_at) VALUES (?, ?, ?, ?)',
+                ('pack', pack_name, -1, timestamp)
+            )
+            return True
+
+    def toggle_song_favorite(self, cursor: sqlite3.Cursor, arcaea_id: str, timestamp: Optional[int] = None) -> bool:
+        """
+        악곡 즐겨찾기 토글.
+        Returns:
+            bool: 토글 후 즐겨찾기 상태 (True: 추가됨, False: 삭제됨)
+        """
+        self.ensure_table(cursor)
+        if self.is_favorite(cursor, 'song', arcaea_id, -1):
+            cursor.execute(
+                'DELETE FROM favorites WHERE target_type = ? AND target_id = ? AND difficulty = ?',
+                ('song', arcaea_id, -1)
+            )
+            return False
+        else:
+            if timestamp is None:
+                timestamp = int(time.time() * 1000)
+            cursor.execute(
+                'INSERT INTO favorites (target_type, target_id, difficulty, created_at) VALUES (?, ?, ?, ?)',
+                ('song', arcaea_id, -1, timestamp)
+            )
+            return True
+
+    def toggle_chart_favorite(self, cursor: sqlite3.Cursor, arcaea_id: str, difficulty: int, timestamp: Optional[int] = None) -> bool:
+        """
+        채보 난이도 즐겨찾기 토글.
+        Returns:
+            bool: 토글 후 즐겨찾기 상태 (True: 추가됨, False: 삭제됨)
+        """
+        self.ensure_table(cursor)
+        if self.is_favorite(cursor, 'chart', arcaea_id, difficulty):
+            cursor.execute(
+                'DELETE FROM favorites WHERE target_type = ? AND target_id = ? AND difficulty = ?',
+                ('chart', arcaea_id, difficulty)
+            )
+            return False
+        else:
+            if timestamp is None:
+                timestamp = int(time.time() * 1000)
+            cursor.execute(
+                'INSERT INTO favorites (target_type, target_id, difficulty, created_at) VALUES (?, ?, ?, ?)',
+                ('chart', arcaea_id, difficulty, timestamp)
+            )
+            return True
+
+    def get_all_favorites(self, cursor: sqlite3.Cursor) -> dict:
+        """
+        모든 즐겨찾기 목록 반환.
+        Returns:
+            dict: {
+                "packs": set[str],
+                "songs": set[str],
+                "charts": dict[str, set[int]]
+            }
+        """
+        self.ensure_table(cursor)
+        cursor.execute('SELECT target_type, target_id, difficulty FROM favorites')
+        packs = set()
+        songs = set()
+        charts = defaultdict(set)
+        for t_type, t_id, diff in cursor.fetchall():
+            if t_type == 'pack':
+                packs.add(t_id)
+            elif t_type == 'song':
+                songs.add(t_id)
+            elif t_type == 'chart':
+                charts[t_id].add(int(diff))
+        return {
+            "packs": packs,
+            "songs": songs,
+            "charts": charts
+        }

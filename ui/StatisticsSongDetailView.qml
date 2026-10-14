@@ -48,7 +48,7 @@ ColumnLayout {
                                     (typeof detailedViewStackContainer !== "undefined" && detailedViewStackContainer && (detailedViewStackContainer.isCrossfading || detailedViewStackContainer.isDeselectingPack) && detailedViewStackContainer.isReturningFromPackSubSong)
                                 )
                             Layout.fillWidth: true
-                            Layout.preferredHeight: showBackToPack ? (isNarrow ? 236 : 240) : (isNarrow ? 180 : 200)
+                            Layout.preferredHeight: showBackToPack ? (isNarrow ? 236 : 238) : (isNarrow ? 180 : 200)
                             implicitHeight: Layout.preferredHeight
                             Behavior on Layout.preferredHeight { NumberAnimation { duration: 140; easing.type: Easing.OutQuad } }
 
@@ -220,7 +220,7 @@ ColumnLayout {
                                 anchors.right: parent.right
                                 anchors.bottom: parent.bottom
                                 anchors.top: parent.top
-                                anchors.topMargin: headerContainer.showBackToPack ? (isNarrow ? 48 : 54) : (isNarrow ? 15 : 24)
+                                anchors.topMargin: headerContainer.showBackToPack ? (isNarrow ? 53 : 62) : (isNarrow ? 15 : 24)
                                 anchors.bottomMargin: isNarrow ? 15 : 24
                                 anchors.leftMargin: isNarrow ? 15 : 24
                                 anchors.rightMargin: isNarrow ? 15 : 24
@@ -527,13 +527,18 @@ ColumnLayout {
                                         }
                                     }
                                     
-                                    Text { 
-                                        text: (currentSong && currentSong.title) ? currentSong.title : "Select a song"
-                                        font.family: titleFontFamily
-                                        color: Theme.detailHeaderTitle; font.bold: true
-                                        font.pixelSize: isNarrow ? 24 : 36
+                                    RowLayout {
                                         Layout.fillWidth: true
-                                        elide: Text.ElideRight
+                                        spacing: 10
+
+                                        Text { 
+                                            text: (currentSong && currentSong.title) ? currentSong.title : "Select a song"
+                                            font.family: titleFontFamily
+                                            color: Theme.detailHeaderTitle; font.bold: true
+                                            font.pixelSize: isNarrow ? 24 : 36
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                        }
                                     }
                                     Text { 
                                         text: (currentSong && currentSong.artist) ? currentSong.artist : ""
@@ -560,7 +565,55 @@ ColumnLayout {
                                 anchors.margins: isNarrow ? 15 : 24
                             }
 
-                            // Consultant Sheet search link (top-right, below Pack back-bar overlay when shown)
+                            // Song Favorite Button in Detail Header (Top-Right)
+                            Rectangle {
+                                id: headerSongFavButton
+                                visible: Boolean(currentSong && currentSong.arcaeaId)
+                                z: 40
+                                anchors.top: parent.top
+                                anchors.topMargin: headerContainer.showBackToPack ? (isNarrow ? 53 : 62) : (isNarrow ? 15 : 24)
+                                anchors.right: parent.right
+                                anchors.rightMargin: isNarrow ? 15 : 24
+                                Behavior on anchors.topMargin { NumberAnimation { duration: 140; easing.type: Easing.OutQuad } }
+                                width: 28
+                                height: 28
+                                radius: 8
+                                border.width: 0
+                                property bool isSongFav: Boolean(currentSong && currentSong.isSongFavorite)
+                                property bool effectiveFav: headerSongFavMouse.pressed ? !isSongFav : isSongFav
+                                color: {
+                                    if (headerSongFavMouse.pressed) return "transparent"
+                                    var isHovered = headerSongFavMouse.containsMouse
+                                    if (Theme.isDarkMode) {
+                                        return isHovered ? Theme.alpha("#FFFFFF", 0.30) : Theme.alpha("#FFFFFF", 0.15)
+                                    } else {
+                                        return isHovered ? Theme.alpha("#000000", 0.30) : Theme.alpha("#000000", 0.15)
+                                    }
+                                }
+                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: parent.effectiveFav ? "♥" : "♡"
+                                    font.pixelSize: 18
+                                    color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                }
+
+                                MouseArea {
+                                    id: headerSongFavMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: (mouse) => {
+                                        mouse.accepted = true
+                                        if (statisticsHandler && currentSong && currentSong.arcaeaId) {
+                                            statisticsHandler.toggleSongFavorite(currentSong.arcaeaId)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Consultant Sheet search link (top-right, to the left of Favorite button)
                             Rectangle {
                                 id: sheetSearchButton
                                 property bool sheetAvailable: false
@@ -609,9 +662,9 @@ ColumnLayout {
                                          && !Boolean(statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.isPackDetailView)
                                 z: 40
                                 anchors.top: parent.top
-                                anchors.topMargin: headerContainer.showBackToPack ? (isNarrow ? 44 : 48) : (isNarrow ? 12 : 18)
-                                anchors.right: parent.right
-                                anchors.rightMargin: isNarrow ? 15 : 24
+                                anchors.topMargin: headerContainer.showBackToPack ? (isNarrow ? 53 : 62) : (isNarrow ? 15 : 24)
+                                anchors.right: (headerSongFavButton.visible ? headerSongFavButton.left : parent.right)
+                                anchors.rightMargin: headerSongFavButton.visible ? 8 : (isNarrow ? 15 : 24)
                                 Behavior on anchors.topMargin { NumberAnimation { duration: 140; easing.type: Easing.OutQuad } }
                                 width: sheetSearchRow.implicitWidth + 16
                                 height: 28
@@ -760,6 +813,14 @@ ColumnLayout {
                                                 }
                                                 isBest10: (bestPotentialMarkLimit > 0 && Boolean(modelData.isBest10) && bestPotentialRank > 0)
 
+                                                isFavorite: Boolean(modelData && (modelData.isFavorite !== undefined ? modelData.isFavorite : modelData.isChartFavorite))
+
+                                                onFavoriteClicked: function(diff) {
+                                                    if (statisticsHandler && currentSong && currentSong.arcaeaId) {
+                                                        statisticsHandler.toggleChartFavorite(currentSong.arcaeaId, diff)
+                                                    }
+                                                }
+
                                                 onClicked: function(diff) {
                                                     if (statisticsHandler) {
                                                         statisticsHandler.setSelectedDifficulty(diff)
@@ -835,7 +896,13 @@ ColumnLayout {
                                                 var r = modelData.potentialRank || 0
                                                 return (bestPotentialMarkLimit > 0 && r > 0 && r <= bestPotentialMarkLimit) ? r : 0
                                             }
-                                            isBest10: (bestPotentialMarkLimit > 0 && Boolean(modelData.isBest10) && bestPotentialRank > 0)
+                                            isFavorite: Boolean(modelData && (modelData.isFavorite !== undefined ? modelData.isFavorite : modelData.isChartFavorite))
+
+                                            onFavoriteClicked: function(diff) {
+                                                if (statisticsHandler && currentSong && currentSong.arcaeaId) {
+                                                    statisticsHandler.toggleChartFavorite(currentSong.arcaeaId, diff)
+                                                }
+                                            }
 
                                             onClicked: function(diff) {
                                                 if (statisticsHandler) {

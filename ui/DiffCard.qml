@@ -40,10 +40,12 @@ Rectangle {
     property string clearTypeAbbr: ""  // Pre-computed clear type abbreviation from Python
     property int bestPotentialRank: 0
     property bool isBest10: false
+    property bool isFavorite: false
     // PM/MAX records render FRAME and MAX as two additional rows.
     property int frameLineCount: hasScore && score >= 10000000 ? 2 : 0
 
     signal clicked(int diff)
+    signal favoriteClicked(int diff)
     
     Layout.fillWidth: true
     Layout.fillHeight: true
@@ -64,6 +66,38 @@ Rectangle {
         cursorShape: isFiltered ? Qt.ArrowCursor : Qt.PointingHandCursor
         enabled: !isFiltered
         onClicked: diffCardRoot.clicked(diffCardRoot.difficulty)
+    }
+
+    // Corner Floating Favorite Heart Button (20x20 comfortably settled in corner radius, z: 10)
+    Rectangle {
+        id: cardFavoriteButton
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: 3
+        anchors.rightMargin: 3
+        width: 20
+        height: 20
+        radius: 10
+        property bool effectiveFav: cardFavMouse.pressed ? !diffCardRoot.isFavorite : diffCardRoot.isFavorite
+        color: (cardFavMouse.containsMouse && !cardFavMouse.pressed) ? Theme.favoriteHoverBg : "transparent"
+
+        Text {
+            anchors.centerIn: parent
+            text: parent.effectiveFav ? "♥" : "♡"
+            font.pixelSize: 13
+            color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+        }
+
+        MouseArea {
+            id: cardFavMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: (mouse) => {
+                mouse.accepted = true
+                diffCardRoot.favoriteClicked(diffCardRoot.difficulty)
+            }
+        }
     }
     
     // Diagonal stripes overlay for filtered state (subtle disabled indicator)

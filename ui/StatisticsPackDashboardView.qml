@@ -99,14 +99,64 @@ ColumnLayout {
                                             Layout.fillWidth: true
                                             spacing: 8
 
-                                            Text {
-                                                text: (packDashboardScrollView.currentPack ? packDashboardScrollView.currentPack.name : "") || ""
-                                                font.family: titleFontFamily
-                                                font.pixelSize: 22
-                                                font.bold: true
-                                                color: Theme.detailHeaderTitle
-                                                elide: Text.ElideRight
+                                            RowLayout {
                                                 Layout.fillWidth: true
+                                                spacing: 8
+
+                                                Text {
+                                                    text: (packDashboardScrollView.currentPack ? packDashboardScrollView.currentPack.name : "") || ""
+                                                    font.family: titleFontFamily
+                                                    font.pixelSize: 22
+                                                    font.bold: true
+                                                    color: Theme.detailHeaderTitle
+                                                    elide: Text.ElideRight
+                                                    Layout.fillWidth: true
+                                                }
+
+                                                // Pack Favorite Button right next to pack name (28x28)
+                                                Rectangle {
+                                                    id: heroPackFavButton
+                                                    visible: Boolean(packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.name)
+                                                    Layout.preferredWidth: 28
+                                                    Layout.preferredHeight: 28
+                                                    Layout.alignment: Qt.AlignVCenter
+                                                    radius: 8
+                                                    border.width: 0
+                                                    property bool isPackFav: Boolean(packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.isPackFavorite)
+                                                    property bool effectiveFav: heroPackFavMouse.pressed ? !isPackFav : isPackFav
+                                                    color: {
+                                                        if (heroPackFavMouse.pressed) return "transparent"
+                                                        var isHovered = heroPackFavMouse.containsMouse
+                                                        if (Theme.isDarkMode) {
+                                                            return isHovered ? Theme.alpha("#FFFFFF", 0.30) : Theme.alpha("#FFFFFF", 0.15)
+                                                        } else {
+                                                            return isHovered ? Theme.alpha("#000000", 0.30) : Theme.alpha("#000000", 0.15)
+                                                        }
+                                                    }
+                                                    Behavior on color { ColorAnimation { duration: 150 } }
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: parent.effectiveFav ? "♥" : "♡"
+                                                        font.pixelSize: 18
+                                                        color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                                    }
+
+                                                    MouseArea {
+                                                        id: heroPackFavMouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onClicked: (mouse) => {
+                                                            mouse.accepted = true
+                                                            if (statisticsHandler && packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.name) {
+                                                                statisticsHandler.togglePackFavorite(packDashboardScrollView.currentPack.name)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                Item { Layout.fillWidth: true }
                                             }
 
                                             RowLayout {
@@ -153,11 +203,12 @@ ColumnLayout {
                                             }
                                         }
 
-                                        // Right: Progress Card
+                                        // Right: Progress Card (Restored to rightmost end)
                                         Rectangle {
                                             id: heroProgressCard
                                             Layout.preferredWidth: 200
                                             Layout.preferredHeight: 80
+                                            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                                             radius: 12
                                             color: {
                                                 var p = packDashboardScrollView.currentPack
@@ -368,9 +419,9 @@ ColumnLayout {
                                                 }
                                             }
                                         }
-                                    }
                                 }
                             }
+                        }
 
                             // 2. Song-Based Statistics 3-Card Row (Best Potential, Best Score, Most Played)
                             GridLayout {

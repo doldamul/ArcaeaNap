@@ -20,6 +20,8 @@ class StatisticsHandler(QObject):
     expandedPackIdsChanged = pyqtSignal()
     isSongsDbAvailableChanged = pyqtSignal()
     thumbnailVersionChanged = pyqtSignal()
+    favoriteFilterChanged = pyqtSignal()
+    isFavoriteTogglingChanged = pyqtSignal(bool)
 
     _DIRECTION_DEPENDENT_SORT_MODES = {
         "bpm", "score", "max", "recent_played",
@@ -37,6 +39,7 @@ class StatisticsHandler(QObject):
         self._sort_ascending = False
         self._search_text = ""
         self._selected_index = -1
+        self._is_favorite_toggling = False
 
         # Processed list & selection
         self._list_model = StatisticsListModel(self)
@@ -53,10 +56,11 @@ class StatisticsHandler(QObject):
         self._thumbnail_service = ThumbnailService.get_instance()
         self._thumbnail_service.thumbnailVersionChanged.connect(self.thumbnailVersionChanged)
 
-        self._service.load_data(
-            get_cache_dir(),
-            config['general']['song_title_language'],
-        )
+        if not self._service.songs_data:
+            self._service.load_data(
+                get_cache_dir(),
+                config['general']['song_title_language'],
+            )
         self._full_rebuild('first')
 
         if settings_handler is not None:
@@ -269,11 +273,15 @@ class StatisticsHandler(QObject):
         self._restore_selection(selection_mode)
 
     def _on_sort_mode_changed(self):
-        """정렬 모드 변경: 재정렬 + displayValue 갱신만 수행."""
+        """정렬 모드 변경: 재정렬 + displayValue 갱신만 수행. 하트필터 활성 시 지연 제외 재필터링 보장."""
         self._pack_manager.pack_items_dirty = True
         if self._display_mode == "pack":
             self._pack_manager.rebuild_pack_items()
             self.dataChanged.emit()
+            return
+
+        if self.favoriteFilterActive:
+            self._full_rebuild(selection_mode='retain_or_first')
             return
 
         current_items = list(self._list_model.get_items())
@@ -288,11 +296,15 @@ class StatisticsHandler(QObject):
         self.dataChanged.emit()
 
     def _on_sort_order_changed(self):
-        """정렬 방향 변경: 방향 의존 키 모드는 전체 재정렬, 그 외는 reverse."""
+        """정렬 방향 변경: 방향 의존 키 모드는 전체 재정렬, 그 외는 reverse. 하트필터 활성 시 지연 제외 재필터링 보장."""
         self._pack_manager.pack_items_dirty = True
         if self._display_mode == "pack":
             self._pack_manager.rebuild_pack_items()
             self.dataChanged.emit()
+            return
+
+        if self.favoriteFilterActive:
+            self._full_rebuild(selection_mode='retain_or_first')
             return
 
         current_items = list(self._list_model.get_items())
@@ -449,11 +461,110 @@ class StatisticsHandler(QObject):
     def activeFiltersModel(self):
         return self._filter_manager.active_filters_model
 
+    @pyqtProperty(bool, notify=favoriteFilterChanged)
+    def favoriteFilterActive(self) -> bool:
+        return self._filter_manager.favorite_only
+
+    @pyqtProperty(bool, notify=isFavoriteTogglingChanged)
+    def isFavoriteToggling(self) -> bool:
+        return self._is_favorite_toggling
+
     @pyqtProperty(int, notify=thumbnailVersionChanged)
     def thumbnailVersion(self) -> int:
         return self._thumbnail_service.thumbnail_version
 
     # === QML Slots ===
+    @pyqtSlot()
+    def toggleFavoriteFilter(self):
+        """즐겨찾기 전용 필터 토글."""
+        self._filter_manager.toggle_favorite_filter()
+        self._on_filter_changed(selection_mode='retain_or_first')
+        self.favoriteFilterChanged.emit()
+
+    @pyqtSlot(str)
+    def togglePackFavorite(self, pack_name: str):
+        """
+        팩 즐겨찾기 토글.
+        하트필터 활성 여부와 무관하게 항상 인플레이스 갱신으로 뷰포트/스크롤 및 목록 100% 보존.
+        """
+        is_fav = self._service.toggle_pack_favorite(pack_name)
+        self._is_favorite_toggling = True
+        try:
+            self.isFavoriteTogglingChanged.emit(True)
+            self._pack_manager.update_pack_favorite_inplace(pack_name, is_fav)
+            self.packItemsChanged.emit()
+            self.currentPackChanged.emit()
+        finally:
+            self._is_favorite_toggling = False
+            self.isFavoriteTogglingChanged.emit(False)
+
+    @pyqtSlot(str)
+    def toggleSongFavorite(self, arcaea_id: str):
+        """
+        곡 즐겨찾기 토글.
+        하트필터 활성 여부와 무관하게 항상 인플레이스 갱신으로 뷰포트/스크롤 및 목록 100% 보존.
+        """
+        is_fav = self._service.toggle_song_favorite(arcaea_id)
+        self._is_favorite_toggling = True
+        try:
+            self.isFavoriteTogglingChanged.emit(True)
+            self._list_model.update_favorite_status('song', arcaea_id, -1, is_fav)
+            if self._selected_item and self._selected_item.get('arcaeaId') == arcaea_id:
+                new_item = dict(self._selected_item)
+                new_item['isSongFavorite'] = is_fav
+                self._selected_item = new_item
+                self.selectedItemChanged.emit()
+            if self._display_mode == 'pack':
+                self._pack_manager.update_song_favorite_inplace(arcaea_id, is_fav)
+                self.packItemsChanged.emit()
+                self.currentPackChanged.emit()
+        finally:
+            self._is_favorite_toggling = False
+            self.isFavoriteTogglingChanged.emit(False)
+
+    @pyqtSlot(str, int)
+    def toggleChartFavorite(self, arcaea_id: str, diff: int):
+        """
+        채보 즐겨찾기 토글.
+        하트필터 활성 여부와 무관하게 항상 인플레이스 갱신으로 뷰포트/스크롤 및 목록 100% 보존.
+        """
+        diff_int = int(diff)
+        is_fav = self._service.toggle_chart_favorite(arcaea_id, diff_int)
+        self._is_favorite_toggling = True
+        try:
+            self.isFavoriteTogglingChanged.emit(True)
+            self._list_model.update_favorite_status('chart', arcaea_id, diff_int, is_fav)
+            if self._selected_item and self._selected_item.get('arcaeaId') == arcaea_id:
+                new_item = dict(self._selected_item)
+                chart_favs = set(new_item.get('chartFavorites', []))
+                if is_fav:
+                    chart_favs.add(diff_int)
+                else:
+                    chart_favs.discard(diff_int)
+                new_item['chartFavorites'] = list(sorted(chart_favs))
+
+                new_diffs = [dict(d) for d in new_item.get('allDifficulties', [])]
+                for d in new_diffs:
+                    if d.get('difficulty') == diff_int:
+                        d['isFavorite'] = is_fav
+                        d['isChartFavorite'] = is_fav
+                new_item['allDifficulties'] = new_diffs
+
+                if self._display_mode == 'chart' and new_item.get('difficulty') == diff_int:
+                    new_item['isChartFavorite'] = is_fav
+                    new_item['isFavorite'] = is_fav
+
+                self._selected_item = new_item
+                self.selectedItemChanged.emit()
+
+            if self._display_mode == 'pack':
+                if self._pack_manager.update_chart_favorite_inplace(arcaea_id, diff_int, is_fav):
+                    self.packItemsChanged.emit()
+                    self.currentPackChanged.emit()
+        finally:
+            self._is_favorite_toggling = False
+            self.isFavoriteTogglingChanged.emit(False)
+
     @pyqtSlot(str)
     def setDisplayMode(self, mode):
         if mode in ["song", "chart", "pack"] and mode != self._display_mode:

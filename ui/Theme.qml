@@ -44,6 +44,12 @@ QtObject {
     property color accent: isDarkMode ? "#B388FF" : "#6A0DAD"
     property color accentHover: isDarkMode ? "#D1B3FF" : "#9D70C9"
 
+    // Favorites
+    readonly property color favoriteActive: "#FF5A79"
+    readonly property color favoriteInactive: textMuted
+    readonly property color favoriteHoverBg: isDarkMode ? "#33FF5A79" : "#1AFF5A79"
+    readonly property color favoriteBadgeBg: isDarkMode ? "#26FF5A79" : "#14FF5A79"
+
     // Settings Specific
     property color divider: isDarkMode ? "#333336" : "#EEEEEE"
     property color settingsTextTitle: isDarkMode ? "#E0E0E0" : "#333333"

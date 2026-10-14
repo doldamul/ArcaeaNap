@@ -472,6 +472,38 @@ Item {
                                 
                                 Item { Layout.fillWidth: true }
                                 
+                                // Center: Heart Filter Button (Option A)
+                                Rectangle {
+                                    id: heartFilterButton
+                                    Layout.preferredWidth: 32
+                                    Layout.preferredHeight: 32
+                                    radius: 6
+                                    color: heartFilterMouse.containsMouse ? Theme.bgHover : Theme.bgButton
+                                    border.width: (statisticsHandler && statisticsHandler.favoriteFilterActive) ? 1 : 0
+                                    border.color: (statisticsHandler && statisticsHandler.favoriteFilterActive)
+                                                  ? Theme.favoriteActive
+                                                  : "transparent"
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: (statisticsHandler && statisticsHandler.favoriteFilterActive) ? "♥" : "♡"
+                                        font.pixelSize: 15
+                                        color: (statisticsHandler && statisticsHandler.favoriteFilterActive) || heartFilterMouse.containsMouse
+                                               ? Theme.favoriteActive
+                                               : Theme.favoriteInactive
+                                    }
+
+                                    MouseArea {
+                                        id: heartFilterMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: if (statisticsHandler) statisticsHandler.toggleFavoriteFilter()
+                                    }
+                                }
+                                
+                                Item { Layout.fillWidth: true }
+                                
                                 // Integrated Sort Dropdown & Direction Toggle
                                 Basic.ComboBox {
                                     id: sortCombo
@@ -884,6 +916,17 @@ Item {
                                     spacing: 8
 
                                     delegate: packDelegate
+                                    property real lastSavedContentY: 0
+                                        onContentYChanged: {
+                                            if (!statisticsHandler || !statisticsHandler.isFavoriteToggling) {
+                                                lastSavedContentY = contentY
+                                            }
+                                        }
+                                        onModelChanged: {
+                                            if (statisticsHandler && statisticsHandler.isFavoriteToggling) {
+                                                contentY = lastSavedContentY
+                                            }
+                                        }
 
                                     opacity: 1.0
                                     NumberAnimation on opacity {
@@ -947,7 +990,9 @@ Item {
                                         anchors.right: parent.right
                                         height: 84
                                         radius: 10
-                                        color: selectedPackHeaderMouse.containsMouse ? Theme.bgItemHover : Theme.bgSelected
+                                        property bool isChildHovered: false
+                                        readonly property bool isItemHovered: selectedPackHeaderMouse.containsMouse || isChildHovered
+                                        color: isItemHovered ? Theme.bgItemHover : Theme.bgSelected
                                         border.width: 1
                                         border.color: Theme.borderSelected
 
@@ -1040,6 +1085,7 @@ Item {
                                         // 2. Main Content Area (Independent from mini bar, fills between card top and mini bar)
                                         Item {
                                             id: selectedPackContentArea
+                                            z: 1
                                             anchors.left: parent.left
                                             anchors.right: parent.right
                                             anchors.top: parent.top
@@ -1052,20 +1098,67 @@ Item {
                                             // Left Area: Pack Name / Songs Count (Independent vertical centering)
                                             RowLayout {
                                                 anchors.left: parent.left
-                                                anchors.verticalCenter: parent.verticalCenter
                                                 anchors.right: selectedPackRightArea.left
                                                 anchors.rightMargin: 12
+                                                anchors.top: parent.top
+                                                anchors.bottom: parent.bottom
                                                 spacing: 8
 
-                                                // Expansion indicator / Back action
-                                                Text {
-                                                    text: "▼"
-                                                    font.pixelSize: 11
-                                                    color: Theme.accent
+                                                // Expansion indicator / Back action & Pack Favorite Button
+                                                Item {
                                                     Layout.preferredWidth: 22
-                                                    horizontalAlignment: Text.AlignHCenter
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    Layout.alignment: Qt.AlignVCenter
+                                                    Layout.fillHeight: true
+                                                    z: 2
+
+                                                    property bool isPackFav: Boolean(selectedPackHeaderCard.pItem && selectedPackHeaderCard.pItem.isPackFavorite)
+                                                    property bool showPackFav: isPackFav || selectedPackHeaderCard.isItemHovered
+
+                                                    // Center: Expansion indicator ("▼")
+                                                    Text {
+                                                        id: selectedPackArrowText
+                                                        anchors.centerIn: parent
+                                                        horizontalAlignment: Text.AlignHCenter
+                                                        verticalAlignment: Text.AlignVCenter
+                                                        text: "▼"
+                                                        font.pixelSize: 11
+                                                        color: Theme.accent
+                                                    }
+
+                                                    // Top: Pack Favorite Button (20x20, anchored above arrow)
+                                                    Rectangle {
+                                                        id: selectedPackFavBtn
+                                                        width: 20
+                                                        height: 20
+                                                        radius: 10
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+                                                        anchors.bottom: selectedPackArrowText.top
+                                                        anchors.bottomMargin: 2
+                                                        opacity: parent.showPackFav ? 1.0 : 0.0
+                                                        property bool effectiveFav: selectedPackFavMouse.pressed ? !parent.isPackFav : parent.isPackFav
+                                                        color: (selectedPackFavMouse.containsMouse && !selectedPackFavMouse.pressed) ? Theme.favoriteHoverBg : "transparent"
+
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: parent.effectiveFav ? "♥" : "♡"
+                                                            font.pixelSize: 12
+                                                            color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                                        }
+
+                                                        MouseArea {
+                                                            id: selectedPackFavMouse
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onEntered: selectedPackHeaderCard.isChildHovered = true
+                                                            onExited: selectedPackHeaderCard.isChildHovered = false
+                                                            onClicked: (mouse) => {
+                                                                mouse.accepted = true
+                                                                if (statisticsHandler && selectedPackHeaderCard.pItem && selectedPackHeaderCard.pItem.name) {
+                                                                    statisticsHandler.togglePackFavorite(selectedPackHeaderCard.pItem.name)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                 }
 
                                                 ColumnLayout {
@@ -1293,7 +1386,18 @@ Item {
                                         spacing: 6
                                         delegate: packSongDelegate
 
+                                        property real lastSavedContentY: 0
+                                        onContentYChanged: {
+                                            if (!statisticsHandler || !statisticsHandler.isFavoriteToggling) {
+                                                lastSavedContentY = contentY
+                                            }
+                                        }
+
                                         function scrollToSelectedSong() {
+                                            if (statisticsHandler && statisticsHandler.isFavoriteToggling) {
+                                                contentY = lastSavedContentY
+                                                return
+                                            }
                                             if (!statsRoot.currentSong || !model || model.length === 0) return
                                             var targetDbId = statsRoot.currentSong.songDbId
                                             var targetArcaeaId = statsRoot.currentSong.arcaeaId
@@ -1474,6 +1578,7 @@ Item {
                                         triggerListTransition(ListView.Contain, true)
                                     }
                                     function onSelectedItemChanged() {
+                                        if (statisticsHandler && statisticsHandler.isFavoriteToggling) return
                                         triggerListTransition(ListView.Contain, false)
                                     }
                                 }
@@ -1484,13 +1589,17 @@ Item {
                                     Rectangle {
                                         width: ListView.view.width
                                         height: 70
-                                        color: (!isNarrow && index === currentSongIndex) ? Theme.bgSelected : (delegateMouse.containsMouse ? Theme.bgItemHover : "transparent")
+                                        property bool isChildHovered: false
+                                        readonly property bool isItemHovered: delegateMouse.containsMouse || isChildHovered
+                                        color: (!isNarrow && index === currentSongIndex) ? Theme.bgSelected : (isItemHovered ? Theme.bgItemHover : "transparent")
                                         radius: 10
                                         border.width: (!isNarrow && index === currentSongIndex) ? 1 : 0
                                         border.color: Theme.borderSelected
                                         property var rowModel: model
+                                        readonly property bool isRowSelected: (!isNarrow && index === currentSongIndex)
                                         
                                         RowLayout {
+                                            z: 1
                                             anchors.fill: parent
                                             anchors.leftMargin: 0
                                             anchors.topMargin: 10
@@ -1498,13 +1607,60 @@ Item {
                                             anchors.rightMargin: 10
                                             spacing: 10
                                             
-                                            // Index
-                                            Text {
-                                                text: index + 1
-                                                font.pixelSize: 11
-                                                color: Theme.textMuted
+                                            // Index / Song Favorite Button (Index centered, Heart anchored top)
+                                            Item {
                                                 Layout.preferredWidth: 22
-                                                horizontalAlignment: Text.AlignRight
+                                                Layout.fillHeight: true
+                                                z: 2
+
+                                                property bool showSongFav: (statisticsHandler && statisticsHandler.displayMode === "song" && rowModel.isSongFavorite) || (isRowSelected && rowModel.isSongFavorite) || isItemHovered
+
+                                                // Center: Index Number (11px, fixed vertical center position)
+                                                Text {
+                                                    id: songIndexText
+                                                    anchors.centerIn: parent
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    text: index + 1
+                                                    font.pixelSize: 11
+                                                    color: Theme.textMuted
+                                                }
+
+                                                // Top: Song Favorite Button (20x20, anchored above index)
+                                                Rectangle {
+                                                    id: songFavBtn
+                                                    width: 20
+                                                    height: 20
+                                                    radius: 10
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                    anchors.bottom: songIndexText.top
+                                                    anchors.bottomMargin: 2
+                                                    opacity: parent.showSongFav ? 1.0 : 0.0
+                                                    property bool effectiveFav: songFavMouse.pressed ? !rowModel.isSongFavorite : rowModel.isSongFavorite
+                                                    color: (songFavMouse.containsMouse && !songFavMouse.pressed) ? Theme.favoriteHoverBg : "transparent"
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: parent.effectiveFav ? "♥" : "♡"
+                                                        font.pixelSize: 12
+                                                        color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                                    }
+
+                                                    MouseArea {
+                                                        id: songFavMouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onEntered: isChildHovered = true
+                                                        onExited: isChildHovered = false
+                                                        onClicked: (mouse) => {
+                                                            mouse.accepted = true
+                                                            if (statisticsHandler && rowModel.arcaeaId) {
+                                                                statisticsHandler.toggleSongFavorite(rowModel.arcaeaId)
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                             
                                             // Thumbnail (uses real image with fallback to colored rectangle)
@@ -1723,6 +1879,43 @@ Item {
                                                                     }
                                                                 }
                                                             }
+
+                                                            // Zero Space Chart Favorite Button (13x13)
+                                                            Rectangle {
+                                                                id: chartFavBtn
+                                                                z: 2
+                                                                property bool showChartFav: (isRowSelected && modelData.isFavorite) || isItemHovered
+                                                                visible: showChartFav
+                                                                width: visible ? 13 : 0
+                                                                height: 13
+                                                                radius: 6.5
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                                clip: true
+                                                                property bool effectiveFav: chartFavMouse.pressed ? !modelData.isFavorite : modelData.isFavorite
+                                                                color: (chartFavMouse.containsMouse && !chartFavMouse.pressed) ? Theme.favoriteHoverBg : "transparent"
+
+                                                                Text {
+                                                                    anchors.centerIn: parent
+                                                                    text: parent.effectiveFav ? "♥" : "♡"
+                                                                    font.pixelSize: 9
+                                                                    color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                                                }
+
+                                                                MouseArea {
+                                                                    id: chartFavMouse
+                                                                    anchors.fill: parent
+                                                                    hoverEnabled: true
+                                                                    cursorShape: Qt.PointingHandCursor
+                                                                    onEntered: isChildHovered = true
+                                                                    onExited: isChildHovered = false
+                                                                    onClicked: (mouse) => {
+                                                                        mouse.accepted = true
+                                                                        if (statisticsHandler && rowModel.arcaeaId) {
+                                                                            statisticsHandler.toggleChartFavorite(rowModel.arcaeaId, modelData.difficulty)
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                     
@@ -1767,6 +1960,43 @@ Item {
                                                                 font.bold: true
                                                                 font.pixelSize: parent.parent.isStandaloneMode ? 13 : 11
                                                                 color: Theme.getDiffColor(rowModel.diffColorTag || rowModel.difficulty)
+                                                            }
+
+                                                            // Chart Favorite Button (Chart Mode, 13x13)
+                                                            Rectangle {
+                                                                id: singleChartFavItem
+                                                                z: 2
+                                                                property bool showSingleFav: rowModel.isChartFavorite || isItemHovered || isRowSelected
+                                                                visible: showSingleFav
+                                                                width: visible ? 13 : 0
+                                                                height: 13
+                                                                radius: 6.5
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                                clip: true
+                                                                property bool effectiveFav: singleChartFavMouse.pressed ? !rowModel.isChartFavorite : Boolean(rowModel && rowModel.isChartFavorite)
+                                                                color: (singleChartFavMouse.containsMouse && !singleChartFavMouse.pressed) ? Theme.favoriteHoverBg : "transparent"
+
+                                                                Text {
+                                                                    anchors.centerIn: parent
+                                                                    text: parent.effectiveFav ? "♥" : "♡"
+                                                                    font.pixelSize: 10
+                                                                    color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                                                }
+
+                                                                MouseArea {
+                                                                    id: singleChartFavMouse
+                                                                    anchors.fill: parent
+                                                                    hoverEnabled: true
+                                                                    cursorShape: Qt.PointingHandCursor
+                                                                    onEntered: isChildHovered = true
+                                                                    onExited: isChildHovered = false
+                                                                    onClicked: (mouse) => {
+                                                                        mouse.accepted = true
+                                                                        if (statisticsHandler && rowModel.arcaeaId) {
+                                                                            statisticsHandler.toggleChartFavorite(rowModel.arcaeaId, rowModel.difficulty)
+                                                                        }
+                                                                    }
+                                                                }
                                                             }
                                                         }
 
@@ -1839,7 +2069,9 @@ Item {
                                         height: 84
                                         Layout.preferredHeight: 84
                                         radius: 10
-                                        color: packHeaderMouse.containsMouse ? Theme.bgItemHover : Theme.bgCard
+                                        property bool isChildHovered: false
+                                        readonly property bool isItemHovered: packHeaderMouse.containsMouse || isChildHovered
+                                        color: isItemHovered ? Theme.bgItemHover : Theme.bgCard
                                         border.width: 0
                                         clip: true
                                         property var packItem: modelData
@@ -1913,6 +2145,7 @@ Item {
                                         // 2. Main Content Area (Independent from mini bar, fills between card top and mini bar)
                                         Item {
                                             id: packContentArea
+                                            z: 1
                                             anchors.left: parent.left
                                             anchors.right: parent.right
                                             anchors.top: parent.top
@@ -1925,20 +2158,67 @@ Item {
                                             // Left Area: Pack Name / Songs Count (Independent vertical centering)
                                             RowLayout {
                                                 anchors.left: parent.left
-                                                anchors.verticalCenter: parent.verticalCenter
                                                 anchors.right: packRightArea.left
                                                 anchors.rightMargin: 12
+                                                anchors.top: parent.top
+                                                anchors.bottom: parent.bottom
                                                 spacing: 8
 
-                                                // Pack Index
-                                                Text {
-                                                    text: index + 1
-                                                    font.pixelSize: 11
-                                                    color: Theme.textMuted
+                                                // Pack Index / Pack Favorite Button (Index centered, Heart anchored top)
+                                                Item {
                                                     Layout.preferredWidth: 22
-                                                    horizontalAlignment: Text.AlignHCenter
-                                                    verticalAlignment: Text.AlignVCenter
-                                                    Layout.alignment: Qt.AlignVCenter
+                                                    Layout.fillHeight: true
+                                                    z: 2
+
+                                                    property bool isSelected: statsRoot.isPackSelected && selectedPackHeaderCard.pItem && selectedPackHeaderCard.pItem.id === packItem.id
+                                                    property bool showPackFav: packItem.isPackFavorite || isSelected || isItemHovered
+
+                                                    // Center: Index Number (11px, fixed vertical center position)
+                                                    Text {
+                                                        id: packIndexText
+                                                        anchors.centerIn: parent
+                                                        horizontalAlignment: Text.AlignHCenter
+                                                        verticalAlignment: Text.AlignVCenter
+                                                        text: index + 1
+                                                        font.pixelSize: 11
+                                                        color: Theme.textMuted
+                                                    }
+
+                                                    // Top: Pack Favorite Button (20x20, anchored above index)
+                                                    Rectangle {
+                                                        id: packFavBtn
+                                                        width: 20
+                                                        height: 20
+                                                        radius: 10
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+                                                        anchors.bottom: packIndexText.top
+                                                        anchors.bottomMargin: 2
+                                                        opacity: parent.showPackFav ? 1.0 : 0.0
+                                                        property bool effectiveFav: packFavMouse.pressed ? !packItem.isPackFavorite : packItem.isPackFavorite
+                                                        color: (packFavMouse.containsMouse && !packFavMouse.pressed) ? Theme.favoriteHoverBg : "transparent"
+
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: parent.effectiveFav ? "♥" : "♡"
+                                                            font.pixelSize: 12
+                                                            color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                                        }
+
+                                                        MouseArea {
+                                                            id: packFavMouse
+                                                            anchors.fill: parent
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onEntered: isChildHovered = true
+                                                            onExited: isChildHovered = false
+                                                            onClicked: (mouse) => {
+                                                                mouse.accepted = true
+                                                                if (statisticsHandler && packItem.name) {
+                                                                    statisticsHandler.togglePackFavorite(packItem.name)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                 }
 
                                                 ColumnLayout {
@@ -2155,12 +2435,15 @@ Item {
                                                 statsRoot.currentSong.songDbId === songItemData.songDbId :
                                                 (statsRoot.currentSong.arcaeaId && statsRoot.currentSong.arcaeaId === (songItemData.arcaeaId || songItemData.id)))
                                         )
+                                        property bool isChildHovered: false
+                                        readonly property bool isItemHovered: songItemHover.containsMouse || isChildHovered
 
-                                        color: isSelected ? Theme.bgSelected : (songItemHover.containsMouse ? Theme.bgItemHover : "transparent")
+                                        color: isSelected ? Theme.bgSelected : (isItemHovered ? Theme.bgItemHover : "transparent")
                                         border.width: isSelected ? 1 : 0
                                         border.color: Theme.borderSelected
 
                                         RowLayout {
+                                            z: 1
                                             anchors.fill: parent
                                             anchors.leftMargin: 8
                                             anchors.topMargin: 10
@@ -2168,13 +2451,62 @@ Item {
                                             anchors.rightMargin: 10
                                             spacing: 10
 
-                                            // Index
-                                            Text {
-                                                text: index + 1
-                                                font.pixelSize: 11
-                                                color: Theme.textMuted
+                                            // Index / Song Favorite Button (Index centered, Heart anchored top)
+                                            Item {
                                                 Layout.preferredWidth: 22
-                                                horizontalAlignment: Text.AlignRight
+                                                Layout.fillHeight: true
+                                                z: 2
+
+                                                property bool showSongFav: Boolean(songItemData && songItemData.isSongFavorite) || isItemHovered || songItemRect.isSelected
+
+                                                // Center: Index Number (11px, fixed vertical center position)
+                                                Text {
+                                                    id: packSongIndexText
+                                                    anchors.centerIn: parent
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    text: index + 1
+                                                    font.pixelSize: 11
+                                                    color: Theme.textMuted
+                                                }
+
+                                                // Top: Song Favorite Button (20x20, anchored above index)
+                                                Rectangle {
+                                                    id: packSongFavBtn
+                                                    width: 20
+                                                    height: 20
+                                                    radius: 10
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                    anchors.bottom: packSongIndexText.top
+                                                    anchors.bottomMargin: 2
+                                                    opacity: parent.showSongFav ? 1.0 : 0.0
+                                                    property bool isSongFav: Boolean(songItemData && songItemData.isSongFavorite)
+                                                    property bool effectiveFav: packSongFavMouse.pressed ? !isSongFav : isSongFav
+                                                    color: (packSongFavMouse.containsMouse && !packSongFavMouse.pressed) ? Theme.favoriteHoverBg : "transparent"
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: parent.effectiveFav ? "♥" : "♡"
+                                                        font.pixelSize: 12
+                                                        color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                                    }
+
+                                                    MouseArea {
+                                                        id: packSongFavMouse
+                                                        anchors.fill: parent
+                                                        hoverEnabled: true
+                                                        cursorShape: Qt.PointingHandCursor
+                                                        onEntered: isChildHovered = true
+                                                        onExited: isChildHovered = false
+                                                        onClicked: (mouse) => {
+                                                            mouse.accepted = true
+                                                            var aid = songItemData ? (songItemData.arcaeaId || songItemData.id) : null
+                                                            if (statisticsHandler && aid) {
+                                                                statisticsHandler.toggleSongFavorite(aid)
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
 
                                             // Thumbnail (jacket image with fallback)
@@ -2372,6 +2704,44 @@ Item {
                                                                         text: "⏪"
                                                                         font.pixelSize: 6
                                                                         visible: Boolean(modelData.hardBpm)
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            // Zero Space Chart Favorite Button (13x13)
+                                                            Rectangle {
+                                                                id: packChartFavBtn
+                                                                z: 2
+                                                                property bool showChartFav: (songItemRect.isSelected && modelData.isFavorite) || isItemHovered
+                                                                visible: showChartFav
+                                                                width: visible ? 13 : 0
+                                                                height: 13
+                                                                radius: 6.5
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                                clip: true
+                                                                property bool effectiveFav: packChartFavMouse.pressed ? !modelData.isFavorite : modelData.isFavorite
+                                                                color: (packChartFavMouse.containsMouse && !packChartFavMouse.pressed) ? Theme.favoriteHoverBg : "transparent"
+
+                                                                Text {
+                                                                    anchors.centerIn: parent
+                                                                    text: parent.effectiveFav ? "♥" : "♡"
+                                                                    font.pixelSize: 9
+                                                                    color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                                                }
+
+                                                                MouseArea {
+                                                                    id: packChartFavMouse
+                                                                    anchors.fill: parent
+                                                                    hoverEnabled: true
+                                                                    cursorShape: Qt.PointingHandCursor
+                                                                    onEntered: isChildHovered = true
+                                                                    onExited: isChildHovered = false
+                                                                    onClicked: (mouse) => {
+                                                                        mouse.accepted = true
+                                                                        var aid = songItemData.arcaeaId || songItemData.id
+                                                                        if (statisticsHandler && aid) {
+                                                                            statisticsHandler.toggleChartFavorite(aid, modelData.difficulty)
+                                                                        }
                                                                     }
                                                                 }
                                                             }

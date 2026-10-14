@@ -37,6 +37,10 @@ class StatisticsListModel(QAbstractListModel):
     IsInscribedRole = Qt.ItemDataRole.UserRole + 30
     IsBest10Role = Qt.ItemDataRole.UserRole + 31
     BestDiffForNoteCountRole = Qt.ItemDataRole.UserRole + 32
+    IsSongFavoriteRole = Qt.ItemDataRole.UserRole + 33
+    ChartFavoritesRole = Qt.ItemDataRole.UserRole + 34
+    IsChartFavoriteRole = Qt.ItemDataRole.UserRole + 35
+    IsPackFavoriteRole = Qt.ItemDataRole.UserRole + 36
 
     _ROLE_KEY_MAP = {
         ArcaeaIdRole: "arcaeaId",
@@ -65,6 +69,10 @@ class StatisticsListModel(QAbstractListModel):
         IsInscribedRole: "isInscribed",
         IsBest10Role: "isBest10",
         BestDiffForNoteCountRole: "bestDiffForNoteCount",
+        IsSongFavoriteRole: "isSongFavorite",
+        ChartFavoritesRole: "chartFavorites",
+        IsChartFavoriteRole: "isChartFavorite",
+        IsPackFavoriteRole: "isPackFavorite",
     }
 
     def __init__(self, parent=None):
@@ -103,3 +111,41 @@ class StatisticsListModel(QAbstractListModel):
 
     def get_items(self) -> list[dict]:
         return self._items
+
+    def update_favorite_status(self, target_type: str, arcaea_id: str, difficulty: int, is_fav: bool):
+        """특정 대상의 즐겨찾기 상태를 인플레이스로 갱신하고 부분 dataChanged 시그널을 방출한다."""
+        diff_int = int(difficulty) if difficulty is not None else -1
+        for row, item in enumerate(self._items):
+            if item.get('arcaeaId') != arcaea_id:
+                continue
+            changed_roles = []
+            idx = self.index(row, 0)
+            if target_type == 'song':
+                item['isSongFavorite'] = is_fav
+                changed_roles.append(self.IsSongFavoriteRole)
+            elif target_type == 'chart':
+                if 'difficulty' in item:
+                    # Chart 모드 아이템: 일치하는 난이도만 갱신
+                    if item.get('difficulty') == diff_int:
+                        item['isChartFavorite'] = is_fav
+                        item['isFavorite'] = is_fav
+                        changed_roles.append(self.IsChartFavoriteRole)
+                else:
+                    # Song 모드 아이템: chartFavorites 및 filteredDifficulties 갱신
+                    chart_favs = set(item.get('chartFavorites', []))
+                    if is_fav:
+                        chart_favs.add(diff_int)
+                    else:
+                        chart_favs.discard(diff_int)
+                    item['chartFavorites'] = list(sorted(chart_favs))
+                    changed_roles.append(self.ChartFavoritesRole)
+
+                    new_diffs = [dict(d) for d in item.get('filteredDifficulties', [])]
+                    for d in new_diffs:
+                        if d.get('difficulty') == diff_int:
+                            d['isFavorite'] = is_fav
+                    item['filteredDifficulties'] = new_diffs
+                    changed_roles.append(self.FilteredDifficultiesRole)
+
+            if changed_roles:
+                self.dataChanged.emit(idx, idx, changed_roles)

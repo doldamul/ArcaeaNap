@@ -7,13 +7,16 @@ PyQt6 의존 없이 순수 Python으로 구현된다.
 import math
 import os
 import re
+import sqlite3
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from models.potential import calculate_potential, calculate_total_potential
 from services.score_query_service import (
     get_best_scores_per_chart, get_play_counts,
-    get_this_year_play_counts
+    get_this_year_play_counts, _get_scores_db_path
 )
+from repositories.score_repository import FavoriteRepository
 from repositories.song_repository import get_all_songs_with_charts, get_db_path
 from models.constants import (
     calculate_rank,
@@ -40,6 +43,7 @@ class FilterParams:
     score_max_rank: int
     clear_types: list  # [int]
     include_inscribed: bool = True
+    favorite_only: bool = False
 
 
 class _ReverseCompare:
@@ -100,6 +104,11 @@ class StatisticsService:
         self._potential_rank_map: dict = {}
         # Arcaea 7.0 상위 10개 슬롯 (Best 10) 튜플 집합: {(arcaea_id, difficulty), ...}
         self._best10_slots: set = set()
+
+        # 즐겨찾기 (Favorite) 리포지토리 및 캐시
+        self.favorite_repo = FavoriteRepository()
+        self._favorites_cache = {"packs": set(), "songs": set(), "charts": defaultdict(set)}
+        self.cache_path = None
 
     @staticmethod
     def _normalize_level(level) -> str:
@@ -163,11 +172,28 @@ class StatisticsService:
 
     def load_data(self, cache_path: str, song_title_language: str = 'en'):
         """DB에서 데이터 로딩 + 정규화. 경계 계산 포함. song_title_language는 'en'/'jp'."""
+        self.cache_path = cache_path
+
         # Load raw data
         raw_songs = get_all_songs_with_charts()
         raw_scores = get_best_scores_per_chart(cache_path)
         raw_play_counts = get_play_counts(cache_path)
         raw_this_year_play_counts = get_this_year_play_counts(cache_path)
+
+        # Load favorites
+        try:
+            scores_db_path = _get_scores_db_path(cache_path)
+            if os.path.exists(scores_db_path):
+                conn = sqlite3.connect(scores_db_path, timeout=10.0)
+                try:
+                    cursor = conn.cursor()
+                    self._favorites_cache = self.favorite_repo.get_all_favorites(cursor)
+                finally:
+                    conn.close()
+            else:
+                self._favorites_cache = {"packs": set(), "songs": set(), "charts": defaultdict(set)}
+        except Exception:
+            self._favorites_cache = {"packs": set(), "songs": set(), "charts": defaultdict(set)}
 
         # Normalize songs data (ensure diff keys are int)
         lang = str(song_title_language or 'en').lower()
@@ -439,6 +465,105 @@ class StatisticsService:
         self._base_pack_cache_key = None
         self._main_pack_index = None
 
+    def is_pack_favorite(self, pack_name: str) -> bool:
+        """팩 즐겨찾기 여부 조회."""
+        if not pack_name:
+            return False
+        return pack_name in self._favorites_cache.get("packs", set())
+
+    def is_song_favorite(self, arcaea_id: str) -> bool:
+        """곡 즐겨찾기 여부 조회."""
+        if not arcaea_id:
+            return False
+        return arcaea_id in self._favorites_cache.get("songs", set())
+
+    def is_chart_favorite(self, arcaea_id: str, diff: int) -> bool:
+        """채보 즐겨찾기 여부 조회."""
+        if not arcaea_id:
+            return False
+        charts_map = self._favorites_cache.get("charts", {})
+        try:
+            return int(diff) in charts_map.get(arcaea_id, set())
+        except (ValueError, TypeError):
+            return False
+
+    def toggle_pack_favorite(self, pack_name: str) -> bool:
+        """
+        팩 즐겨찾기 토글 및 캐시 동기화.
+        Returns:
+            bool: 토글 후의 즐겨찾기 상태
+        """
+        if not pack_name or not self.cache_path:
+            return False
+        scores_db_path = _get_scores_db_path(self.cache_path)
+        conn = sqlite3.connect(scores_db_path, timeout=10.0)
+        try:
+            with conn:
+                cursor = conn.cursor()
+                is_fav = self.favorite_repo.toggle_pack_favorite(cursor, pack_name)
+        finally:
+            conn.close()
+
+        if is_fav:
+            self._favorites_cache["packs"].add(pack_name)
+        else:
+            self._favorites_cache["packs"].discard(pack_name)
+        self.invalidate_caches()
+        return is_fav
+
+    def toggle_song_favorite(self, arcaea_id: str) -> bool:
+        """
+        곡 즐겨찾기 토글 및 캐시 동기화.
+        Returns:
+            bool: 토글 후의 즐겨찾기 상태
+        """
+        if not arcaea_id or not self.cache_path:
+            return False
+        scores_db_path = _get_scores_db_path(self.cache_path)
+        conn = sqlite3.connect(scores_db_path, timeout=10.0)
+        try:
+            with conn:
+                cursor = conn.cursor()
+                is_fav = self.favorite_repo.toggle_song_favorite(cursor, arcaea_id)
+        finally:
+            conn.close()
+
+        if is_fav:
+            self._favorites_cache["songs"].add(arcaea_id)
+        else:
+            self._favorites_cache["songs"].discard(arcaea_id)
+        self.invalidate_caches()
+        return is_fav
+
+    def toggle_chart_favorite(self, arcaea_id: str, diff: int) -> bool:
+        """
+        채보 즐겨찾기 토글 및 캐시 동기화.
+        Returns:
+            bool: 토글 후의 즐겨찾기 상태
+        """
+        if not arcaea_id or not self.cache_path:
+            return False
+        try:
+            diff_int = int(diff)
+        except (ValueError, TypeError):
+            return False
+
+        scores_db_path = _get_scores_db_path(self.cache_path)
+        conn = sqlite3.connect(scores_db_path, timeout=10.0)
+        try:
+            with conn:
+                cursor = conn.cursor()
+                is_fav = self.favorite_repo.toggle_chart_favorite(cursor, arcaea_id, diff_int)
+        finally:
+            conn.close()
+
+        if is_fav:
+            self._favorites_cache["charts"][arcaea_id].add(diff_int)
+        else:
+            self._favorites_cache.get("charts", {}).get(arcaea_id, set()).discard(diff_int)
+        self.invalidate_caches()
+        return is_fav
+
     def build_filtered_sorted_list(
         self, display_mode, sort_mode, sort_ascending,
         search_text, filters: FilterParams
@@ -539,6 +664,18 @@ class StatisticsService:
             )
             self._base_pack_items_cache = packs
             self._base_pack_cache_key = base_cache_key
+
+        # 팩 목록의 isPackFavorite 및 수록곡 isSongFavorite, chartFavorites 최신화
+        for pack in packs:
+            pack['isPackFavorite'] = self.is_pack_favorite(pack.get('name', ''))
+            for s in pack.get('songs', []):
+                aid = s.get('arcaeaId') or s.get('id')
+                s['isSongFavorite'] = self.is_song_favorite(aid)
+                s['chartFavorites'] = list(sorted(self._favorites_cache.get("charts", {}).get(aid, set())))
+                for diff_item in s.get('filteredDifficulties', []):
+                    diff_item['isFavorite'] = self.is_chart_favorite(aid, diff_item.get('difficulty'))
+        if filters and getattr(filters, 'favorite_only', False):
+            packs = [pack for pack in packs if pack.get('isPackFavorite', False)]
 
         # 2. 검색어가 없으면 Base packs 캐시 결과를 그대로 반환
         if not clean_search:
@@ -703,6 +840,22 @@ class StatisticsService:
             ):
                 continue
 
+            if (
+                display_mode == "song"
+                and filters is not None
+                and getattr(filters, 'favorite_only', False)
+                and not self.is_song_favorite(item.get('arcaeaId', ''))
+            ):
+                continue
+
+            if (
+                display_mode == "pack"
+                and filters is not None
+                and getattr(filters, 'favorite_only', False)
+                and not self.is_pack_favorite(item.get('name', ''))
+            ):
+                continue
+
             result.append(item)
 
         self._filtered_items_cache = result
@@ -753,6 +906,7 @@ class StatisticsService:
             int(filters.score_max_rank),
             tuple(sorted(int(v) for v in (filters.clear_types or []))),
             bool(getattr(filters, 'include_inscribed', True)),
+            bool(getattr(filters, 'favorite_only', False)),
         )
 
     def _build_all_chart_items(
@@ -802,6 +956,10 @@ class StatisticsService:
             if not arcaea_id:
                 continue
 
+            if filters and getattr(filters, 'favorite_only', False):
+                if not self.is_song_favorite(arcaea_id):
+                    continue
+
             filtered_diffs = []
             for diff, chart_data in song_data.get('charts', {}).items():
                 if filters is None:
@@ -824,6 +982,11 @@ class StatisticsService:
     def _item_matches_chart_filter(self, item: dict, filters: FilterParams) -> bool:
         """Chart 아이템(dict) 기준 필터링."""
         difficulty = item.get('difficulty')
+        if getattr(filters, 'favorite_only', False):
+            arcaea_id = item.get('arcaeaId', '')
+            if not self.is_chart_favorite(arcaea_id, difficulty):
+                return False
+
         if difficulty == 3:
             is_ins = bool(item.get('isInscribed', False))
             if is_ins:
@@ -1107,6 +1270,9 @@ class StatisticsService:
             ) if has_score else None,
             'potentialRank': self._potential_rank_map.get((arcaea_id, difficulty), 0),
             'isBest10': (arcaea_id, difficulty) in self._best10_slots,
+            'isSongFavorite': self.is_song_favorite(arcaea_id),
+            'isChartFavorite': self.is_chart_favorite(arcaea_id, difficulty),
+            'isFavorite': self.is_chart_favorite(arcaea_id, difficulty),
             'displayValue': '',  # Will be set based on sort mode
         }
 
@@ -1136,6 +1302,7 @@ class StatisticsService:
             'version': chart_data.get('version', ''),
             'potentialRank': self._potential_rank_map.get((arcaea_id, difficulty), 0),
             'isBest10': bool(arcaea_id) and (arcaea_id, difficulty) in self._best10_slots,
+            'isFavorite': self.is_chart_favorite(arcaea_id, difficulty),
         }
 
     def _build_song_item(self, song_db_id, arcaea_id, song_data, filtered_difficulties, filters: FilterParams = None) -> dict:
@@ -1311,6 +1478,8 @@ class StatisticsService:
             'bestDiffForNoteCount': best_diff_for_note_count,
             'bestPotential': best_potential,
             'bestDiffForPotential': best_diff_for_potential,
+            'isSongFavorite': self.is_song_favorite(arcaea_id),
+            'chartFavorites': list(sorted(self._favorites_cache.get("charts", {}).get(arcaea_id, set()))),
         }
 
     def _build_all_difficulty_details(self, arcaea_id, song_data, filters: FilterParams) -> list:

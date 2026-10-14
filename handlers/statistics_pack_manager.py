@@ -25,6 +25,70 @@ class StatisticsPackManager:
             items.append(p)
         return items
 
+    def update_pack_favorite_inplace(self, pack_name: str, is_fav: bool) -> bool:
+        """하트필터 OFF 시 팩 목록 및 current_pack의 isPackFavorite만 인플레이스로 동기화."""
+        updated = False
+        for pack in self.pack_items:
+            if pack.get('name') == pack_name:
+                pack['isPackFavorite'] = is_fav
+                updated = True
+        if self.current_pack and self.current_pack.get('name') == pack_name:
+            self.current_pack['isPackFavorite'] = is_fav
+            updated = True
+        return updated
+
+    def update_song_favorite_inplace(self, arcaea_id: str, is_fav: bool) -> bool:
+        """하트필터 OFF 시 팩 목록 내 모든 악곡 및 current_pack의 isSongFavorite을 인플레이스로 동기화."""
+        updated = False
+        for pack in self.pack_items:
+            for s in pack.get('songs', []):
+                if s.get('arcaeaId') == arcaea_id or s.get('id') == arcaea_id:
+                    s['isSongFavorite'] = is_fav
+                    updated = True
+        if self.current_pack:
+            for s in self.current_pack.get('songs', []):
+                if s.get('arcaeaId') == arcaea_id or s.get('id') == arcaea_id:
+                    s['isSongFavorite'] = is_fav
+                    updated = True
+        return updated
+
+    def update_chart_favorite_inplace(self, arcaea_id: str, diff: int, is_fav: bool) -> bool:
+        """하트필터 OFF 시 팩 목록 내 모든 악곡 및 current_pack의 chartFavorites를 인플레이스로 동기화."""
+        updated = False
+        try:
+            diff_int = int(diff)
+        except (ValueError, TypeError):
+            return False
+
+        for pack in self.pack_items:
+            for s in pack.get('songs', []):
+                if s.get('arcaeaId') == arcaea_id or s.get('id') == arcaea_id:
+                    c_favs = set(s.get('chartFavorites', []))
+                    if is_fav:
+                        c_favs.add(diff_int)
+                    else:
+                        c_favs.discard(diff_int)
+                    s['chartFavorites'] = list(sorted(c_favs))
+                    for diff_item in s.get('filteredDifficulties', []):
+                        if diff_item.get('difficulty') == diff_int:
+                            diff_item['isFavorite'] = is_fav
+                    updated = True
+
+        if self.current_pack:
+            for s in self.current_pack.get('songs', []):
+                if s.get('arcaeaId') == arcaea_id or s.get('id') == arcaea_id:
+                    c_favs = set(s.get('chartFavorites', []))
+                    if is_fav:
+                        c_favs.add(diff_int)
+                    else:
+                        c_favs.discard(diff_int)
+                    s['chartFavorites'] = list(sorted(c_favs))
+                    for diff_item in s.get('filteredDifficulties', []):
+                        if diff_item.get('difficulty') == diff_int:
+                            diff_item['isFavorite'] = is_fav
+                    updated = True
+        return updated
+
     def rebuild_pack_items(self):
         """Pack 모드 팩 아이템 목록 재빌드 및 current_pack 동기화."""
         filters = self._handler._get_filter_params()

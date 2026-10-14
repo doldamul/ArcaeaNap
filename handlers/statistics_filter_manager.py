@@ -24,6 +24,7 @@ class StatisticsFilterManager:
         self._filter_score_min_rank = 0  # Index in SCORE_RANKS (0 = '-')
         self._filter_score_max_rank = len(SCORE_RANKS) - 1  # Index in SCORE_RANKS (last = 'PM')
         self._filter_clear_types = [0, 1, 2, 3, 4, 5]  # All clear types
+        self._filter_favorite_only = False  # Favorite only filter flag
 
     def get_filter_params(self) -> FilterParams:
         """현재 필터 상태를 FilterParams로 변환."""
@@ -41,6 +42,7 @@ class StatisticsFilterManager:
             score_max_rank=self._filter_score_max_rank,
             clear_types=self._filter_clear_types,
             include_inscribed=self._filter_include_inscribed,
+            favorite_only=self._filter_favorite_only,
         )
 
     def set_filter(self, filter_type: str, value: Any):
@@ -78,6 +80,16 @@ class StatisticsFilterManager:
             self._filter_score_max_rank = int(value) if value is not None else len(SCORE_RANKS) - 1
         elif filter_type in ('include_inscribed', 'includeInscribed'):
             self._filter_include_inscribed = bool(value)
+        elif filter_type in ('favorite_only', 'favoriteOnly'):
+            self._filter_favorite_only = bool(value)
+
+    @property
+    def favorite_only(self) -> bool:
+        return self._filter_favorite_only
+
+    def toggle_favorite_filter(self):
+        """즐겨찾기 전용 필터 토글."""
+        self._filter_favorite_only = not self._filter_favorite_only
 
     @property
     def available_levels(self):
@@ -217,6 +229,73 @@ class StatisticsFilterManager:
                                 continue
                             break
 
+        elif selection_mode == 'retain_or_first':
+            found = False
+            if self._handler._selected_song_db_id is not None:
+                for i, item in enumerate(list_items):
+                    if item.get('songDbId') != self._handler._selected_song_db_id:
+                        continue
+
+                    if self._handler._display_mode == "chart":
+                        if item.get('difficulty') == self._handler._selected_difficulty:
+                            self._handler._selected_index = i
+                            self._handler._selected_item = item
+                            found = True
+                            break
+                    else:
+                        self._handler._selected_index = i
+                        self._handler._selected_item = item
+                        found = True
+                        all_diffs = self._handler._get_item_detail_difficulties(item)
+                        selected_details = all_diffs
+                        current_diff_available = any(
+                            d.get('difficulty') == self._handler._selected_difficulty
+                            and not d.get('isFiltered', False)
+                            for d in all_diffs
+                        )
+                        if not current_diff_available:
+                            for diff_num in [3, 4, 2, 1, 0]:
+                                for diff_item in all_diffs:
+                                    if (
+                                        diff_item.get('difficulty') == diff_num
+                                        and not diff_item.get('isFiltered', False)
+                                    ):
+                                        self._handler._selected_difficulty = diff_num
+                                        break
+                                else:
+                                    continue
+                                break
+                        break
+
+            if not found and list_items:
+                # 기존 선택 항목이 없으면 첫 번째 항목으로 fallback
+                self._handler._selected_index = 0
+                self._handler._selected_item = self._handler._list_model.get_item(0)
+                self._handler._selected_song_db_id = self._handler._selected_item.get('songDbId')
+
+                if self._handler._display_mode == "chart":
+                    self._handler._selected_difficulty = self._handler._selected_item.get('difficulty', 2)
+                else:
+                    best_diff = self._service.get_best_diff_for_sort(
+                        self._handler._selected_item, self._handler._sort_mode
+                    )
+                    if best_diff >= 0:
+                        self._handler._selected_difficulty = best_diff
+                    else:
+                        all_diffs = self._handler._get_item_detail_difficulties(self._handler._selected_item)
+                        selected_details = all_diffs
+                        for diff_num in [3, 4, 2, 1, 0]:
+                            for diff_item in all_diffs:
+                                if (
+                                    diff_item.get('difficulty') == diff_num
+                                    and not diff_item.get('isFiltered', False)
+                                ):
+                                    self._handler._selected_difficulty = diff_num
+                                    break
+                            else:
+                                continue
+                            break
+
         elif selection_mode == 'adjacent_fallback':
             if self._handler._selected_song_db_id is not None:
                 found = False
@@ -286,7 +365,7 @@ class StatisticsFilterManager:
         self._handler.dataChanged.emit()
 
         if (
-            selection_mode in ('first', 'restore_always_emit', 'adjacent_fallback')
+            selection_mode in ('first', 'restore_always_emit', 'adjacent_fallback', 'retain_or_first')
             or self._handler._selected_index != old_selected_index
         ):
             self._handler.selectedItemChanged.emit()
