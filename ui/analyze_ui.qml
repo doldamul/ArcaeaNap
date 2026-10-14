@@ -11,7 +11,7 @@ Item {
     readonly property var appWindow: ApplicationWindow.window
     readonly property string titleFontFamily: (appWindow && appWindow.titleFontFamily)
         ? appWindow.titleFontFamily
-        : (appWindow ? appWindow.font.family : "")
+        : ((typeof embeddedTitleFontFamily === "string" && embeddedTitleFontFamily.length > 0) ? embeddedTitleFontFamily : ((appWindow && appWindow.font && appWindow.font.family) ? appWindow.font.family : ((typeof embeddedBaseUiFontFamily === "string" && embeddedBaseUiFontFamily.length > 0) ? embeddedBaseUiFontFamily : "Segoe UI")))
 
     Connections {
         target: analysisHandler

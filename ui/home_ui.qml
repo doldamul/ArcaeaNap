@@ -43,7 +43,7 @@ Item {
     readonly property var appWindow: ApplicationWindow.window
     readonly property string titleFontFamily: (appWindow && appWindow.titleFontFamily)
         ? appWindow.titleFontFamily
-        : (appWindow ? appWindow.font.family : "")
+        : ((typeof embeddedTitleFontFamily === "string" && embeddedTitleFontFamily.length > 0) ? embeddedTitleFontFamily : ((appWindow && appWindow.font && appWindow.font.family) ? appWindow.font.family : ((typeof embeddedBaseUiFontFamily === "string" && embeddedBaseUiFontFamily.length > 0) ? embeddedBaseUiFontFamily : "Segoe UI")))
 
     function loadProfile() {
         if (profileHandler) {
@@ -266,11 +266,11 @@ Item {
                                 spacing: 2
                                 visible: homeRoot.showPotentialInProfile
                                 
-                                property color colorTheme: (profileData.connected && profileData.rating !== null && profileData.rating !== undefined)
+                                property bool hasRating: profileData.connected && profileData.rating !== null && profileData.rating !== undefined
+                                property color colorTheme: hasRating
                                     ? Theme.getPotentialColor(profileData.rating)
                                     : Theme.textLight
                                 property int starCount: (profileData.connected && profileData.potentialStars) ? profileData.potentialStars : 0
-                                property bool hasRating: profileData.connected && profileData.rating !== null && profileData.rating !== undefined
 
                                 // Rating Value (floating directly on background)
                                 Text {

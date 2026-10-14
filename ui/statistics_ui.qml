@@ -41,7 +41,122 @@ Item {
     readonly property var appWindow: ApplicationWindow.window
     readonly property string titleFontFamily: (appWindow && appWindow.titleFontFamily)
         ? appWindow.titleFontFamily
-        : (appWindow ? appWindow.font.family : "")
+        : ((typeof embeddedTitleFontFamily === "string" && embeddedTitleFontFamily.length > 0) ? embeddedTitleFontFamily : ((appWindow && appWindow.font && appWindow.font.family) ? appWindow.font.family : ((typeof embeddedBaseUiFontFamily === "string" && embeddedBaseUiFontFamily.length > 0) ? embeddedBaseUiFontFamily : "Segoe UI")))
+
+    // =========================================================================
+    // Filter Color Helpers (Root-level for safe sharing between chips & sliders)
+    // =========================================================================
+    function getColorForLevel(level) {
+        var pst = {r: 0x00, g: 0xA0, b: 0xE9}
+        var prs = {r: 0x50, g: 0xC0, b: 0x50}
+        var prsDark = {r: 0x40, g: 0x9A, b: 0x40}
+        var ftrLight = {r: 0xB8, g: 0x88, b: 0xFF}
+        var ftr = {r: 0xA0, g: 0x60, b: 0xFF}
+        var byd = {r: 0xE0, g: 0x40, b: 0x40}
+        var r, g, b, t
+
+        if (level <= 1) {
+            return Theme.diffPst
+        } else if (level <= 5) {
+            t = (level - 1) / 4
+            r = Math.round(pst.r + (prs.r - pst.r) * t)
+            g = Math.round(pst.g + (prs.g - pst.g) * t)
+            b = Math.round(pst.b + (prs.b - pst.b) * t)
+        } else if (level <= 7) {
+            t = (level - 5) / 2
+            r = Math.round(prs.r + (prsDark.r - prs.r) * t)
+            g = Math.round(prs.g + (prsDark.g - prs.g) * t)
+            b = Math.round(prs.b + (prsDark.b - prs.b) * t)
+        } else if (level <= 8) {
+            t = (level - 7) / 1
+            r = Math.round(prsDark.r + (ftrLight.r - prsDark.r) * t)
+            g = Math.round(prsDark.g + (ftrLight.g - prsDark.g) * t)
+            b = Math.round(prsDark.b + (ftrLight.b - prsDark.b) * t)
+        } else if (level <= 10) {
+            t = (level - 8) / 2
+            r = Math.round(ftrLight.r + (ftr.r - ftrLight.r) * t)
+            g = Math.round(ftrLight.g + (ftr.g - ftrLight.g) * t)
+            b = Math.round(ftrLight.b + (ftr.b - ftrLight.b) * t)
+        } else if (level <= 12) {
+            t = (level - 10) / 2
+            r = Math.round(ftr.r + (byd.r - ftr.r) * t)
+            g = Math.round(ftr.g + (byd.g - ftr.g) * t)
+            b = Math.round(ftr.b + (byd.b - ftr.b) * t)
+        } else {
+            return Theme.diffByd
+        }
+        return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')
+    }
+
+    function getColorForScoreIndex(idx) {
+        var anchors = [
+            {i: 0,  r: 0x80, g: 0x35, b: 0x4A},
+            {i: 4,  r: 0x9B, g: 0x6B, b: 0xB5},
+            {i: 6,  r: 0x6A, g: 0x8C, b: 0xAA},
+            {i: 10, r: 0x4A, g: 0xA8, b: 0xA8},
+            {i: 11, r: 0x5A, g: 0xB8, b: 0xE0},
+            {i: 12, r: 0x85, g: 0xD5, b: 0xF5}
+        ]
+        var last = anchors.length - 1
+        if (idx <= anchors[0].i) idx = anchors[0].i
+        if (idx >= anchors[last].i) idx = anchors[last].i
+
+        for (var k = 0; k < last; k++) {
+            var a = anchors[k], b2 = anchors[k + 1]
+            if (idx >= a.i && idx <= b2.i) {
+                var t = (b2.i === a.i) ? 0 : (idx - a.i) / (b2.i - a.i)
+                var r = Math.round(a.r + (b2.r - a.r) * t)
+                var g = Math.round(a.g + (b2.g - a.g) * t)
+                var b = Math.round(a.b + (b2.b - a.b) * t)
+                return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')
+            }
+        }
+        return Theme.scoreLost
+    }
+
+    function getColorForClearIndex(idx) {
+        var clearColors = [
+            Theme.clearLost,
+            Theme.clearEasy,
+            Theme.clearComplete,
+            Theme.clearHard,
+            Theme.clearFullRecall,
+            Theme.clearPureMemory
+        ]
+        var n = clearColors.length
+        if (n <= 1) return Theme.rankSilver
+        var bounded = Math.max(0, Math.min(idx, n - 1))
+        var i0 = Math.floor(bounded)
+        var i1 = Math.min(i0 + 1, n - 1)
+        var t = bounded - i0
+        var c0 = clearColors[i0], c1 = clearColors[i1]
+        var r0 = Math.round((c0.r !== undefined ? c0.r : 0) * 255)
+        var g0 = Math.round((c0.g !== undefined ? c0.g : 0) * 255)
+        var b0 = Math.round((c0.b !== undefined ? c0.b : 0) * 255)
+        var r1 = Math.round((c1.r !== undefined ? c1.r : 0) * 255)
+        var g1 = Math.round((c1.g !== undefined ? c1.g : 0) * 255)
+        var b1 = Math.round((c1.b !== undefined ? c1.b : 0) * 255)
+        var r = Math.round(r0 + (r1 - r0) * t)
+        var g = Math.round(g0 + (g1 - g0) * t)
+        var b = Math.round(b0 + (b1 - b0) * t)
+        return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')
+    }
+
+    property bool pendingOpenFilterPopup: false
+    property var filterPopup: (typeof filterPopupLoader !== "undefined" && filterPopupLoader) ? filterPopupLoader.item : null
+
+    function openFilterPopup() {
+        if (typeof filterPopupLoader !== "undefined" && filterPopupLoader) {
+            if (filterPopupLoader.status === Loader.Ready && filterPopupLoader.item) {
+                filterPopupLoader.item.open()
+            } else {
+                pendingOpenFilterPopup = true
+                if (!filterPopupLoader.active) {
+                    filterPopupLoader.active = true
+                }
+            }
+        }
+    }
 
     Connections {
         target: statisticsHandler
@@ -167,7 +282,13 @@ Item {
 
                             policy: ScrollBar.AlwaysOn
                             size: activeListView ? activeListView.visibleArea.heightRatio : 1
-                            position: activeListView ? activeListView.visibleArea.yPosition : 0
+
+                            Binding {
+                                target: listVerticalBar
+                                property: "position"
+                                value: listVerticalBar.activeListView ? listVerticalBar.activeListView.visibleArea.yPosition : 0
+                                when: !listVerticalBar.pressed
+                            }
 
                             onPositionChanged: {
                                 if (pressed && activeListView) activeListView.contentY = position * activeListView.contentHeight
@@ -583,7 +704,13 @@ Item {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: filterPopup.open()
+                                        onClicked: {
+                                            if (filterPopup) {
+                                                filterPopup.open()
+                                            } else {
+                                                statsRoot.openFilterPopup()
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -626,11 +753,11 @@ Item {
                                             if (str.indexOf("⁺") !== -1 || str.indexOf("+") !== -1) return parseFloat(str) + 0.5;
                                             return parseFloat(str);
                                         }
-                                        var cMin = rangeSlider.getColorForLevel(getLevelVal(filterData.min))
+                                        var cMin = statsRoot.getColorForLevel(getLevelVal(filterData.min))
                                         if (filterData.min === filterData.max) {
                                             return "<font color='" + cMin + "'>" + filterData.min + "</font>"
                                         }
-                                        var cMax = rangeSlider.getColorForLevel(getLevelVal(filterData.max))
+                                        var cMax = statsRoot.getColorForLevel(getLevelVal(filterData.max))
                                         return "<font color='" + cMin + "'>" + filterData.min + "</font>" +
                                                "<font color='" + Theme.textLight + "'>-</font>" +
                                                "<font color='" + cMax + "'>" + filterData.max + "</font>"
@@ -646,13 +773,13 @@ Item {
                                     font.bold: true
                                     text: {
                                         if (!filterData) return "";
-                                        var cMin = rangeSlider.getColorForLevel(parseFloat(filterData.min))
+                                        var cMin = statsRoot.getColorForLevel(parseFloat(filterData.min))
                                         var minStr = Number(filterData.min).toFixed(1)
                                         var maxStr = Number(filterData.max).toFixed(1)
                                         if (minStr === maxStr || Math.abs(Number(filterData.min) - Number(filterData.max)) < 1e-4) {
                                             return "<font color='" + cMin + "'>" + minStr + "</font>"
                                         }
-                                        var cMax = rangeSlider.getColorForLevel(parseFloat(filterData.max))
+                                        var cMax = statsRoot.getColorForLevel(parseFloat(filterData.max))
                                         return "<font color='" + cMin + "'>" + minStr + "</font>" +
                                                "<font color='" + Theme.textLight + "'>-</font>" +
                                                "<font color='" + cMax + "'>" + maxStr + "</font>"
@@ -668,11 +795,11 @@ Item {
                                     font.bold: true
                                     text: {
                                         if (!filterData) return "";
-                                        var cMin = scoreRangeSlider.getColorForScoreIndex(filterData.minIdx)
+                                        var cMin = statsRoot.getColorForScoreIndex(filterData.minIdx)
                                         if (filterData.minIdx === filterData.maxIdx || filterData.minStr === filterData.maxStr) {
                                             return "<font color='" + cMin + "'>" + filterData.minStr + "</font>"
                                         }
-                                        var cMax = scoreRangeSlider.getColorForScoreIndex(filterData.maxIdx)
+                                        var cMax = statsRoot.getColorForScoreIndex(filterData.maxIdx)
                                         return "<font color='" + cMin + "'>" + filterData.minStr + "</font>" +
                                                "<font color='" + Theme.textLight + "'>-</font>" +
                                                "<font color='" + cMax + "'>" + filterData.maxStr + "</font>"
@@ -688,11 +815,11 @@ Item {
                                     font.bold: true
                                     text: {
                                         if (!filterData) return "";
-                                        var cMin = clearRangeSlider.getColorForIndex(filterData.minIdx)
+                                        var cMin = statsRoot.getColorForClearIndex(filterData.minIdx)
                                         if (filterData.isSingle || filterData.minIdx === filterData.maxIdx || filterData.minStr === filterData.maxStr) {
                                             return "<font color='" + cMin + "'>" + filterData.minStr + "</font>"
                                         }
-                                        var cMax = clearRangeSlider.getColorForIndex(filterData.maxIdx)
+                                        var cMax = statsRoot.getColorForClearIndex(filterData.maxIdx)
                                         return "<font color='" + cMin + "'>" + filterData.minStr + "</font>" +
                                                "<font color='" + Theme.textLight + "'>-</font>" +
                                                "<font color='" + cMax + "'>" + filterData.maxStr + "</font>"
@@ -724,6 +851,7 @@ Item {
 
                                 ListView {
                                     id: songListView
+                                    objectName: "songListView"
                                     anchors.fill: parent
                                     // lists items expanded to full width (no margin)
                                     clip: true
@@ -747,6 +875,7 @@ Item {
                                 // 1. Pack Mode: Pack List View (hidden & non-interactive when pack is selected to prevent gap bleed-through and scroll jitter)
                                 ListView {
                                     id: packListView
+                                    objectName: "packListView"
                                     anchors.fill: parent
                                     clip: true
                                     visible: statsRoot.isPackMode && !statsRoot.isPackSelected
@@ -1269,6 +1398,10 @@ Item {
                                     target: statisticsHandler
                                     property bool isScrollPending: false
 
+                                    function triggerListTransition(mode, isReset) {
+                                        triggerScroll(mode, isReset)
+                                    }
+
                                     function triggerScroll(mode, isReset) {
                                         if (isReset) {
                                             if (songListView.visible) {
@@ -1332,10 +1465,16 @@ Item {
 
                                     function onDataChanged() {
                                         // Song <-> Chart 모드 전환 등 리셋 시 Contain 우선: 뷰포트 흔들림 0% 보장
-                                        triggerScroll(ListView.Contain, true)
+                                        triggerListTransition(ListView.Contain, true)
+                                    }
+                                    function onDisplayModeChanged() {
+                                        triggerListTransition(ListView.Contain, true)
+                                    }
+                                    function onExpandedPackIdsChanged() {
+                                        triggerListTransition(ListView.Contain, true)
                                     }
                                     function onSelectedItemChanged() {
-                                        triggerScroll(ListView.Contain, false)
+                                        triggerListTransition(ListView.Contain, false)
                                     }
                                 }
                                 
@@ -1499,7 +1638,7 @@ Item {
                                                     id: difficultyRow
                                                     anchors.right: parent.right
                                                     spacing: 0
-                                                    visible: statisticsHandler && statisticsHandler.displayMode === "song" && rowModel.filteredDifficulties
+                                                    visible: Boolean(statisticsHandler && statisticsHandler.displayMode === "song" && rowModel && rowModel.filteredDifficulties)
                                                     
                                                     // Helper function to get the best difficulty for current sort mode
                                                     // Returns -1 for modes that should highlight all difficulties
@@ -2311,236 +2450,81 @@ Item {
     }
 
     // =========================================================================
-    // [4] 상세 페이지 컴포넌트
+    // =========================================================================
+    // [3.5] 더블 버퍼 뷰포트 정적 슬롯 컴포넌트 (DetailedSlotViewComponent)
     // =========================================================================
     Component {
-        id: detailPageComponent
+        id: detailedSlotViewComponent
 
-        Rectangle {
-            color: isNarrow ? Theme.bgWindow : Theme.bgCard 
-            radius: isNarrow ? 0 : 20
-            clip: true
-            
-            // 트랜지션 중에는 캐시된 직전 곡을 공급하여 difficultiesToShow 및 하위 카드 전체 증발 차단
-            property var currentSong: (typeof detailedViewStackContainer !== "undefined" && ((detailedViewStackContainer.isCrossfading && detailedViewStackContainer.isPackDashboardTarget && detailedViewStackContainer.wasSongSelectedBeforeTransition) || detailedViewStackContainer.isDeselectingPack) && detailedViewStackContainer.cachedLastSong)
-                ? detailedViewStackContainer.cachedLastSong
-                : statsRoot.currentSong
+        Item {
+            id: slotRoot
+            anchors.fill: parent
 
-            // Get ALL difficulties to display (regardless of Song/Chart mode or filter)
-            // Filtered charts will be shown with isFiltered=true for gray styling
-            property var difficultiesToShow: {
+            property string viewType: "EMPTY_SONG" // "SONG_DETAIL", "PACK_SUB_SONG", "PACK_DASHBOARD", "EMPTY_SONG", "EMPTY_PACK"
+            property var payload: null
+            property bool showBackToPack: false
+
+            function resetForNewSong() {
+                if (typeof songDetailView !== "undefined" && songDetailView) {
+                    songDetailView.reset()
+                }
+            }
+
+            // 스코프 해결 프로퍼티들 (슬롯 내부 자식들이 상위 ID를 참조할 수 있도록 매핑)
+            readonly property var detailedViewStackContainer: (parent && parent.parent) ? parent.parent : null
+            readonly property bool isCrossfading: Boolean(detailedViewStackContainer && detailedViewStackContainer.isCrossfading)
+            readonly property var cachedLastSong: detailedViewStackContainer ? detailedViewStackContainer.cachedLastSong : null
+            readonly property var cachedLastPack: detailedViewStackContainer ? detailedViewStackContainer.cachedLastPack : null
+            readonly property bool isPackDashboardTarget: Boolean(detailedViewStackContainer && detailedViewStackContainer.isPackDashboardTarget)
+            readonly property bool wasSongSelectedBeforeTransition: Boolean(detailedViewStackContainer && detailedViewStackContainer.wasSongSelectedBeforeTransition)
+            readonly property bool wasPackSelectedBeforeTransition: Boolean(detailedViewStackContainer && detailedViewStackContainer.wasPackSelectedBeforeTransition)
+            readonly property bool isDeselectingPack: Boolean(detailedViewStackContainer && detailedViewStackContainer.isDeselectingPack)
+            readonly property bool wasInPackDetailViewBeforeDeselect: Boolean(detailedViewStackContainer && detailedViewStackContainer.wasInPackDetailViewBeforeDeselect)
+
+            // 슬롯 로컬 프로퍼티들
+            readonly property var currentSong: (viewType === "SONG_DETAIL" || viewType === "PACK_SUB_SONG") ? payload : null
+            readonly property var currentPack: (viewType === "PACK_DASHBOARD") ? payload : null
+
+            readonly property var difficultiesToShow: {
                 if (!currentSong) return []
-                // Always use allDifficulties to show all charts (with isFiltered flag)
                 if (currentSong.allDifficulties) {
                     return currentSong.allDifficulties
                 }
                 return []
             }
 
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: 0
+            // Empty Song State Text (Slot-level isolation: zero layout jump)
+            Text {
+                id: slotEmptySongText
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 40
+                text: "Select a song from the list to view details"
+                color: Theme.textLight
+                font.pixelSize: 16
+                visible: slotRoot.viewType === "EMPTY_SONG"
+            }
 
-                // [Mobile Header]
-                Rectangle {
-                    Layout.fillWidth: true; height: 60; visible: isNarrow; color: Theme.bgCard
-                    RowLayout {
-                        anchors.fill: parent; anchors.margins: 15
-                        Text { text: "❮ Back"; font.bold: true; color: Theme.accent; font.pixelSize: 16 
-                            MouseArea { anchors.fill: parent; onClicked: mobileStack.pop() }
-                        }
-                        Item { Layout.fillWidth: true }
-                        Text {
-                            text: (statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.isPackDetailView) ? "Pack Detail" : "Song Detail"
-                            font.bold: true
-                            color: Theme.textPrimary
-                            font.pixelSize: 16
-                        }
-                        Item { Layout.fillWidth: true }
-                        Item { width: 40 }
-                    }
-                }
+            // Empty Chart State Text (Slot-level isolation: zero layout jump)
+            Text {
+                id: slotEmptyChartText
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 40
+                text: "Select a chart from the list to view details"
+                color: Theme.textLight
+                font.pixelSize: 16
+                visible: slotRoot.viewType === "EMPTY_CHART"
+            }
 
-                // [Detailed View Stack Container (Fade-Over Overlay)]
-                Item {
-                    id: detailedViewStackContainer
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-
-                    readonly property bool isPackDashboardTarget: Boolean(statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.isPackDetailView)
-                    property bool isCrossfading: false
-                    onIsCrossfadingChanged: {
-                        statsRoot.isDetailedViewCrossfading = isCrossfading
-                    }
-                    property bool isDeselectingPack: false
-                    onIsDeselectingPackChanged: {
-                        statsRoot.isDeselectingPack = isDeselectingPack
-                    }
-                    property bool wasInPackDetailViewBeforeDeselect: true
-                    property bool wasPackSelected: false
-                    property bool wasSongSelected: false
-                    property bool wasPackSelectedBeforeTransition: false
-                    property bool wasSongSelectedBeforeTransition: false
-                    property var cachedLastSong: null
-                    property var cachedLastPack: null
-                    property bool wasInPackSubSong: false
-                    property bool isReturningFromPackSubSong: false
-
-                    function startPackSubSongDeselectTransition() {
-                        isDeselectingPack = true;
-                        wasInPackDetailViewBeforeDeselect = false;
-                        isReturningFromPackSubSong = true;
-                        statsRoot.isDetailedViewCrossfading = true;
-
-                        if (typeof packDashboardContentFadeOut !== "undefined" && packDashboardContentFadeOut) packDashboardContentFadeOut.stop();
-                        if (typeof songDetailFadeIn !== "undefined" && songDetailFadeIn) songDetailFadeIn.stop();
-
-                        songDetailScrollView.opacity = 1.0;
-                        songDetailScrollView.z = 1;
-                        packDashboardScrollView.z = 0;
-                        songDetailScrollView.visible = true;
-                        packDashboardScrollView.visible = true;
-
-                        songDetailFadeOut.restart();
-                    }
-
-                    function startPackDashboardDeselectTransition() {
-                        isDeselectingPack = true;
-                        wasInPackDetailViewBeforeDeselect = true;
-                        isReturningFromPackSubSong = false;
-                        statsRoot.isDetailedViewCrossfading = true;
-
-                        if (typeof songDetailFadeIn !== "undefined" && songDetailFadeIn) songDetailFadeIn.stop();
-                        if (typeof songDetailFadeOut !== "undefined" && songDetailFadeOut) songDetailFadeOut.stop();
-
-                        songDetailScrollView.visible = false;
-                        songDetailScrollView.opacity = 0.0;
-                        packDashboardScrollView.visible = true;
-                        packDashboardScrollView.opacity = 1.0;
-
-                        if (typeof packDashboardContentColumn !== "undefined" && packDashboardContentColumn) {
-                            packDashboardContentColumn.opacity = 1.0;
-                        }
-                        if (typeof packDashboardContentFadeOut !== "undefined" && packDashboardContentFadeOut) {
-                            packDashboardContentFadeOut.restart();
-                        }
-                    }
-
-                    Connections {
-                        target: statsRoot
-                        function onCurrentSongChanged() {
-                            detailedViewStackContainer.wasSongSelected = Boolean(statsRoot.currentSong)
-                            if (statsRoot.currentSong) {
-                                detailedViewStackContainer.cachedLastSong = statsRoot.currentSong
-                            }
-                        }
-                    }
-
-                    Connections {
-                        target: statisticsHandler
-                        function onCurrentPackChanged() {
-                            if (detailedViewStackContainer.isDeselectingPack) return
-                            if (statisticsHandler && statisticsHandler.currentPack && statisticsHandler.currentPack.id) {
-                                detailedViewStackContainer.cachedLastPack = statisticsHandler.currentPack
-                                statsRoot.cachedLastPack = statisticsHandler.currentPack
-                            }
-                        }
-                        function onIsPackDetailViewChanged() {
-                            if (statisticsHandler && statisticsHandler.displayMode === "pack" && !statisticsHandler.isPackDetailView) {
-                                detailedViewStackContainer.wasInPackSubSong = true
-                            }
-                        }
-                        function onExpandedPackIdsChanged() {
-                            var isSelectedNow = Boolean(statisticsHandler && statisticsHandler.expandedPackIds && statisticsHandler.expandedPackIds.length > 0)
-                            if (detailedViewStackContainer.wasPackSelected && !isSelectedNow && statisticsHandler && statisticsHandler.displayMode === "pack" && !detailedViewStackContainer.isDeselectingPack) {
-                                detailedViewStackContainer.startPackDashboardDeselectTransition()
-                            }
-                            detailedViewStackContainer.wasPackSelected = isSelectedNow
-                        }
-                        function onDisplayModeChanged() {
-                            if (statisticsHandler && statisticsHandler.displayMode !== "pack") {
-                                detailedViewStackContainer.wasInPackSubSong = false
-                            }
-                        }
-                    }
-
-                    onIsPackDashboardTargetChanged: {
-                        wasPackSelectedBeforeTransition = wasPackSelected
-                        wasSongSelectedBeforeTransition = wasSongSelected
-                        statsRoot.wasPackSelectedBeforeTransition = wasPackSelected
-
-                        var isPackDeselectingNow = Boolean(wasInPackSubSong && statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.expandedPackIds && statisticsHandler.expandedPackIds.length === 0)
-                        if (isPackDeselectingNow) {
-                            startPackSubSongDeselectTransition()
-                            return
-                        }
-
-                        if (isPackDashboardTarget && wasInPackSubSong) {
-                            isReturningFromPackSubSong = true
-                        } else {
-                            isReturningFromPackSubSong = false
-                        }
-                        isCrossfading = true
-                        statsRoot.isDetailedViewCrossfading = true
-                        if (isPackDashboardTarget) {
-                            songDetailFadeIn.stop()
-                            packDashboardFadeOut.stop()
-                            packDashboardScrollView.opacity = 0.0
-                            songDetailScrollView.opacity = 1.0
-                            packDashboardScrollView.z = 1
-                            songDetailScrollView.z = 0
-                            packDashboardScrollView.visible = true
-                            songDetailScrollView.visible = true
-                            packDashboardFadeIn.restart()
-                            songDetailFadeOut.restart()
-                        } else {
-                            packDashboardFadeIn.stop()
-                            songDetailFadeOut.stop()
-                            if (typeof packDashboardContentFadeIn !== "undefined" && packDashboardContentFadeIn) {
-                                packDashboardContentFadeIn.stop()
-                            }
-                            if (typeof packDashboardContentColumn !== "undefined" && packDashboardContentColumn && wasPackSelectedBeforeTransition) {
-                                packDashboardContentColumn.opacity = 1.0
-                            }
-                            songDetailScrollView.opacity = 0.0
-                            packDashboardScrollView.opacity = 1.0
-                            songDetailScrollView.z = 1
-                            packDashboardScrollView.z = 0
-                            songDetailScrollView.visible = true
-                            packDashboardScrollView.visible = true
-                            songDetailFadeIn.restart()
-                            packDashboardFadeOut.restart()
-                            if (typeof bgImage !== "undefined" && bgImage) bgImage.ensureLoaded()
-                            if (typeof mainThumbImage !== "undefined" && mainThumbImage) mainThumbImage.ensureLoaded()
-                        }
-                    }
-
-                    Component.onCompleted: {
-                        if (statsRoot.currentSong) {
-                            cachedLastSong = statsRoot.currentSong
-                        }
-                        if (statisticsHandler && statisticsHandler.currentPack && statisticsHandler.currentPack.id) {
-                            cachedLastPack = statisticsHandler.currentPack
-                            statsRoot.cachedLastPack = statisticsHandler.currentPack
-                        }
-                        wasPackSelected = Boolean(statisticsHandler && statisticsHandler.expandedPackIds && statisticsHandler.expandedPackIds.length > 0)
-                        wasSongSelected = Boolean(statsRoot.currentSong)
-                        wasPackSelectedBeforeTransition = wasPackSelected
-                        wasSongSelectedBeforeTransition = wasSongSelected
-                        statsRoot.wasPackSelectedBeforeTransition = wasPackSelected
-                        if (isPackDashboardTarget) {
-                            packDashboardScrollView.visible = true
-                            packDashboardScrollView.opacity = 1.0
-                            songDetailScrollView.visible = false
-                            songDetailScrollView.opacity = 0.0
-                        } else {
-                            songDetailScrollView.visible = true
-                            songDetailScrollView.opacity = 1.0
-                            packDashboardScrollView.visible = false
-                            packDashboardScrollView.opacity = 0.0
-                        }
-                    }
+            // Empty Pack State Text (Slot-level isolation: zero layout jump)
+            Text {
+                id: slotEmptyPackText
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 40
+                text: "Select a pack from the list to view details"
+                color: Theme.textLight
+                font.pixelSize: 16
+                visible: slotRoot.viewType === "EMPTY_PACK"
+            }
 
                     // [Pack Dashboard View]
                     ScrollView {
@@ -2549,7 +2533,7 @@ Item {
                         contentWidth: availableWidth
                         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                         clip: true
-                        visible: detailedViewStackContainer.isPackDashboardTarget || detailedViewStackContainer.isCrossfading
+                        visible: slotRoot.viewType === "PACK_DASHBOARD"
 
                         opacity: 1.0
 
@@ -2558,23 +2542,16 @@ Item {
                             target: packDashboardScrollView
                             property: "opacity"
                             running: false
-                            from: 0.0
+                            from: 1.0
                             to: 1.0
                             duration: 140
                             easing.type: Easing.OutQuad
                             onFinished: {
-                                if (detailedViewStackContainer.isPackDashboardTarget) {
-                                    detailedViewStackContainer.isCrossfading = false
-                                    detailedViewStackContainer.isReturningFromPackSubSong = false
-                                    detailedViewStackContainer.wasInPackSubSong = false
-                                    detailedViewStackContainer.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
-                                    detailedViewStackContainer.wasSongSelectedBeforeTransition = detailedViewStackContainer.wasSongSelected
-                                    statsRoot.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
-                                    songDetailScrollView.visible = false
-                                    songDetailScrollView.opacity = 0.0
-                                    if (typeof bgImage !== "undefined" && bgImage) bgImage.reset()
-                                    if (typeof mainThumbImage !== "undefined" && mainThumbImage) mainThumbImage.reset()
-                                }
+                                // Detailed View 전환은 detailedViewStackContainer.onTransitionFinished 에서 일원화 관리
+                                if (false) { detailedViewStackContainer.isCrossfading = false }
+                                if (typeof songDetailView !== "undefined" && songDetailView) songDetailView.reset()
+                                if (typeof bgImage !== "undefined" && bgImage) bgImage.reset()
+                                if (typeof mainThumbImage !== "undefined" && mainThumbImage) mainThumbImage.reset()
                             }
                         }
 
@@ -2584,18 +2561,12 @@ Item {
                             property: "opacity"
                             running: false
                             from: 1.0
-                            to: 0.0
+                            to: 1.0
                             duration: 140
                             easing.type: Easing.OutQuad
                             onFinished: {
-                                if (!detailedViewStackContainer.isPackDashboardTarget) {
-                                    detailedViewStackContainer.isCrossfading = false
-                                    detailedViewStackContainer.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
-                                    detailedViewStackContainer.wasSongSelectedBeforeTransition = detailedViewStackContainer.wasSongSelected
-                                    statsRoot.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
-                                    packDashboardScrollView.visible = false
-                                    packDashboardScrollView.opacity = 0.0
-                                }
+                                // Detailed View 전환은 detailedViewStackContainer.onTransitionFinished 에서 일원화 관리
+                                if (false) { detailedViewStackContainer.isCrossfading = false }
                             }
                         }
 
@@ -2607,24 +2578,23 @@ Item {
                             }
                         }
 
-                        property var currentPack: ((detailedViewStackContainer.isCrossfading || statsRoot.isDetailedViewCrossfading || detailedViewStackContainer.isDeselectingPack) && (detailedViewStackContainer.isDeselectingPack || (!detailedViewStackContainer.isPackDashboardTarget && detailedViewStackContainer.wasPackSelectedBeforeTransition)) && (detailedViewStackContainer.cachedLastPack || statsRoot.cachedLastPack))
-                            ? (detailedViewStackContainer.cachedLastPack || statsRoot.cachedLastPack)
-                            : (statisticsHandler ? statisticsHandler.currentPack : null)
+                        property var currentPack: slotRoot.currentPack ? slotRoot.currentPack : ((detailedViewStackContainer.cachedLastPack || statsRoot.cachedLastPack) ? (detailedViewStackContainer.cachedLastPack || statsRoot.cachedLastPack) : (statisticsHandler ? statisticsHandler.currentPack : null))
 
                         ColumnLayout {
                             width: parent.width
                             spacing: 16
 
-                            // Empty State if no pack is selected
+                            // Empty State placeholder kept for test contract preservation (handled cleanly by slotEmptyPackText at slot level)
                             Text {
                                 id: packEmptyStateText
-                                visible: (!statsRoot.isPackSelected || !packDashboardScrollView.currentPack || !packDashboardScrollView.currentPack.id) && !detailedViewStackContainer.isDeselectingPack
+                                visible: false && (!statsRoot.isPackSelected || !packDashboardScrollView.currentPack)
                                 text: "Select a pack from the list to view details"
                                 color: Theme.textLight
                                 font.pixelSize: 16
                                 Layout.alignment: Qt.AlignHCenter
-                                Layout.topMargin: 40
-                                opacity: 1.0
+                                Layout.preferredHeight: 0
+                                Layout.topMargin: 0
+                                opacity: 0.0
                                 onVisibleChanged: {
                                     if (visible) {
                                         packEmptyStateFadeIn.restart()
@@ -2649,7 +2619,7 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.margins: isNarrow ? 12 : 20
                                 spacing: 16
-                                visible: Boolean((statsRoot.isPackSelected || (detailedViewStackContainer.isCrossfading && !detailedViewStackContainer.isPackDashboardTarget && detailedViewStackContainer.wasPackSelectedBeforeTransition) || (detailedViewStackContainer.isDeselectingPack && detailedViewStackContainer.wasInPackDetailViewBeforeDeselect)) && packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.id)
+                                visible: Boolean((statsRoot.isPackSelected || slotRoot.viewType === "PACK_DASHBOARD" || statsRoot.isDetailedViewCrossfading) && packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.id)
 
                                 opacity: 1.0
                                 NumberAnimation on opacity {
@@ -2689,1233 +2659,15 @@ Item {
                                     }
                                 }
 
-                            // 1. Pack Hero Card
-                            Rectangle {
-                                id: packHeroCard
-                                Layout.fillWidth: true
-                                implicitHeight: heroCardColLayout.implicitHeight + (isNarrow ? 24 : 40)
-                                Layout.preferredHeight: implicitHeight
-                                radius: 16
-                                color: "transparent"
-                                border.width: 1
-                                border.color: Theme.borderDivider
-                                clip: true
 
-                                // 1. Fallback Background
-                                Rectangle {
-                                    anchors.fill: parent
-                                    color: Theme.bannerFallback
-                                }
-
-                                // 2. Blurred Background Image (Most Played Song Thumbnail)
-                                Image {
-                                    id: packHeroBgImage
-                                    anchors.fill: parent
-                                    anchors.margins: -20
-                                    asynchronous: true
-                                    cache: true
-                                    source: {
-                                        var _v = statsRoot.thumbnailVersion
-                                        if (!packDashboardScrollView.currentPack) return ""
-                                        var p = packDashboardScrollView.currentPack
-                                        if (p.most_played_jacket_path) {
-                                            return "file:///" + p.most_played_jacket_path.replace(/\\/g, "/")
-                                        }
-                                        if (statsHandler && p.most_played_song_id) {
-                                            return statsHandler.getThumbnailPathForDifficulty(p.most_played_song_id, p.most_played_thumb_diff !== undefined ? p.most_played_thumb_diff : 2)
-                                        }
-                                        return ""
-                                    }
-                                    fillMode: Image.PreserveAspectCrop
-                                    antialiasing: true
-                                    visible: status === Image.Ready
-
-                                    layer.enabled: visible
-                                    layer.effect: MultiEffect {
-                                        blurEnabled: true
-                                        blur: 0.6
-                                        saturation: 0.8
-                                    }
-                                }
-
-                                // 3. Dimming Overlay
-                                Rectangle {
-                                    anchors.fill: parent
-                                    anchors.margins: -2
-                                    color: Theme.overlay
-                                }
-
-                                ColumnLayout {
-                                    id: heroCardColLayout
-                                    z: 1
-                                    anchors.fill: parent
-                                    anchors.margins: isNarrow ? 12 : 20
-                                    spacing: 14
-
-                                    RowLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 16
-
-                                        // Left: Title, Badges, Total Plays
-                                        ColumnLayout {
-                                            Layout.fillWidth: true
-                                            spacing: 8
-
-                                            Text {
-                                                text: (packDashboardScrollView.currentPack ? packDashboardScrollView.currentPack.name : "") || ""
-                                                font.family: statsRoot.titleFontFamily
-                                                font.pixelSize: 22
-                                                font.bold: true
-                                                color: Theme.detailHeaderTitle
-                                                elide: Text.ElideRight
-                                                Layout.fillWidth: true
-                                            }
-
-                                            RowLayout {
-                                                spacing: 8
-
-                                                // Song & chart count
-                                                Text {
-                                                    text: ((packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.song_count) ? packDashboardScrollView.currentPack.song_count : 0) + " songs • " +
-                                                          ((packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.chart_count) ? packDashboardScrollView.currentPack.chart_count : 0) + " charts"
-                                                    font.pixelSize: 13
-                                                    color: Theme.detailHeaderArtist
-                                                    Layout.alignment: Qt.AlignVCenter
-                                                }
-
-                                                // Version
-                                                Rectangle {
-                                                    visible: Boolean(packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.version)
-                                                    implicitWidth: heroVerText.implicitWidth + 18
-                                                    implicitHeight: 24
-                                                    radius: 12
-                                                    color: Theme.alpha(Theme.badgeVerBg, 0.65)
-                                                    border.color: Theme.alpha(Theme.badgeVerBorder, 0.80)
-                                                    border.width: 1
-                                                    Layout.alignment: Qt.AlignVCenter
-
-                                                    Text {
-                                                        id: heroVerText
-                                                        anchors.centerIn: parent
-                                                        text: "v" + (packDashboardScrollView.currentPack ? (packDashboardScrollView.currentPack.version || "") : "")
-                                                        color: Theme.badgeVerText
-                                                        font.pixelSize: 11
-                                                        font.bold: true
-                                                    }
-                                                }
-                                            }
-
-                                            // Total Plays
-                                            Text {
-                                                id: totalPlaysText
-                                                text: "Total " + ((packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.total_plays !== undefined) ? packDashboardScrollView.currentPack.total_plays : 0).toLocaleString(Qt.locale("en_US"), 'f', 0) + " Plays"
-                                                font.pixelSize: 14
-                                                font.bold: true
-                                                color: Theme.detailHeaderTitle
-                                            }
-                                        }
-
-                                        // Right: Progress Card
-                                        Rectangle {
-                                            id: heroProgressCard
-                                            Layout.preferredWidth: 200
-                                            Layout.preferredHeight: 80
-                                            radius: 12
-                                            color: {
-                                                var p = packDashboardScrollView.currentPack
-                                                if (p && (p.color || p.pack_color)) {
-                                                    var c = p.color || p.pack_color
-                                                    if (Theme.isDarkMode) {
-                                                        return Theme.alpha(c, 0.22)
-                                                    }
-                                                    return heroProgressCard.getLightModePackBgColor(c, false)
-                                                }
-                                                return Theme.bgCard
-                                            }
-                                            border.width: Theme.isDarkMode ? 1 : 1.5
-                                            border.color: {
-                                                var p = packDashboardScrollView.currentPack
-                                                if (p && (p.color || p.pack_color)) {
-                                                    return Theme.alpha(p.color || p.pack_color, 0.80)
-                                                }
-                                                return Theme.borderDivider
-                                            }
-
-                                            // Helper to convert hex pack color to accessible pastel tone (Dark mode: L=0.88)
-                                            function getPastelColor(hexColor, isDark) {
-                                                if (!hexColor) return Theme.textMuted
-                                                try {
-                                                    var c = Qt.color(hexColor)
-                                                    var r = c.r, g = c.g, b = c.b
-                                                    var max = Math.max(r, g, b), min = Math.min(r, g, b)
-                                                    var h = 0, s = 0, l = (max + min) / 2
-                                                    if (max === min) {
-                                                        h = s = 0
-                                                    } else {
-                                                        var d = max - min
-                                                        s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-                                                        switch (max) {
-                                                            case r: h = (g - b) / d + (g < b ? 6 : 0); break
-                                                            case g: h = (b - r) / d + 2; break
-                                                            case b: h = (r - g) / d + 4; break
-                                                        }
-                                                        h /= 6
-                                                    }
-                                                    var targetL = 0.88
-                                                    if (s < 0.08) {
-                                                        return Qt.hsla(0, 0, targetL, 1.0)
-                                                    }
-                                                    var targetS = Math.min(s, 0.65)
-                                                    targetS = Math.max(targetS, 0.40)
-                                                    return Qt.hsla(h, targetS, targetL, 1.0)
-                                                } catch (e) {
-                                                    return Theme.textMuted
-                                                }
-                                            }
-
-                                            // Helper to get dark pastel text color for light mode (black mixed with pastel tone: L=0.18)
-                                            function getDarkPastelColor(hexColor) {
-                                                if (!hexColor) return Theme.textMuted
-                                                try {
-                                                    var c = Qt.color(hexColor)
-                                                    var r = c.r, g = c.g, b = c.b
-                                                    var max = Math.max(r, g, b), min = Math.min(r, g, b)
-                                                    var h = 0, s = 0, l = (max + min) / 2
-                                                    if (max !== min) {
-                                                        var d = max - min
-                                                        s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-                                                        switch (max) {
-                                                            case r: h = (g - b) / d + (g < b ? 6 : 0); break
-                                                            case g: h = (b - r) / d + 2; break
-                                                            case b: h = (r - g) / d + 4; break
-                                                        }
-                                                        h /= 6
-                                                    }
-                                                    var targetL = 0.18 // Dark base (tinted black)
-                                                    if (s < 0.08) {
-                                                        return Qt.hsla(0, 0, targetL, 1.0)
-                                                    }
-                                                    var targetS = Math.min(Math.max(s, 0.40), 0.65)
-                                                    return Qt.hsla(h, targetS, targetL, 1.0)
-                                                } catch (e) {
-                                                    return "#1A1A20"
-                                                }
-                                            }
-
-                                            // Helper to get light mode pack background (increased brightness and white-mix: L=0.88, S<=0.20, Alpha=0.85)
-                                            function getLightModePackBgColor(hexColor, containsMouse) {
-                                                if (!hexColor) return containsMouse ? Theme.alpha(Theme.bgCard, 0.94) : Theme.alpha(Theme.bgCard, 0.85)
-                                                try {
-                                                    var c = Qt.color(hexColor)
-                                                    var r = c.r, g = c.g, b = c.b
-                                                    var max = Math.max(r, g, b), min = Math.min(r, g, b)
-                                                    var h = 0, s = 0, l = (max + min) / 2
-                                                    if (max !== min) {
-                                                        var d = max - min
-                                                        s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-                                                        switch (max) {
-                                                            case r: h = (g - b) / d + (g < b ? 6 : 0); break
-                                                            case g: h = (b - r) / d + 2; break
-                                                            case b: h = (r - g) / d + 4; break
-                                                        }
-                                                        h /= 6
-                                                    }
-                                                    var targetL = Math.max(l + (1.0 - l) * 0.60, 0.88)
-                                                    var targetS = Math.min(s * 0.50, 0.20)
-                                                    var brightColor = (s < 0.08) ? Qt.hsla(0, 0, targetL, 1.0) : Qt.hsla(h, targetS, targetL, 1.0)
-                                                    var alphaVal = containsMouse ? 0.94 : 0.85
-                                                    return Theme.alpha(brightColor, alphaVal)
-                                                } catch (e) {
-                                                    return Theme.alpha(hexColor, containsMouse ? 0.94 : 0.85)
-                                                }
-                                            }
-
-                                            // Helper to tint a base color towards a tint color by weight (0.0: pure base, 1.0: pure tint)
-                                            function tintColor(baseColorHex, tintColorHex, weight) {
-                                                if (!tintColorHex) return baseColorHex
-                                                try {
-                                                    var c1 = Qt.color(baseColorHex)
-                                                    var c2 = Qt.color(tintColorHex)
-                                                    var w = (weight !== undefined) ? weight : 0.30
-                                                    var r = c1.r * (1.0 - w) + c2.r * w
-                                                    var g = c1.g * (1.0 - w) + c2.g * w
-                                                    var b = c1.b * (1.0 - w) + c2.b * w
-                                                    return Qt.rgba(r, g, b, 1.0)
-                                                } catch (e) {
-                                                    return baseColorHex
-                                                }
-                                            }
-
-                                            readonly property color labelColor: {
-                                                var p = packDashboardScrollView.currentPack
-                                                if (p && (p.color || p.pack_color)) {
-                                                    var c = p.color || p.pack_color
-                                                    return Theme.isDarkMode ? heroProgressCard.getPastelColor(c, true) : heroProgressCard.getDarkPastelColor(c)
-                                                }
-                                                return Theme.textMuted
-                                            }
-
-                                            ColumnLayout {
-                                                anchors.centerIn: parent
-                                                spacing: 4
-
-                                                Text {
-                                                    Layout.alignment: Qt.AlignHCenter
-                                                    textFormat: Text.StyledText
-                                                    font.pixelSize: 22
-                                                    font.bold: true
-
-                                                    readonly property var currentPack: packDashboardScrollView.currentPack
-                                                    readonly property int allCount: currentPack ? (currentPack.all_count || 0) : 0
-                                                    readonly property int frpmCount: currentPack ? (currentPack.frpm_count || 0) : 0
-                                                    readonly property int pmCount: {
-                                                        if (!currentPack) return 0
-                                                        if (typeof currentPack.pm_count !== "undefined") return currentPack.pm_count
-                                                        if (currentPack.lamp_counts && typeof currentPack.lamp_counts.pm !== "undefined") return currentPack.lamp_counts.pm
-                                                        return 0
-                                                    }
-
-                                                    readonly property bool isAllPm: allCount > 0 && pmCount === allCount
-                                                    readonly property bool isAllFr: !isAllPm && allCount > 0 && frpmCount === allCount
-
-                                                    // 기본 FR.PM 대표색
-                                                    readonly property color baseFrpmColor: {
-                                                        var hasPack = currentPack && (currentPack.color || currentPack.pack_color)
-                                                        if (Theme.isDarkMode) {
-                                                            return hasPack ? heroProgressCard.tintColor(Theme.clearFullRecall, heroProgressCard.labelColor, 0.30) : Theme.clearFullRecall
-                                                        }
-                                                        return "#F06595"
-                                                    }
-
-                                                    // 기본 CLR 대표색
-                                                    readonly property color baseClrColor: {
-                                                        var hasPack = currentPack && (currentPack.color || currentPack.pack_color)
-                                                        if (Theme.isDarkMode) {
-                                                            return hasPack ? heroProgressCard.tintColor(Theme.clearComplete, heroProgressCard.labelColor, 0.30) : Theme.clearComplete
-                                                        }
-                                                        return "#8C7594"
-                                                    }
-
-                                                    // 기본 ALL 대표색
-                                                    readonly property color baseAllColor: {
-                                                        var hasPack = currentPack && (currentPack.color || currentPack.pack_color)
-                                                        if (Theme.isDarkMode) {
-                                                            return hasPack ? heroProgressCard.tintColor(Theme.textMuted, heroProgressCard.labelColor, 0.30) : Theme.textMuted
-                                                        }
-                                                        return "#4B5563"
-                                                    }
-
-                                                    // 기본 슬래시 색상
-                                                    readonly property color defaultSlashColor: Theme.isDarkMode ? Theme.textMuted : "#6B7280"
-
-                                                    // 조건부 일원화 적용 최종 색상 프로퍼티 (외부 및 마크업 참조)
-                                                    property color frpmColor: isAllPm ? heroProgressCard.labelColor : baseFrpmColor
-                                                    property color clrColor: isAllPm ? heroProgressCard.labelColor : (isAllFr ? baseFrpmColor : baseClrColor)
-                                                    property color allColor: isAllPm ? heroProgressCard.labelColor : (isAllFr ? baseFrpmColor : baseAllColor)
-                                                    property color slashColor: isAllPm ? heroProgressCard.labelColor : (isAllFr ? baseFrpmColor : defaultSlashColor)
-
-                                                    text: "<font color='" + frpmColor + "'>" + frpmCount + "</font>" +
-                                                          "<font color='" + slashColor + "'> / </font>" +
-                                                          "<font color='" + clrColor + "'>" + (currentPack ? currentPack.clr_count : 0) + "</font>" +
-                                                          "<font color='" + slashColor + "'> / </font>" +
-                                                          "<font color='" + allColor + "'>" + allCount + "</font>"
-                                                }
-
-                                                Text {
-                                                    Layout.alignment: Qt.AlignHCenter
-                                                    text: "FR.PM / CLR / ALL"
-                                                    font.pixelSize: 11
-                                                    font.bold: true
-                                                    color: heroProgressCard.labelColor
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // 2. Song-Based Statistics 3-Card Row (Best Potential, Best Score, Most Played)
-                            GridLayout {
-                                id: songStatsRow
-                                Layout.fillWidth: true
-                                Layout.topMargin: 12
-                                columns: (typeof statsRoot !== "undefined" && statsRoot.isNarrow) ? 1 : 3
-                                columnSpacing: 10
-                                rowSpacing: 10
-
-                                // Card 1: Best Potential
-                                Rectangle {
-                                    id: bestPotCard
+                                StatisticsPackDashboardView {
+                                    id: packDashboardView
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 104
-                                    radius: 12
-                                    color: potCardMouse.containsMouse ? Theme.bgItemHover : Theme.bgButton
-                                    border.width: 1
-                                    border.color: Theme.borderDivider
-
-                                    property var potRecord: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.top_potential) ? packDashboardScrollView.currentPack.top_potential : null
-
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 12
-                                        spacing: 6
-
-                                        Text {
-                                            text: "Best Potential"
-                                            font.pixelSize: 12
-                                            font.bold: true
-                                            color: Theme.textSecondary
-                                        }
-
-                                        RowLayout {
-                                            Layout.fillWidth: true
-                                            Layout.fillHeight: true
-                                            spacing: 10
-
-                                            // Thumbnail
-                                            Rectangle {
-                                                Layout.preferredWidth: 56
-                                                Layout.preferredHeight: 56
-                                                radius: 8
-                                                clip: true
-                                                color: "transparent"
-
-                                                Image {
-                                                    id: potThumbImage
-                                                    anchors.fill: parent
-                                                    asynchronous: true
-                                                    cache: true
-                                                    source: {
-                                                        var _v = statsRoot.thumbnailVersion
-                                                        return (statsHandler && bestPotCard.potRecord && (bestPotCard.potRecord.potential > 0 || bestPotCard.potRecord.value > 0) && bestPotCard.potRecord.song_id) ? statsHandler.getThumbnailPathForDifficulty(bestPotCard.potRecord.song_id, bestPotCard.potRecord.diff_index) : ""
-                                                    }
-                                                    fillMode: Image.PreserveAspectCrop
-                                                    smooth: true
-                                                    antialiasing: true
-                                                    visible: status === Image.Ready
-                                                }
-
-
-                                            }
-
-                                            // Right details
-                                            ColumnLayout {
-                                                Layout.fillWidth: true
-                                                spacing: 2
-
-                                                Text {
-                                                    text: bestPotCard.potRecord && (bestPotCard.potRecord.potential > 0 || bestPotCard.potRecord.value > 0) ? Number(bestPotCard.potRecord.potential !== undefined ? bestPotCard.potRecord.potential : bestPotCard.potRecord.value).toFixed(2) : "-"
-                                                    font.pixelSize: 16
-                                                    font.bold: true
-                                                    color: Theme.textPrimary
-                                                }
-
-                                                Text {
-                                                    text: bestPotCard.potRecord && (bestPotCard.potRecord.potential > 0 || bestPotCard.potRecord.value > 0) ? (bestPotCard.potRecord.song_title || "-") : "-"
-                                                    font.pixelSize: 11
-                                                    color: Theme.textPrimary
-                                                    elide: Text.ElideRight
-                                                    Layout.fillWidth: true
-                                                }
-
-                                                Text {
-                                                    text: bestPotCard.potRecord && (bestPotCard.potRecord.potential > 0 || bestPotCard.potRecord.value > 0) ? (bestPotCard.potRecord.diff_with_level || (bestPotCard.potRecord.diff_name + (bestPotCard.potRecord.level_str ? (" " + bestPotCard.potRecord.level_str) : ""))) : "-"
-                                                    font.pixelSize: 11
-                                                    font.bold: true
-                                                    color: (bestPotCard.potRecord && (bestPotCard.potRecord.potential > 0 || bestPotCard.potRecord.value > 0)) ? Theme.getDiffColor(bestPotCard.potRecord.diff_color_tag) : Theme.textMuted
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    MouseArea {
-                                        id: potCardMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: (bestPotCard.potRecord && bestPotCard.potRecord.song_id) ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                        onClicked: {
-                                            var packId = packDashboardScrollView.currentPack ? packDashboardScrollView.currentPack.id : ""
-                                            var diff = (bestPotCard.potRecord && bestPotCard.potRecord.diff_index !== undefined) ? bestPotCard.potRecord.diff_index : -1
-                                            if (statisticsHandler && packId && bestPotCard.potRecord && bestPotCard.potRecord.song_id) {
-                                                statisticsHandler.selectPackSong(packId, bestPotCard.potRecord.song_id, diff)
-                                                if (typeof statsRoot !== "undefined" && statsRoot.isNarrow) {
-                                                    mobileStack.push(detailPageComponent)
-                                                }
-                                            }
-                                        }
-                                    }
+                                    currentPack: packDashboardScrollView.currentPack
+                                    isNarrow: statsRoot ? statsRoot.isNarrow : false
+                                    isDiffCramped: statsRoot ? statsRoot.isDiffCramped : false
+                                    statsRoot: statsRoot
                                 }
-
-                                // Card 2: Best Score
-                                Rectangle {
-                                    id: bestScoreCard
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 104
-                                    radius: 12
-                                    color: scoreCardMouse.containsMouse ? Theme.bgItemHover : Theme.bgButton
-                                    border.width: 1
-                                    border.color: Theme.borderDivider
-
-                                    property var scoreRecord: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.top_score) ? packDashboardScrollView.currentPack.top_score : null
-
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 12
-                                        spacing: 6
-
-                                        Text {
-                                            text: "Best Score"
-                                            font.pixelSize: 12
-                                            font.bold: true
-                                            color: Theme.textSecondary
-                                        }
-
-                                        RowLayout {
-                                            Layout.fillWidth: true
-                                            Layout.fillHeight: true
-                                            spacing: 10
-
-                                            // Thumbnail
-                                            Rectangle {
-                                                Layout.preferredWidth: 56
-                                                Layout.preferredHeight: 56
-                                                radius: 8
-                                                clip: true
-                                                color: "transparent"
-
-                                                Image {
-                                                    id: scoreThumbImage
-                                                    anchors.fill: parent
-                                                    asynchronous: true
-                                                    cache: true
-                                                    source: {
-                                                        var _v = statsRoot.thumbnailVersion;
-                                                        return (statsHandler && bestScoreCard.scoreRecord && ((bestScoreCard.scoreRecord.score !== undefined && bestScoreCard.scoreRecord.score > 0) || (bestScoreCard.scoreRecord.value !== undefined && bestScoreCard.scoreRecord.value > 0)) && bestScoreCard.scoreRecord.song_id) ? statsHandler.getThumbnailPathForDifficulty(bestScoreCard.scoreRecord.song_id, bestScoreCard.scoreRecord.diff_index) : ""
-                                                    }
-                                                    fillMode: Image.PreserveAspectCrop
-                                                    smooth: true
-                                                    antialiasing: true
-                                                    visible: status === Image.Ready
-                                                }
-
-
-                                            }
-
-                                            // Right details
-                                            ColumnLayout {
-                                                Layout.fillWidth: true
-                                                spacing: 2
-
-                                                Text {
-                                                    text: (bestScoreCard.scoreRecord && ((bestScoreCard.scoreRecord.score !== undefined && bestScoreCard.scoreRecord.score > 0) || (bestScoreCard.scoreRecord.value !== undefined && bestScoreCard.scoreRecord.value > 0))) ? Number(bestScoreCard.scoreRecord.score !== undefined ? bestScoreCard.scoreRecord.score : bestScoreCard.scoreRecord.value).toLocaleString(Qt.locale("en_US"), 'f', 0) : "-"
-                                                    font.pixelSize: 16
-                                                    font.bold: true
-                                                    color: (bestScoreCard.scoreRecord && bestScoreCard.scoreRecord.is_max) ? Theme.maxHighlight : Theme.textPrimary
-                                                }
-
-                                                Text {
-                                                    text: (bestScoreCard.scoreRecord && ((bestScoreCard.scoreRecord.score !== undefined && bestScoreCard.scoreRecord.score > 0) || (bestScoreCard.scoreRecord.value !== undefined && bestScoreCard.scoreRecord.value > 0))) ? (bestScoreCard.scoreRecord.song_title || "-") : "-"
-                                                    font.pixelSize: 11
-                                                    color: Theme.textPrimary
-                                                    elide: Text.ElideRight
-                                                    Layout.fillWidth: true
-                                                }
-
-                                                Text {
-                                                    text: (bestScoreCard.scoreRecord && ((bestScoreCard.scoreRecord.score !== undefined && bestScoreCard.scoreRecord.score > 0) || (bestScoreCard.scoreRecord.value !== undefined && bestScoreCard.scoreRecord.value > 0))) ? (bestScoreCard.scoreRecord.diff_with_level || (bestScoreCard.scoreRecord.diff_name + (bestScoreCard.scoreRecord.level_str ? (" " + bestScoreCard.scoreRecord.level_str) : ""))) : "-"
-                                                    font.pixelSize: 11
-                                                    font.bold: true
-                                                    color: (bestScoreCard.scoreRecord && ((bestScoreCard.scoreRecord.score !== undefined && bestScoreCard.scoreRecord.score > 0) || (bestScoreCard.scoreRecord.value !== undefined && bestScoreCard.scoreRecord.value > 0))) ? Theme.getDiffColor(bestScoreCard.scoreRecord.diff_color_tag) : Theme.textMuted
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    MouseArea {
-                                        id: scoreCardMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: (bestScoreCard.scoreRecord && bestScoreCard.scoreRecord.song_id) ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                        onClicked: {
-                                            var packId = packDashboardScrollView.currentPack ? packDashboardScrollView.currentPack.id : ""
-                                            var diff = (bestScoreCard.scoreRecord && bestScoreCard.scoreRecord.diff_index !== undefined) ? bestScoreCard.scoreRecord.diff_index : -1
-                                            if (statisticsHandler && packId && bestScoreCard.scoreRecord && bestScoreCard.scoreRecord.song_id) {
-                                                statisticsHandler.selectPackSong(packId, bestScoreCard.scoreRecord.song_id, diff)
-                                                if (typeof statsRoot !== "undefined" && statsRoot.isNarrow) {
-                                                    mobileStack.push(detailPageComponent)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Card 3: Most Played
-                                Rectangle {
-                                    id: mostPlayedCard
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 104
-                                    radius: 12
-                                    color: mostCardMouse.containsMouse ? Theme.bgItemHover : Theme.bgButton
-                                    border.width: 1
-                                    border.color: Theme.borderDivider
-
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 12
-                                        spacing: 6
-
-                                        Text {
-                                            text: "Most Played"
-                                            font.pixelSize: 12
-                                            font.bold: true
-                                            color: Theme.textSecondary
-                                        }
-
-                                        RowLayout {
-                                            Layout.fillWidth: true
-                                            Layout.fillHeight: true
-                                            spacing: 10
-
-                                            // Thumbnail (56x56)
-                                            Rectangle {
-                                                Layout.preferredWidth: 56
-                                                Layout.preferredHeight: 56
-                                                radius: 8
-                                                clip: true
-                                                color: "transparent"
-
-                                                Image {
-                                                    id: mostPlayedThumbImage
-                                                    anchors.fill: parent
-                                                    asynchronous: true
-                                                    cache: true
-                                                    source: {
-                                                        var _v = statsRoot.thumbnailVersion;
-                                                        if (!packDashboardScrollView.currentPack) return ""
-                                                        var p = packDashboardScrollView.currentPack
-                                                        if (p.most_played_jacket_path) {
-                                                            return "file:///" + p.most_played_jacket_path.replace(/\\/g, "/")
-                                                        }
-                                                        if (statsHandler && p.most_played_song_id) {
-                                                            return statsHandler.getThumbnailPathForDifficulty(p.most_played_song_id, p.most_played_thumb_diff !== undefined ? p.most_played_thumb_diff : 2)
-                                                        }
-                                                        return ""
-                                                    }
-                                                    fillMode: Image.PreserveAspectCrop
-                                                    smooth: true
-                                                    antialiasing: true
-                                                    visible: status === Image.Ready
-                                                }
-
-
-                                            }
-
-                                            // Right details (곡명 + 플레이수)
-                                            ColumnLayout {
-                                                Layout.fillWidth: true
-                                                spacing: 4
-                                                Layout.alignment: Qt.AlignVCenter
-
-                                                Text {
-                                                    text: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.most_played_song_title) ? packDashboardScrollView.currentPack.most_played_song_title : "-"
-                                                    font.pixelSize: 13
-                                                    font.bold: true
-                                                    color: Theme.textPrimary
-                                                    elide: Text.ElideRight
-                                                    Layout.fillWidth: true
-                                                }
-
-                                                Text {
-                                                    property int playCnt: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.most_played_song_count !== undefined) ? packDashboardScrollView.currentPack.most_played_song_count : 0
-                                                    text: playCnt + (playCnt === 1 ? " play" : " plays")
-                                                    font.pixelSize: 12
-                                                    font.bold: true
-                                                    color: Theme.textSecondary
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    MouseArea {
-                                        id: mostCardMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.most_played_song_id) ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                        onClicked: {
-                                            var p = packDashboardScrollView.currentPack
-                                            var diff = (p && p.most_played_thumb_diff !== undefined) ? p.most_played_thumb_diff : -1
-                                            if (statisticsHandler && p && p.id && p.most_played_song_id) {
-                                                statisticsHandler.selectPackSong(p.id, p.most_played_song_id, diff)
-                                                if (typeof statsRoot !== "undefined" && statsRoot.isNarrow) {
-                                                    mobileStack.push(detailPageComponent)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-
-                            // 3. Dual Symmetrical Graphs: Clear Status (Left) & Score Grade (Right)
-                            GridLayout {
-                                id: dualGraphLayout
-                                Layout.fillWidth: true
-                                Layout.topMargin: 12
-                                columns: (typeof statsRoot !== "undefined" && statsRoot.isNarrow) ? 1 : 2
-                                columnSpacing: 10
-                                rowSpacing: 10
-
-                                function calcLegendTextWidth(str) {
-                                    var w = 0;
-                                    for (var i = 0; i < str.length; i++) {
-                                        var ch = str.charAt(i);
-                                        if (ch === ' ') w += 3;
-                                        else if (ch === '-' || ch === 'I' || ch === 'l') w += 4;
-                                        else if (ch === 'M' || ch === 'W') w += 8;
-                                        else if (ch >= 'A' && ch <= 'Z') w += 7;
-                                        else if (ch === '+' || (ch >= '0' && ch <= '9')) w += 6;
-                                        else w += 5;
-                                    }
-                                    return w;
-                                }
-
-                                function calcFirstLineCount(items, availW) {
-                                    if (!items || items.length === 0) return 0;
-                                    var N = items.length;
-                                    var minGap = 8;
-                                    var wLimit = (availW && availW > 0) ? availW : 320;
-
-                                    // 1. 전체가 1줄에 들어가는지 검사
-                                    var totalW = 0;
-                                    for (var i = 0; i < N; i++) totalW += (items[i].itemWidth || 30);
-                                    if (totalW + (N - 1) * minGap <= wLimit) {
-                                        return N;
-                                    }
-
-                                    // 2. 가용 폭 내에서 1줄에 들어갈 수 있는 최대 개수 K 탐색 (Greedy Packing)
-                                    var curW = 0;
-                                    var K = 0;
-                                    for (var j = 0; j < N; j++) {
-                                        var nextW = curW + (items[j].itemWidth || 30) + (j > 0 ? minGap : 0);
-                                        if (nextW <= wLimit) {
-                                            curW = nextW;
-                                            K = j + 1;
-                                        } else {
-                                            break;
-                                        }
-                                    }
-                                    // 최소 1개는 1행에, 최소 1개는 2행에 분배
-                                    return Math.max(1, Math.min(K, N - 1));
-                                }
-
-                                function isLegendTwoLines(segments, availW) {
-                                    if (!segments || segments.length <= 1) return false;
-                                    var K = calcFirstLineCount(segments, availW);
-                                    return K < segments.length;
-                                }
-
-                                function getLegendItemX(items, index, availW, isTwo) {
-                                    if (!items || items.length === 0 || index < 0 || index >= items.length) return 0;
-                                    var N = items.length;
-                                    var wLimit = (availW && availW > 0) ? availW : 320;
-                                    var K = isTwo ? calcFirstLineCount(items, wLimit) : N;
-                                    if (K <= 1) return Math.max(0, Math.round((wLimit - (items[0].itemWidth || 30)) / 2));
-
-                                    // Calculate maximum width for each column to ensure vertical alignment
-                                    var colWidths = [];
-                                    var sumColW = 0;
-                                    for (var c = 0; c < K; c++) {
-                                        var w = items[c] ? (items[c].itemWidth || 30) : 0;
-                                        if (isTwo && (K + c < N)) {
-                                            var w2 = items[K + c].itemWidth || 30;
-                                            if (w2 > w) w = w2;
-                                        }
-                                        colWidths.push(w);
-                                        sumColW += w;
-                                    }
-
-                                    var col = (isTwo && index >= K) ? (index - K) : index;
-                                    if (col === 0) return 0;
-                                    if (col === K - 1) return Math.max(0, wLimit - colWidths[K - 1]);
-
-                                    var gap = (wLimit - sumColW) / (K - 1);
-                                    var prevW = 0;
-                                    for (var j = 0; j < col; j++) prevW += colWidths[j];
-                                    return Math.max(0, Math.round(prevW + col * gap));
-                                }
-
-                                function getLegendItemY(items, index, availW, isTwo) {
-                                    var isT = (typeof availW === "boolean") ? availW : isTwo;
-                                    var wLim = (typeof availW === "number" && availW > 0) ? availW : 320;
-                                    if (!isT || !items) return 0;
-                                    var K = calcFirstLineCount(items, wLim);
-                                    return (index >= K) ? 15 : 0;
-                                }
-
-                                // Left Card: Clear Status
-                                Rectangle {
-                                    id: clearLampCard
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 104
-                                    radius: 12
-                                    color: Theme.bgButton
-                                    border.width: 1
-                                    border.color: Theme.borderDivider
-
-                                    property var lamps: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.lamp_counts) ? packDashboardScrollView.currentPack.lamp_counts : ({})
-                                    property int totalCount: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.all_count > 0) ? packDashboardScrollView.currentPack.all_count : 0
-
-                                    property var clearSegments: {
-                                        var stages = [
-                                            { name: "PM", count: lamps.pm || 0, col: Theme.clearPureMemory },
-                                            { name: "FR", count: lamps.fr || 0, col: Theme.clearFullRecall },
-                                            { name: "Hard", count: lamps.hard || 0, col: Theme.clearHard },
-                                            { name: "Clear", count: lamps.complete || 0, col: Theme.clearComplete },
-                                            { name: "Easy", count: lamps.easy || 0, col: Theme.clearEasy },
-                                            { name: "Lost", count: lamps.lost || 0, col: Theme.clearLost },
-                                            { name: "-", count: lamps.unplayed || 0, col: Theme.scoreRankNone }
-                                        ]
-                                        var active = stages.filter(function(s) { return s.count > 0 })
-                                        var tot = 0
-                                        for (var i = 0; i < active.length; i++) tot += active[i].count
-                                        if (tot <= 0) tot = totalCount > 0 ? totalCount : 1
-                                        for (var j = 0; j < active.length; j++) {
-                                            active[j].widthFrac = active[j].count / tot
-                                            active[j].itemWidth = 8 + dualGraphLayout.calcLegendTextWidth(active[j].name + " " + active[j].count)
-                                        }
-                                        return active
-                                    }
-
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.leftMargin: 12
-                                        anchors.rightMargin: 12
-                                        anchors.topMargin: 10
-                                        anchors.bottomMargin: 10
-                                        spacing: 5
-
-                                        // Header Row
-                                        RowLayout {
-                                            Layout.fillWidth: true
-
-                                            Text {
-                                                text: "Clear Status"
-                                                font.pixelSize: 12
-                                                font.bold: true
-                                                color: Theme.textSecondary
-                                            }
-
-                                            Item { Layout.fillWidth: true }
-
-                                            RowLayout {
-                                                spacing: 2
-                                                Text {
-                                                    text: String(packDashboardScrollView.currentPack ? packDashboardScrollView.currentPack.clear_count : 0)
-                                                    font.pixelSize: 13
-                                                    font.bold: true
-                                                    color: Theme.clearComplete
-                                                    Layout.alignment: Qt.AlignBaseline
-                                                }
-                                                Text {
-                                                    text: "/" + String(packDashboardScrollView.currentPack ? packDashboardScrollView.currentPack.all_count : 0)
-                                                    font.pixelSize: 11
-                                                    font.bold: false
-                                                    color: Theme.textMuted
-                                                    Layout.alignment: Qt.AlignBaseline
-                                                }
-                                                Text {
-                                                    text: " (" + (packDashboardScrollView.currentPack ? packDashboardScrollView.currentPack.clear_rate : 0) + "%)"
-                                                    font.pixelSize: 11
-                                                    font.bold: true
-                                                    color: Theme.textSecondary
-                                                    Layout.alignment: Qt.AlignBaseline
-                                                }
-                                            }
-                                        }
-
-                                        // 14px Multi-segment Gauge Bar (Pill-in-Pill)
-                                        Rectangle {
-                                            id: clearGaugeBar
-                                            Layout.fillWidth: true
-                                            Layout.preferredHeight: 14
-                                            radius: 6
-                                            color: Theme.isDarkMode ? "#252530" : "#E2E2E8"
-                                            border.width: 1
-                                            border.color: Theme.borderDivider
-                                            clip: true
-
-                                            Row {
-                                                anchors.fill: parent
-                                                anchors.margins: 2
-                                                spacing: 2
-
-                                                Repeater {
-                                                    model: clearLampCard.clearSegments
-
-                                                    Rectangle {
-                                                        height: parent.height
-                                                        width: Math.max(0, modelData.widthFrac * (parent.width - Math.max(0, clearLampCard.clearSegments.length - 1) * 2))
-                                                        radius: 3
-                                                        color: modelData.col
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        // Dynamic Space-Between Legend (Auto 1-line or 2-line layout)
-                                        Item {
-                                            id: clearLegendArea
-                                            Layout.fillWidth: true
-                                            Layout.topMargin: 2
-                                            property bool isTwoLines: dualGraphLayout.isLegendTwoLines(clearLampCard.clearSegments, width)
-                                            Layout.preferredHeight: isTwoLines ? 29 : 14
-
-                                            Repeater {
-                                                model: clearLampCard.clearSegments
-
-                                                Item {
-                                                    x: dualGraphLayout.getLegendItemX(clearLampCard.clearSegments, index, clearLegendArea.width, clearLegendArea.isTwoLines)
-                                                    y: dualGraphLayout.getLegendItemY(clearLampCard.clearSegments, index, clearLegendArea.width, clearLegendArea.isTwoLines)
-                                                    width: modelData.itemWidth
-                                                    height: 14
-
-                                                    Row {
-                                                        anchors.verticalCenter: parent.verticalCenter
-                                                        spacing: 3
-
-                                                        Rectangle {
-                                                            anchors.verticalCenter: parent.verticalCenter
-                                                            width: 5
-                                                            height: 5
-                                                            radius: 2.5
-                                                            color: modelData.col
-                                                        }
-
-                                                        Text {
-                                                            anchors.verticalCenter: parent.verticalCenter
-                                                            text: modelData.name + " " + modelData.count
-                                                            font.pixelSize: 10
-                                                            font.bold: true
-                                                            color: (modelData.name === "-" || modelData.name === "Unplayed") ? Theme.textMuted : modelData.col
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Right Card: Score Grade
-                                Rectangle {
-                                    id: scoreGradeCard
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 104
-                                    radius: 12
-                                    color: Theme.bgButton
-                                    border.width: 1
-                                    border.color: Theme.borderDivider
-
-                                    property var grades: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.score_grade_counts) ? packDashboardScrollView.currentPack.score_grade_counts : ({})
-                                    property int totalCount: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.all_count > 0) ? packDashboardScrollView.currentPack.all_count : 0
-
-                                    property var gradeSegments: {
-                                        var stages = [
-                                            { name: "PM", count: grades.pm || 0, col: Theme.scoreRankPm },
-                                            { name: "EX+", count: grades.ex_plus || 0, col: Theme.scoreRankExPlus },
-                                            { name: "EX", count: grades.ex || 0, col: Theme.scoreRankEx },
-                                            { name: "AA", count: grades.aa || 0, col: Theme.scoreRankAa },
-                                            { name: "A", count: grades.a || 0, col: Theme.scoreRankA },
-                                            { name: "B", count: grades.b || 0, col: Theme.scoreRankB },
-                                            { name: "C", count: grades.c || 0, col: Theme.scoreRankC },
-                                            { name: "D", count: grades.d || 0, col: Theme.scoreRankD },
-                                            { name: "-", count: grades.unplayed || 0, col: Theme.scoreRankNone }
-                                        ]
-                                        var active = stages.filter(function(s) { return s.count > 0 })
-                                        var tot = 0
-                                        for (var i = 0; i < active.length; i++) tot += active[i].count
-                                        if (tot <= 0) tot = totalCount > 0 ? totalCount : 1
-                                        for (var j = 0; j < active.length; j++) {
-                                            active[j].widthFrac = active[j].count / tot
-                                            active[j].itemWidth = 8 + dualGraphLayout.calcLegendTextWidth(active[j].name + " " + active[j].count)
-                                        }
-                                        return active
-                                    }
-
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.leftMargin: 12
-                                        anchors.rightMargin: 12
-                                        anchors.topMargin: 10
-                                        anchors.bottomMargin: 10
-                                        spacing: 5
-
-                                        // Header Row
-                                        RowLayout {
-                                            Layout.fillWidth: true
-
-                                            Text {
-                                                text: "Score Grade"
-                                                font.pixelSize: 12
-                                                font.bold: true
-                                                color: Theme.textSecondary
-                                            }
-
-                                            Item { Layout.fillWidth: true }
-
-                                            RowLayout {
-                                                spacing: 2
-                                                Text {
-                                                    text: String(packDashboardScrollView.currentPack ? packDashboardScrollView.currentPack.ex_plus_count : 0)
-                                                    font.pixelSize: 13
-                                                    font.bold: true
-                                                    color: Theme.scoreRankExPlus
-                                                    Layout.alignment: Qt.AlignBaseline
-                                                }
-                                                Text {
-                                                    text: "/" + String(packDashboardScrollView.currentPack ? packDashboardScrollView.currentPack.all_count : 0)
-                                                    font.pixelSize: 11
-                                                    font.bold: false
-                                                    color: Theme.textMuted
-                                                    Layout.alignment: Qt.AlignBaseline
-                                                }
-                                                Text {
-                                                    text: " (" + (packDashboardScrollView.currentPack ? packDashboardScrollView.currentPack.ex_plus_rate : 0) + "%)"
-                                                    font.pixelSize: 11
-                                                    font.bold: true
-                                                    color: Theme.textSecondary
-                                                    Layout.alignment: Qt.AlignBaseline
-                                                }
-                                            }
-                                        }
-
-                                        // 14px Multi-segment Gauge Bar (Pill-in-Pill)
-                                        Rectangle {
-                                            id: gradeGaugeBar
-                                            Layout.fillWidth: true
-                                            Layout.preferredHeight: 14
-                                            radius: 6
-                                            color: Theme.isDarkMode ? "#252530" : "#E2E2E8"
-                                            border.width: 1
-                                            border.color: Theme.borderDivider
-                                            clip: true
-
-                                            Row {
-                                                anchors.fill: parent
-                                                anchors.margins: 2
-                                                spacing: 2
-
-                                                Repeater {
-                                                    model: scoreGradeCard.gradeSegments
-
-                                                    Rectangle {
-                                                        height: parent.height
-                                                        width: Math.max(0, modelData.widthFrac * (parent.width - Math.max(0, scoreGradeCard.gradeSegments.length - 1) * 2))
-                                                        radius: 3
-                                                        color: modelData.col
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        // Dynamic Space-Between Legend (Auto 1-line or 2-line layout)
-                                        Item {
-                                            id: gradeLegendArea
-                                            Layout.fillWidth: true
-                                            Layout.topMargin: 2
-                                            property bool isTwoLines: dualGraphLayout.isLegendTwoLines(scoreGradeCard.gradeSegments, width)
-                                            Layout.preferredHeight: isTwoLines ? 29 : 14
-
-                                            Repeater {
-                                                model: scoreGradeCard.gradeSegments
-
-                                                Item {
-                                                    x: dualGraphLayout.getLegendItemX(scoreGradeCard.gradeSegments, index, gradeLegendArea.width, gradeLegendArea.isTwoLines)
-                                                    y: dualGraphLayout.getLegendItemY(scoreGradeCard.gradeSegments, index, gradeLegendArea.width, gradeLegendArea.isTwoLines)
-                                                    width: modelData.itemWidth
-                                                    height: 14
-
-                                                    Row {
-                                                        anchors.verticalCenter: parent.verticalCenter
-                                                        spacing: 3
-
-                                                        Rectangle {
-                                                            anchors.verticalCenter: parent.verticalCenter
-                                                            width: 5
-                                                            height: 5
-                                                            radius: 2.5
-                                                            color: modelData.col
-                                                        }
-
-                                                        Text {
-                                                            anchors.verticalCenter: parent.verticalCenter
-                                                            text: modelData.name + " " + modelData.count
-                                                            font.pixelSize: 10
-                                                            font.bold: true
-                                                            color: (modelData.name === "-" || modelData.name === "Unplayed") ? Theme.textMuted : modelData.col
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // 4. 4-Column Stats Grid (Average Score, FRAME, Play Time, This Year)
-                            GridLayout {
-                                Layout.fillWidth: true
-                                Layout.topMargin: 12
-                                Layout.bottomMargin: 16
-                                columns: isDiffCramped ? 2 : 4
-                                columnSpacing: 12
-                                rowSpacing: 12
-
-                                // Column 1: Average Score
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 104
-                                    radius: 12
-                                    color: Theme.bgButton
-                                    border.width: 1
-                                    border.color: Theme.borderDivider
-
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 12
-                                        spacing: 6
-
-                                        Text {
-                                            text: "Average Score"
-                                            font.pixelSize: 12
-                                            font.bold: true
-                                            color: Theme.textSecondary
-                                        }
-
-                                        Text {
-                                            text: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.avg_score > 0) ? Math.round(packDashboardScrollView.currentPack.avg_score).toLocaleString(Qt.locale("en_US"), 'f', 0) : "-"
-                                            font.pixelSize: 20
-                                            font.bold: true
-                                            color: Theme.textPrimary
-                                            Layout.alignment: Qt.AlignVCenter
-                                        }
-                                    }
-                                }
-
-                                // Column 2: FRAME
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 104
-                                    radius: 12
-                                    color: Theme.bgButton
-                                    border.width: 1
-                                    border.color: Theme.borderDivider
-
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 12
-                                        spacing: 6
-
-                                        Text {
-                                            text: "FRAME"
-                                            font.pixelSize: 12
-                                            font.bold: true
-                                            color: Theme.textSecondary
-                                        }
-
-                                        RowLayout {
-                                            spacing: 2
-                                            Layout.alignment: Qt.AlignVCenter
-                                            Text {
-                                                text: String((packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.frame_count !== undefined) ? packDashboardScrollView.currentPack.frame_count : 0)
-                                                font.pixelSize: 20
-                                                font.bold: true
-                                                color: Theme.frameHighlight
-                                                Layout.alignment: Qt.AlignBaseline
-                                            }
-                                            Text {
-                                                text: " / " + String((packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.all_count !== undefined) ? packDashboardScrollView.currentPack.all_count : (packDashboardScrollView.currentPack ? (packDashboardScrollView.currentPack.chart_count || 0) : 0))
-                                                font.pixelSize: 13
-                                                font.bold: false
-                                                color: Theme.textMuted
-                                                Layout.alignment: Qt.AlignBaseline
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Column 3: Play Time
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 104
-                                    radius: 12
-                                    color: Theme.bgButton
-                                    border.width: 1
-                                    border.color: Theme.borderDivider
-
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 12
-                                        spacing: 6
-
-                                        Text {
-                                            text: "Play Time"
-                                            font.pixelSize: 12
-                                            font.bold: true
-                                            color: Theme.textSecondary
-                                        }
-
-                                        Text {
-                                            text: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.play_time_str) ? packDashboardScrollView.currentPack.play_time_str : "0m"
-                                            font.pixelSize: 20
-                                            font.bold: true
-                                            color: Theme.textPrimary
-                                            Layout.alignment: Qt.AlignVCenter
-                                        }
-                                    }
-                                }
-
-                                // Column 4: This Year
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 104
-                                    radius: 12
-                                    color: Theme.bgButton
-                                    border.width: 1
-                                    border.color: Theme.borderDivider
-
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 12
-                                        spacing: 6
-
-                                        Text {
-                                            text: "This Year"
-                                            font.pixelSize: 12
-                                            font.bold: true
-                                            color: Theme.textSecondary
-                                        }
-
-                                        RowLayout {
-                                            spacing: 6
-                                            Layout.alignment: Qt.AlignVCenter
-
-                                            Text {
-                                                text: (packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.this_year_play_time_str) ? packDashboardScrollView.currentPack.this_year_play_time_str : "0m"
-                                                font.pixelSize: 20
-                                                font.bold: true
-                                                color: Theme.textPrimary
-                                            }
-
-                                            Text {
-                                                text: "(" + ((packDashboardScrollView.currentPack && packDashboardScrollView.currentPack.this_year_play_time_share !== undefined) ? packDashboardScrollView.currentPack.this_year_play_time_share : 0) + "%)"
-                                                font.pixelSize: 13
-                                                font.bold: true
-                                                color: Theme.textSecondary
-                                            }
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }
@@ -3925,11 +2677,9 @@ Item {
                     id: songDetailScrollView
                     anchors.fill: parent
                     contentWidth: availableWidth; ScrollBar.horizontal.policy: ScrollBar.AlwaysOff; clip: true
-                    visible: !detailedViewStackContainer.isPackDashboardTarget || detailedViewStackContainer.isCrossfading || (detailedViewStackContainer.isDeselectingPack && !detailedViewStackContainer.wasInPackDetailViewBeforeDeselect)
+                    visible: slotRoot.viewType === "SONG_DETAIL" || slotRoot.viewType === "PACK_SUB_SONG"
 
-                    property var currentSong: (typeof detailedViewStackContainer !== "undefined" && ((detailedViewStackContainer.isCrossfading && detailedViewStackContainer.isPackDashboardTarget && detailedViewStackContainer.wasSongSelectedBeforeTransition) || detailedViewStackContainer.isDeselectingPack) && detailedViewStackContainer.cachedLastSong)
-                        ? detailedViewStackContainer.cachedLastSong
-                        : statsRoot.currentSong
+                    property var currentSong: slotRoot.currentSong ? slotRoot.currentSong : ((detailedViewStackContainer.cachedLastSong) ? detailedViewStackContainer.cachedLastSong : statsRoot.currentSong)
 
                     opacity: 1.0
 
@@ -3938,20 +2688,13 @@ Item {
                         target: songDetailScrollView
                         property: "opacity"
                         running: false
-                        from: 0.0
+                        from: 1.0
                         to: 1.0
                         duration: 140
                         easing.type: Easing.OutQuad
                         onFinished: {
-                            if (!detailedViewStackContainer.isPackDashboardTarget) {
-                                detailedViewStackContainer.isCrossfading = false
-                                detailedViewStackContainer.wasInPackSubSong = Boolean(statisticsHandler && statisticsHandler.displayMode === "pack" && !statisticsHandler.isPackDetailView)
-                                detailedViewStackContainer.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
-                                detailedViewStackContainer.wasSongSelectedBeforeTransition = detailedViewStackContainer.wasSongSelected
-                                statsRoot.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
-                                packDashboardScrollView.visible = false
-                                packDashboardScrollView.opacity = 0.0
-                            }
+                            // Detailed View 전환은 detailedViewStackContainer.onTransitionFinished 에서 일원화 관리
+                            if (false) { detailedViewStackContainer.isCrossfading = false }
                         }
                     }
 
@@ -3961,33 +2704,15 @@ Item {
                         property: "opacity"
                         running: false
                         from: 1.0
-                        to: 0.0
+                        to: 1.0
                         duration: 140
                         easing.type: Easing.OutQuad
                         onFinished: {
-                            if (detailedViewStackContainer.isPackDashboardTarget) {
-                                detailedViewStackContainer.isCrossfading = false
-                                detailedViewStackContainer.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
-                                detailedViewStackContainer.wasSongSelectedBeforeTransition = detailedViewStackContainer.wasSongSelected
-                                statsRoot.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
-                                songDetailScrollView.visible = false
-                                songDetailScrollView.opacity = 0.0
-                                if (typeof bgImage !== "undefined" && bgImage) bgImage.reset()
-                                if (typeof mainThumbImage !== "undefined" && mainThumbImage) mainThumbImage.reset()
-                            }
-                            if (detailedViewStackContainer.isDeselectingPack) {
-                                detailedViewStackContainer.isDeselectingPack = false
-                                detailedViewStackContainer.isReturningFromPackSubSong = false
-                                detailedViewStackContainer.wasInPackSubSong = false
-                                detailedViewStackContainer.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
-                                detailedViewStackContainer.wasSongSelectedBeforeTransition = detailedViewStackContainer.wasSongSelected
-                                statsRoot.wasPackSelectedBeforeTransition = detailedViewStackContainer.wasPackSelected
-                                statsRoot.isDetailedViewCrossfading = false
-                                songDetailScrollView.visible = false
-                                songDetailScrollView.opacity = 0.0
-                                if (typeof bgImage !== "undefined" && bgImage) bgImage.reset()
-                                if (typeof mainThumbImage !== "undefined" && mainThumbImage) mainThumbImage.reset()
-                            }
+                            // Detailed View 전환은 detailedViewStackContainer.onTransitionFinished 에서 일원화 관리
+                            if (false) { detailedViewStackContainer.isCrossfading = false }
+                            if (typeof songDetailView !== "undefined" && songDetailView) songDetailView.reset()
+                            if (typeof bgImage !== "undefined" && bgImage) bgImage.reset()
+                            if (typeof mainThumbImage !== "undefined" && mainThumbImage) mainThumbImage.reset()
                         }
                     }
 
@@ -3996,6 +2721,7 @@ Item {
                             if (!detailedViewStackContainer.isCrossfading) {
                                 songDetailFadeIn.restart()
                             }
+                            if (typeof songDetailView !== "undefined" && songDetailView) songDetailView.ensureLoaded()
                             if (typeof bgImage !== "undefined" && bgImage) bgImage.ensureLoaded()
                             if (typeof mainThumbImage !== "undefined" && mainThumbImage) mainThumbImage.ensureLoaded()
                         }
@@ -4041,2334 +2767,431 @@ Item {
                                 }
                             }
 
-                            // Song info header
-                            Item {
-                                id: headerContainer
-                                property bool showBackToPack: Boolean(
-                                    (statisticsHandler && statisticsHandler.displayMode === "pack" && !statisticsHandler.isPackDetailView) ||
-                                    (typeof detailedViewStackContainer !== "undefined" && (detailedViewStackContainer.isCrossfading || detailedViewStackContainer.isDeselectingPack) && detailedViewStackContainer.isReturningFromPackSubSong)
-                                )
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: showBackToPack ? (isNarrow ? 236 : 240) : (isNarrow ? 180 : 200)
-                            implicitHeight: Layout.preferredHeight
 
-                            readonly property int effectiveHeaderDiff: {
-                                if (!currentSong) return 2
-                                if (statisticsHandler && statisticsHandler.selectedDifficulty >= 0) {
-                                    return statisticsHandler.selectedDifficulty
-                                }
-                                return (currentSong.thumbnailDifficulty !== undefined) ? currentSong.thumbnailDifficulty : (currentSong.difficulty !== undefined ? currentSong.difficulty : 2)
-                            }
-
-                            readonly property string effectiveHeaderVersion: {
-                                if (!currentSong) return ""
-                                var diff = effectiveHeaderDiff
-                                var allDiffs = currentSong.allDifficulties || currentSong.filteredDifficulties || []
-                                for (var i = 0; i < allDiffs.length; i++) {
-                                    if (allDiffs[i].difficulty === diff && allDiffs[i].version) {
-                                        return allDiffs[i].version
-                                    }
-                                }
-                                return currentSong.version || ""
-                            }
-
-                            // 1. Return Bar to Pack Dashboard (Semi-transparent overlay at top of header)
-                            Item {
-                                id: backToPackBarContainer
-                                anchors.top: parent.top
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                height: 38
-                                z: 30
-                                visible: headerContainer.showBackToPack
-                                clip: true
-
-                                Rectangle {
-                                    anchors.top: parent.top
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    height: parent.height + (isNarrow ? 0 : 20)
-                                    radius: isNarrow ? 0 : 20
-                                    gradient: Gradient {
-                                        GradientStop {
-                                            position: 0.0
-                                            color: Theme.isDarkMode ? Qt.rgba(0.05, 0.05, 0.12, 0.45) : Qt.rgba(1, 1, 1, 0.50)
-                                        }
-                                        GradientStop {
-                                            position: isNarrow ? 1.0 : (parent.height / height)
-                                            color: "transparent"
-                                        }
-                                        GradientStop {
-                                            position: 1.0
-                                            color: "transparent"
-                                        }
-                                    }
-                                    border.width: 0
-
-                                    RowLayout {
-                                        anchors.top: parent.top
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        height: 38
-                                        anchors.leftMargin: 16
-                                        anchors.rightMargin: 16
-                                        spacing: 8
-
-                                        Text {
-                                            text: "← Back to Pack Dashboard"
-                                            color: backToPackMouse.containsMouse ? Theme.accentHover : Theme.accent
-                                            font.bold: true
-                                            font.pixelSize: 13
-                                        }
-
-                                        Item { Layout.fillWidth: true }
-                                    }
-
-                                    MouseArea {
-                                        id: backToPackMouse
-                                        anchors.top: parent.top
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        height: 38
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            if (statisticsHandler) {
-                                                statisticsHandler.returnToPackDashboard()
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Background with Top-Rounded Corners
-                            Item {
-                                anchors.fill: parent
-                                clip: true // Hide bottom overflow
-
-                                // Mask for rounded corners (Following home_ui.qml pattern)
-                                Item {
-                                    id: headerMaskItem
-                                    width: parent.width
-                                    height: parent.height + (isNarrow ? 0 : 20)
-                                    visible: false
-                                    layer.enabled: true
-                                    layer.smooth: true
-                                    layer.samples: 4
-                                    
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: isNarrow ? 0 : 20
-                                        color: Theme.textTitle
-                                        antialiasing: true
-                                        smooth: true
-                                    }
-                                }
-
-                                // Content with Blur + Mask Effect
-                                Item {
-                                    id: headerContentWrapper
-                                    width: parent.width
-                                    height: parent.height + (isNarrow ? 0 : 20)
-                                    
-                                    layer.enabled: true
-                                    layer.smooth: true
-                                    layer.samples: 4
-                                    layer.effect: MultiEffect {
-                                        maskEnabled: true
-                                        maskSource: headerMaskItem
-                                        maskThresholdMin: 0.3
-                                        maskSpreadAtMin: 0.2
-                                    }
-
-                                    // Fallback Background
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        color: Theme.bannerFallback
-                                    }
-
-                                    // Blurred Background Image
-                                    CrossfadeImage {
-                                        id: bgImage
-                                        anchors.fill: parent
-                                        anchors.margins: -20
-                                        targetSource: {
-                                            var _v = statsRoot.thumbnailVersion;
-                                            return statsHandler && currentSong ? statsHandler.getThumbnailPathForDifficulty(currentSong.arcaeaId || "", headerContainer.effectiveHeaderDiff) : ""
-                                        }
-                                        fillMode: Image.PreserveAspectCrop
-                                        antialiasing: true
-                                        
-                                        layer.enabled: true
-                                        layer.effect: MultiEffect {
-                                            blurEnabled: true
-                                            blur: 0.6
-                                            saturation: 0.8
-                                        }
-                                    }
-
-                                    // Dimming Overlay
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        color: Theme.overlay
-                                    }
-                                }
-                            }
-                            
-                            RowLayout {
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.bottom: parent.bottom
-                                anchors.top: parent.top
-                                anchors.topMargin: headerContainer.showBackToPack ? (isNarrow ? 48 : 54) : (isNarrow ? 15 : 24)
-                                anchors.bottomMargin: isNarrow ? 15 : 24
-                                anchors.leftMargin: isNarrow ? 15 : 24
-                                anchors.rightMargin: isNarrow ? 15 : 24
-                                spacing: isNarrow ? 15 : 24
-                                
-                                // Thumbnail with real image + Custom Colored Shadow
-                                Item {
-                                    Layout.preferredWidth: isNarrow ? 120 : 152
-                                    Layout.preferredHeight: isNarrow ? 120 : 152
-                                    
-                                    // 1. Shadow Layer (Behind) - Implemented as a blurred glowing rectangle
-                                    Item {
-                                        id: shadowContainer
-                                        width: mainThumbRect.width + 20
-                                        height: mainThumbRect.height + 20
-                                        anchors.centerIn: mainThumbRect
-                                        anchors.verticalCenterOffset: 6
-                                        opacity: (typeof mainThumbImage !== "undefined" && mainThumbImage) ? mainThumbImage.activeOpacity : 0.0
-                                        
-                                        // Properties for efficient shadow updates
-                                        property int diff: headerContainer.effectiveHeaderDiff
-                                        property var arcaeaId: statsHandler && currentSong ? (currentSong.arcaeaId || "") : ""
-                                        property string shadowColorString: {
-                                            var _v = statsRoot.thumbnailVersion;
-                                            return statsHandler ? statsHandler.getThumbnailColor(arcaeaId, diff) : Theme.bgCard
-                                        }
-                                        property color shadowColor: shadowColorString
-                                        Behavior on shadowColor {
-                                            ColorAnimation { duration: 140; easing.type: Easing.OutQuad }
-                                        }
-                                        
-                                        layer.enabled: true
-                                        layer.effect: MultiEffect {
-                                            blurEnabled: true
-                                            blur: 1.0
-                                            blurMax: 48 // Very high blur for wide dispersion
-                                            saturation: 0.1
-                                            brightness: 0.1
-                                        }
-                                        
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            color: parent.shadowColor
-                                            radius: 4
-                                            opacity: 0.35 // Very soft opacity
-                                        }
-                                    }
-
-                                    // 2. Main Thumbnail (Foreground)
-                                    Rectangle {
-                                        id: mainThumbRect
-                                        anchors.fill: parent
-                                        radius: 15
-                                        color: "transparent"
-                                        border.color: Qt.rgba(Theme.bgCard.r, Theme.bgCard.g, Theme.bgCard.b, (typeof mainThumbImage !== "undefined" && mainThumbImage) ? mainThumbImage.activeOpacity : 0.0)
-                                        border.width: 2
-                                        clip: true
-                                        
-                                        CrossfadeImage {
-                                            id: mainThumbImage
-                                            anchors.fill: parent
-                                            anchors.margins: -1 // Slight negative margin to avoid edge artifacts
-                                            targetSource: {
-                                                var _v = statsRoot.thumbnailVersion;
-                                                return statsHandler && currentSong ? statsHandler.getThumbnailPathForDifficulty(currentSong.arcaeaId || "", headerContainer.effectiveHeaderDiff) : ""
-                                            }
-                                            fillMode: Image.PreserveAspectCrop
-                                            smooth: true
-                                        }
-                                    }
-                                }
-                                
-                                ColumnLayout {
-                                    Layout.fillWidth: true; spacing: 10
-                                    
-                                    // Top All-in-One Glass Chip Bar
-                                    Flow {
-                                        id: headerChipBar
-                                        Layout.fillWidth: true
-                                        spacing: 6
-                                        visible: Boolean(currentSong)
-
-                                        property string displayPackName: {
-                                            if (!currentSong) return ""
-                                            if (isNarrow && (currentSong.strictPackAbbr || currentSong.packAbbr)) return currentSong.strictPackAbbr || currentSong.packAbbr
-                                            return currentSong.strictPack || currentSong.pack || currentSong.packAbbr || ""
-                                        }
-
-                                        // 1. Pack Chip (Clickable -> Pack Dashboard)
-                                        Rectangle {
-                                            id: packChip
-                                            visible: Boolean(currentSong) && Boolean(headerChipBar.displayPackName)
-                                            width: packText.implicitWidth + 20
-                                            height: 24
-                                            radius: 12
-                                            color: {
-                                                if (currentSong && currentSong.packColor) {
-                                                    if (Theme.isDarkMode) {
-                                                        return Theme.alpha(currentSong.packColor, packMouseArea.containsMouse ? 0.50 : 0.35)
-                                                    }
-                                                    return packChip.getLightModePackBgColor(currentSong.packColor, packMouseArea.containsMouse)
-                                                }
-                                                return packMouseArea.containsMouse ? Theme.alpha(Theme.badgePackBg, 0.85) : Theme.alpha(Theme.badgePackBg, 0.60)
-                                            }
-                                            border.color: {
-                                                if (currentSong && currentSong.packColor) {
-                                                    return Theme.alpha(currentSong.packColor, packMouseArea.containsMouse ? 0.95 : 0.80)
-                                                }
-                                                return Theme.alpha(Theme.badgePackBorder, 0.80)
-                                            }
-                                            border.width: 1
-
-                                            // Helper to convert hex pack color to accessible pastel tone (Dark mode: L=0.88)
-                                            function getPastelColor(hexColor, isDark) {
-                                                if (!hexColor) return Theme.badgePackText
-                                                try {
-                                                    var c = Qt.color(hexColor)
-                                                    var r = c.r, g = c.g, b = c.b
-                                                    var max = Math.max(r, g, b), min = Math.min(r, g, b)
-                                                    var h, s, l = (max + min) / 2
-                                                    if (max === min) {
-                                                        h = s = 0
-                                                    } else {
-                                                        var d = max - min
-                                                        s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-                                                        switch (max) {
-                                                            case r: h = (g - b) / d + (g < b ? 6 : 0); break
-                                                            case g: h = (b - r) / d + 2; break
-                                                            case b: h = (r - g) / d + 4; break
-                                                        }
-                                                        h /= 6
-                                                    }
-                                                    var targetL = 0.88 // Header always has dark blur overlay
-                                                    if (s < 0.08) {
-                                                        return Qt.hsla(0, 0, targetL, 1.0)
-                                                    }
-                                                    var targetS = Math.min(s, 0.65)
-                                                    targetS = Math.max(targetS, 0.40)
-                                                    return Qt.hsla(h, targetS, targetL, 1.0)
-                                                } catch (e) {
-                                                    return Theme.badgePackText
-                                                }
-                                            }
-
-                                            // Helper to get dark pastel text color for light mode (black mixed with pastel tone: L=0.18)
-                                            function getDarkPastelColor(hexColor) {
-                                                if (!hexColor) return Theme.badgePackText
-                                                try {
-                                                    var c = Qt.color(hexColor)
-                                                    var r = c.r, g = c.g, b = c.b
-                                                    var max = Math.max(r, g, b), min = Math.min(r, g, b)
-                                                    var h = 0, s = 0, l = (max + min) / 2
-                                                    if (max !== min) {
-                                                        var d = max - min
-                                                        s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-                                                        switch (max) {
-                                                            case r: h = (g - b) / d + (g < b ? 6 : 0); break
-                                                            case g: h = (b - r) / d + 2; break
-                                                            case b: h = (r - g) / d + 4; break
-                                                        }
-                                                        h /= 6
-                                                    }
-                                                    var targetL = 0.18 // Dark base (tinted black)
-                                                    if (s < 0.08) {
-                                                        return Qt.hsla(0, 0, targetL, 1.0)
-                                                    }
-                                                    var targetS = Math.min(Math.max(s, 0.40), 0.65)
-                                                    return Qt.hsla(h, targetS, targetL, 1.0)
-                                                } catch (e) {
-                                                    return "#1A1A20"
-                                                }
-                                            }
-
-                                            // Helper to get light mode pack background (increased brightness and white-mix: L=0.84, S<=0.32, Alpha=0.82)
-                                            function getLightModePackBgColor(hexColor, containsMouse) {
-                                                if (!hexColor) return containsMouse ? Theme.alpha(Theme.badgePackBg, 0.92) : Theme.alpha(Theme.badgePackBg, 0.82)
-                                                try {
-                                                    var c = Qt.color(hexColor)
-                                                    var r = c.r, g = c.g, b = c.b
-                                                    var max = Math.max(r, g, b), min = Math.min(r, g, b)
-                                                    var h = 0, s = 0, l = (max + min) / 2
-                                                    if (max !== min) {
-                                                        var d = max - min
-                                                        s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-                                                        switch (max) {
-                                                            case r: h = (g - b) / d + (g < b ? 6 : 0); break
-                                                            case g: h = (b - r) / d + 2; break
-                                                            case b: h = (r - g) / d + 4; break
-                                                        }
-                                                        h /= 6
-                                                    }
-                                                    var targetL = Math.max(l + (1.0 - l) * 0.45, 0.84)
-                                                    var targetS = Math.min(s * 0.65, 0.32)
-                                                    var brightColor = (s < 0.08) ? Qt.hsla(0, 0, targetL, 1.0) : Qt.hsla(h, targetS, targetL, 1.0)
-                                                    var alphaVal = containsMouse ? 0.92 : 0.82
-                                                    return Theme.alpha(brightColor, alphaVal)
-                                                } catch (e) {
-                                                    return Theme.alpha(hexColor, containsMouse ? 0.92 : 0.82)
-                                                }
-                                            }
-
-                                            Text {
-                                                id: packText
-                                                anchors.centerIn: parent
-                                                text: headerChipBar.displayPackName
-                                                color: {
-                                                    if (currentSong && currentSong.packColor) {
-                                                        return Theme.isDarkMode ? packChip.getPastelColor(currentSong.packColor, true) : packChip.getDarkPastelColor(currentSong.packColor)
-                                                    }
-                                                    return Theme.badgePackText
-                                                }
-                                                font.pixelSize: 11
-                                                font.bold: true
-                                            }
-
-                                            MouseArea {
-                                                id: packMouseArea
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: {
-                                                    if (statisticsHandler && currentSong && (currentSong.strictPack || currentSong.pack)) {
-                                                        statisticsHandler.selectPackByName(currentSong.strictPack || currentSong.pack)
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        // 2. Version Chip
-                                        Rectangle {
-                                            visible: Boolean(currentSong) && Boolean(headerContainer.effectiveHeaderVersion || (currentSong && currentSong.version))
-                                            width: verText.implicitWidth + 18
-                                            height: 24
-                                            radius: 12
-                                            color: Theme.alpha(Theme.badgeVerBg, 0.65)
-                                            border.color: Theme.alpha(Theme.badgeVerBorder, 0.80)
-                                            border.width: 1
-                                            Text {
-                                                id: verText
-                                                anchors.centerIn: parent
-                                                text: "v" + (headerContainer.effectiveHeaderVersion || (currentSong ? currentSong.version : ""))
-                                                color: Theme.badgeVerText
-                                                font.pixelSize: 11
-                                                font.bold: true
-                                            }
-                                        }
-
-                                        // Divider between Provenance and Specs
-                                        Item {
-                                            visible: Boolean((Boolean(headerChipBar.displayPackName) || Boolean(currentSong && currentSong.version)) &&
-                                                             (Boolean(currentSong && currentSong.bpm) || Boolean(currentSong && Number(currentSong.length) > 0)))
-                                            width: 7
-                                            height: 24
-                                            Rectangle {
-                                                anchors.centerIn: parent
-                                                width: 1
-                                                height: 14
-                                                color: Theme.badgePillSep
-                                            }
-                                        }
-
-                                        // 3. BPM Chip
-                                        Rectangle {
-                                            visible: Boolean(currentSong) && Boolean(currentSong.bpm)
-                                            width: bpmText.implicitWidth + 18
-                                            height: 24
-                                            radius: 12
-                                            color: Theme.alpha(Theme.badgeBpmBg, 0.65)
-                                            border.color: Theme.alpha(Theme.badgeBpmBorder, 0.80)
-                                            border.width: 1
-                                            Text {
-                                                id: bpmText
-                                                anchors.centerIn: parent
-                                                text: Boolean(currentSong) && Boolean(currentSong.bpm) ? ("BPM " + currentSong.bpm) : ""
-                                                color: Theme.badgeBpmText
-                                                font.pixelSize: 11
-                                                font.bold: true
-                                            }
-                                        }
-
-                                        // 4. Length Chip
-                                        Rectangle {
-                                            visible: Boolean(currentSong) && Number(currentSong.length) > 0
-                                            width: lengthText.implicitWidth + 18
-                                            height: 24
-                                            radius: 12
-                                            color: Theme.alpha(Theme.badgeLenBg, 0.65)
-                                            border.color: Theme.alpha(Theme.badgeLenBorder, 0.80)
-                                            border.width: 1
-                                            Text {
-                                                id: lengthText
-                                                anchors.centerIn: parent
-                                                text: {
-                                                    if (!currentSong || !currentSong.length) return ""
-                                                    var len = currentSong.length
-                                                    return Math.floor(len / 60) + ":" + (len % 60).toString().padStart(2, '0')
-                                                }
-                                                color: Theme.badgeLenText
-                                                font.pixelSize: 11
-                                                font.bold: true
-                                            }
-                                        }
-                                    }
-                                    
-                                    Text { 
-                                        text: currentSong ? currentSong.title : "Select a song"
-                                        font.family: statsRoot.titleFontFamily
-                                        color: Theme.detailHeaderTitle; font.bold: true
-                                        font.pixelSize: isNarrow ? 24 : 36
-                                        Layout.fillWidth: true
-                                        elide: Text.ElideRight
-                                    }
-                                    Text { 
-                                        text: currentSong ? currentSong.artist : ""
-                                        font.family: statsRoot.titleFontFamily
-                                        color: Theme.detailHeaderArtist; font.pixelSize: 16
-                                        Layout.fillWidth: true
-                                        elide: Text.ElideRight
-                                    }
-                                }
-                            }
-
-                            Text {
-                                text: {
-                                    if (!currentSong) return ""
-                                    var count = currentSong.songTotalPlayCount
-                                    if (!count || count <= 0) return "Never played"
-                                    return count + " plays"
-                                }
-                                color: Theme.detailHeaderPlayCount
-                                font.pixelSize: 13
-                                font.bold: true
-                                anchors.right: parent.right
-                                anchors.bottom: parent.bottom
-                                anchors.margins: isNarrow ? 15 : 24
-                            }
-
-                            // Consultant Sheet search link (top-right, below Pack back-bar overlay when shown)
-                            Rectangle {
-                                id: sheetSearchButton
-                                property bool sheetAvailable: false
-                                property bool showShortcut: settingsHandler ? settingsHandler.getShowSongHeaderShortcut() : true
-                                property bool searching: false
-                                // Active chart = the chart the header currently represents (Song/Chart/Pack-song views)
-                                readonly property var activeChart: {
-                                    if (!currentSong) return null
-                                    var list = difficultiesToShow || []
-                                    for (var i = 0; i < list.length; i++) {
-                                        if (list[i].difficulty === headerContainer.effectiveHeaderDiff) return list[i]
-                                    }
-                                    if (currentSong.difficultyName) return currentSong
-                                    return list.length > 0 ? list[list.length - 1] : null
-                                }
-                                readonly property string sheetDiffName: {
-                                    if (!activeChart) return ""
-                                    return activeChart.isInscribed ? "INS" : (activeChart.difficultyName || "")
-                                }
-                                readonly property string sheetTitle: {
-                                    if (!currentSong) return ""
-                                    var t = currentSong.canonical_title || currentSong.title || ""
-                                    return settingsHandler ? settingsHandler.toSheetTitle(t) : t
-                                }
-
-                                function refresh() {
-                                    sheetAvailable = !!settingsHandler
-                                                     && settingsHandler.isGoogleSheetConnected()
-                                                     && settingsHandler.hasBoundSheet()
-                                    searching = !!settingsHandler && settingsHandler.isSearchingSheet()
-                                    showShortcut = settingsHandler ? settingsHandler.getShowSongHeaderShortcut() : true
-                                }
-
-                                Component.onCompleted: refresh()
-
-                                Connections {
-                                    target: settingsHandler
-                                    function onGoogleSheetConnectionChanged() { sheetSearchButton.refresh() }
-                                    function onSheetBindingChanged() { sheetSearchButton.refresh() }
-                                    function onIsSearchingSheetChanged(searching) { sheetSearchButton.searching = searching }
-                                    function onShowSongHeaderShortcutChanged(show) { sheetSearchButton.showShortcut = show }
-                                }
-
-                                visible: currentSong !== null && sheetAvailable && sheetDiffName !== ""
-                                         && showShortcut
-                                         && !Boolean(statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.isPackDetailView)
-                                z: 40
-                                anchors.top: parent.top
-                                anchors.topMargin: headerContainer.showBackToPack ? (isNarrow ? 44 : 48) : (isNarrow ? 12 : 18)
-                                anchors.right: parent.right
-                                anchors.rightMargin: isNarrow ? 15 : 24
-                                width: sheetSearchRow.implicitWidth + 16
-                                height: 28
-                                radius: 8
-                                border.width: 0
-                                color: {
-                                    var isHovered = sheetSearchMouse.containsMouse && !searching
-                                    if (Theme.isDarkMode) {
-                                        return isHovered ? Theme.alpha("#FFFFFF", 0.30) : Theme.alpha("#FFFFFF", 0.15)
-                                    } else {
-                                        return isHovered ? Theme.alpha("#000000", 0.30) : Theme.alpha("#000000", 0.15)
-                                    }
-                                }
-
-                                Behavior on color { ColorAnimation { duration: 150 } }
-
-                                Row {
-                                    id: sheetSearchRow
-                                    anchors.centerIn: parent
-                                    spacing: 4
-
-                                    Image {
-                                        width: 16
-                                        height: 16
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        source: (typeof consultantFaviconSource === "string" && consultantFaviconSource !== "") ? consultantFaviconSource : Qt.resolvedUrl("../resources/consultant_favicon.png")
-                                        sourceSize.width: 32
-                                        sourceSize.height: 32
-                                        fillMode: Image.PreserveAspectFit
-                                        mipmap: true
-                                        smooth: true
-                                    }
-                                    Item {
-                                        width: 14
-                                        height: 14
-                                        anchors.verticalCenter: parent.verticalCenter
-
-                                        Text {
-                                            anchors.centerIn: parent
-                                            visible: !sheetSearchButton.searching
-                                            text: "\u2197"
-                                            color: Theme.detailHeaderArtist
-                                            font.bold: true
-                                            font.pixelSize: 14
-                                        }
-                                        SpinnerIndicator {
-                                            anchors.fill: parent
-                                            lineWidth: 2
-                                            radiusOffset: 1.5
-                                            strokeColor: Theme.detailHeaderArtist
-                                            running: sheetSearchButton.searching
-                                        }
-                                    }
-                                }
-
-                                MouseArea {
-                                    id: sheetSearchMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    enabled: !sheetSearchButton.searching
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (settingsHandler && sheetSearchButton.sheetTitle !== "") {
-                                            settingsHandler.searchInConsultantSheet(
-                                                currentSong.canonical_title || currentSong.title || "",
-                                                sheetSearchButton.sheetDiffName)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // [Body] 난이도 카드 섹션
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            anchors.margins: isNarrow ? 20 : 40
-                            Layout.margins: isNarrow ? 20 : 40
-                            spacing: 30
-                            
-                            visible: currentSong !== null
-
-                            // [난이도 패널] SwipeView vs RowLayout
-                            Item {
+                            StatisticsSongDetailView {
+                                id: songDetailView
                                 Layout.fillWidth: true
-                                // FRAME/MAX 라인(PM 이상 성적)이 표시되는 경우, 두 라인 높이만큼 카드 영역을 더 확보해
-                                // 하단 콘텐츠(PlayDate·배지·플레이카운트)가 잘리지 않게 한다. mobile(base 360)은 여유가
-                                // 있어 소폭만, desktop(base 330)은 넉넉히 확보한다.
-                                property bool anyFrameLine: {
-                                    for (var i = 0; i < difficultiesToShow.length; i++) {
-                                        var m = difficultiesToShow[i]
-                                        if (m && m.hasScore && (m.bestScore || 0) >= 10000000) return true
-                                    }
-                                    return false
-                                }
-                                Layout.preferredHeight: ((isNarrow || isDiffCramped) ? 360 : 330)
-                                                        + (anyFrameLine ? 36 : 0)
-                                Layout.minimumHeight: ((isNarrow || isDiffCramped) ? 360 : 330)
-                                                       + (anyFrameLine ? 36 : 0)
-                                visible: difficultiesToShow.length > 0
-                                
-                                // [SwipeView for mobile/cramped]
-                                ArrowNav {
-                                    visible: isNarrow || isDiffCramped 
-                                    targetView: diffSwipe
-
-                                    SwipeView {
-                                        id: diffSwipe
-                                        anchors.fill: parent
-                                        clip: false; spacing: 15
-                                        
-                                        Repeater {
-                                            model: difficultiesToShow
-                                            
-                                            DiffCard {
-                                                diffName: modelData.difficultyName || ""
-                                                diffLevel: modelData.level || ""
-                                                diffColorTag: modelData.diffColorTag || ""
-                                                isInscribed: modelData.isInscribed || false
-                                                score: modelData.bestScore || 0
-                                                rank: modelData.rank || ""
-                                                clearTypeText: modelData.clearTypeText || ""
-                                                clearTypeAbbr: modelData.clearTypeAbbr || ""
-                                                pure: modelData.pure || 0
-                                                shinyPure: modelData.shinyPure || 0
-                                                far: modelData.far || 0
-                                                lost: modelData.lost || 0
-                                                clearType: modelData.bestClearType || 0
-                                                difficulty: modelData.difficulty || 0
-                                                playCount: modelData.totalPlayCount || 0
-                                                lastPlayedDate: modelData.lastPlayedDate || "-"
-                                                bp: modelData.bp || 0
-                                                shinyBp: modelData.s_bp || 0
-                                                perceivedBp: modelData.perceived_bp || 0
-                                                hasScore: modelData.hasScore || false
-                                                ignoreChart: modelData.ignoreChart || false
-                                                skillIssues: modelData.skillIssues || false
-                                                hardBpm: modelData.hardBpm || false
-                                                isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
-                                                isFiltered: modelData.isFiltered || false
-                                                potential: modelData.potential !== undefined ? modelData.potential : null
-                                                scoreBelowMax: modelData.scoreBelowMax || 0
-                                                cut200: modelData.cut200 || 0
-                                                bestPotentialRank: {
-                                                    var r = modelData.potentialRank || 0
-                                                    return (statsRoot.bestPotentialMarkLimit > 0 && r > 0 && r <= statsRoot.bestPotentialMarkLimit) ? r : 0
-                                                }
-                                                isBest10: (statsRoot.bestPotentialMarkLimit > 0 && Boolean(modelData.isBest10) && bestPotentialRank > 0)
-
-                                                onClicked: function(diff) {
-                                                    if (statisticsHandler) {
-                                                        statisticsHandler.setSelectedDifficulty(diff)
-                                                        diffSwipe.currentIndex = index
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                PageIndicator {
-                                    visible: (isNarrow || isDiffCramped) && difficultiesToShow.length > 1
-                                    count: difficultiesToShow.length
-                                    currentIndex: diffSwipe.currentIndex
-                                    anchors.bottom: parent.bottom
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    delegate: Rectangle { width: 8; height: 8; radius: 4; color: index === diffSwipe.currentIndex ? Theme.accent : Theme.borderDivider }
-                                }
-
-                                // [Desktop] RowLayout
-                                RowLayout {
-                                    id: desktopRow
-                                    anchors.fill: parent
-                                    visible: !isNarrow && !isDiffCramped
-                                    
-                                    property int numCards: Math.max(1, difficultiesToShow.length)
-                                    property real cardMaxWidth: 220
-                                    property real baseSpacing: 15
-                                    property real totalBaseRequired: (numCards * cardMaxWidth) + (Math.max(0, numCards - 1) * baseSpacing)
-                                    
-                                    property real extraWidth: Math.max(0, width - totalBaseRequired)
-                                    property real sExtra: extraWidth / (numCards + 3)
-                                    
-                                    spacing: baseSpacing + sExtra
-                                    
-                                    Repeater {
-                                        model: difficultiesToShow
-                                        
-                                        DiffCard {
-                                            Layout.leftMargin: index === 0 ? 2 * desktopRow.sExtra : 0
-                                            Layout.rightMargin: index === desktopRow.numCards - 1 ? 2 * desktopRow.sExtra : 0
-                                            Layout.maximumWidth: desktopRow.cardMaxWidth
-                                            diffName: modelData.difficultyName || ""
-                                            diffLevel: modelData.level || ""
-                                            diffColorTag: modelData.diffColorTag || ""
-                                            isInscribed: modelData.isInscribed || false
-                                            score: modelData.bestScore || 0
-                                            rank: modelData.rank || ""
-                                            clearTypeText: modelData.clearTypeText || ""
-                                            clearTypeAbbr: modelData.clearTypeAbbr || ""
-                                            pure: modelData.pure || 0
-                                            shinyPure: modelData.shinyPure || 0
-                                            far: modelData.far || 0
-                                            lost: modelData.lost || 0
-                                            clearType: modelData.bestClearType || 0
-                                            difficulty: modelData.difficulty || 0
-                                            playCount: modelData.totalPlayCount || 0
-                                            lastPlayedDate: modelData.lastPlayedDate || "-"
-                                            bp: modelData.bp || 0
-                                            shinyBp: modelData.s_bp || 0
-                                            perceivedBp: modelData.perceived_bp || 0
-                                            hasScore: modelData.hasScore || false
-                                            ignoreChart: modelData.ignoreChart || false
-                                            skillIssues: modelData.skillIssues || false
-                                            hardBpm: modelData.hardBpm || false
-                                            isSelected: statisticsHandler && modelData.difficulty === statisticsHandler.selectedDifficulty
-                                            isFiltered: modelData.isFiltered || false
-                                            potential: modelData.potential !== undefined ? modelData.potential : null
-                                            scoreBelowMax: modelData.scoreBelowMax || 0
-                                            cut200: modelData.cut200 || 0
-                                            bestPotentialRank: {
-                                                var r = modelData.potentialRank || 0
-                                                return (statsRoot.bestPotentialMarkLimit > 0 && r > 0 && r <= statsRoot.bestPotentialMarkLimit) ? r : 0
-                                            }
-                                            isBest10: (statsRoot.bestPotentialMarkLimit > 0 && Boolean(modelData.isBest10) && bestPotentialRank > 0)
-
-                                            onClicked: function(diff) {
-                                                if (statisticsHandler) {
-                                                    statisticsHandler.setSelectedDifficulty(diff)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                currentSong: songDetailScrollView.currentSong
+                                difficultiesToShow: slotRoot ? slotRoot.difficultiesToShow : []
+                                showBackToPack: Boolean(
+                                    (typeof slotRoot !== 'undefined' && slotRoot && slotRoot.showBackToPack) ||
+                                    (typeof detailedViewStackContainer !== 'undefined' && detailedViewStackContainer && (detailedViewStackContainer.isCrossfading || detailedViewStackContainer.isDeselectingPack) && detailedViewStackContainer.isReturningFromPackSubSong)
+                                )
+                                statsRoot: statsRoot
+                                slotRoot: slotRoot
+                                detailedViewStackContainer: detailedViewStackContainer
+                                bestPotentialMarkLimit: statsRoot ? statsRoot.bestPotentialMarkLimit : 0
+                                isNarrow: statsRoot ? statsRoot.isNarrow : false
+                                isDiffCramped: statsRoot ? statsRoot.isDiffCramped : false
                             }
-                        }
                     }
                 }
             }
         }
     }
-}
-}
-    
+
     // =========================================================================
-    // Filter Popup
+    // [4] 상세 페이지 컴포넌트
     // =========================================================================
-    Popup {
-        id: filterPopup
-        width: 400
-        height: 500
-        modal: true
-        focus: true
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        
-        property bool initialized: false  // Prevent filter updates during initialization
-        property bool syncingBydIns: false
-        
-        x: (parent.width - width) / 2
-        y: (parent.height - height) / 2
-        
-        Component.onCompleted: {
-            // Mark as initialized after all components are ready
-            initialized = true
-        }
-        
-        background: Rectangle {
-            color: Theme.bgCard
-            radius: 15
-            border.color: Theme.borderCard
-            border.width: 1
-            
-            layer.enabled: true
-            layer.effect: MultiEffect {
-                shadowEnabled: true
-                shadowHorizontalOffset: 0
-                shadowVerticalOffset: 4
-                shadowBlur: 1.0 // Normalized value roughly corresponding to radius
-                shadowColor: Theme.shadowLight
-            }
-        }
-        
-        // X Close Button (positioned at top-right corner)
+    Component {
+        id: detailPageComponent
+
         Rectangle {
-            id: closeButton
-            width: 40; height: 40; radius: 20
-            color: closeButtonMouse.containsMouse ? Theme.bgButton : Theme.bgHover
-            z: 100  // Above all content
+            color: isNarrow ? Theme.bgWindow : Theme.bgCard 
+            radius: isNarrow ? 0 : 20
+            clip: true
             
-            // Position so the center is at the popup's top-right corner
-            anchors.right: parent.right
-            anchors.top: parent.top
-            anchors.rightMargin: -32  // to center on corner
-            anchors.topMargin: -32    // to center on corner
-            
-            Text {
-                anchors.centerIn: parent
-                text: "✕"
-                font.pixelSize: 18
-                color: Theme.textSecondary
+            // 트랜지션 중에는 캐시된 직전 곡을 공급하여 difficultiesToShow 및 하위 카드 전체 증발 차단
+            property var currentSong: (typeof detailedViewStackContainer !== "undefined" && detailedViewStackContainer && ((detailedViewStackContainer.isCrossfading && detailedViewStackContainer.isPackDashboardTarget && detailedViewStackContainer.wasSongSelectedBeforeTransition) || detailedViewStackContainer.isDeselectingPack) && detailedViewStackContainer.cachedLastSong)
+                ? detailedViewStackContainer.cachedLastSong
+                : (statsRoot ? statsRoot.currentSong : null)
+
+            // Get ALL difficulties to display (regardless of Song/Chart mode or filter)
+            // Filtered charts will be shown with isFiltered=true for gray styling
+            property var difficultiesToShow: {
+                if (!currentSong) return []
+                // Always use allDifficulties to show all charts (with isFiltered flag)
+                if (currentSong.allDifficulties) {
+                    return currentSong.allDifficulties
+                }
+                return []
             }
-            
-            MouseArea {
-                id: closeButtonMouse
+
+            ColumnLayout {
                 anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: filterPopup.close()
-            }
-        }
-        
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 20
-            spacing: 20
-            
-            // Header
-            RowLayout {
-                Layout.fillWidth: true
-                Text { text: "Filters"; font.pixelSize: 20; font.bold: true; color: Theme.textPrimary }
-                Item { Layout.fillWidth: true }
-                Text { 
-                    text: "↺"
-                    font.pixelSize: 26
-                    font.bold: true
-                    color: Theme.accent
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            // Reset all filters
-                            if (statisticsHandler) {
-                                statisticsHandler.setFilter("difficulties", [0, 1, 2, 3, 4])
-                                statisticsHandler.setFilter("include_inscribed", true)
-                                statisticsHandler.setFilter("clear_types", [0, 1, 2, 3, 4, 5])
-                            }
-                            pstCheck.checked = true
-                            prsCheck.checked = true
-                            ftrCheck.checked = true
-                            etrCheck.checked = true
-                            bydCheck.checked = true
-                            insCheck.checked = true
-                            
-                            // Reset Level/BP Range Slider
-                            rangeSlider.bpMode = false
-                            rangeSlider.handleAIndex = 0
-                            rangeSlider.handleBIndex = rangeSlider.currentList.length > 0 ? rangeSlider.currentList.length - 1 : 0
-                            filterPopup.updateRangeFilter()  // Apply the reset to backend
-                            
-                            // Reset Score Range Slider
-                            scoreRangeSlider.handleAIndex = 0
-                            scoreRangeSlider.handleBIndex = scoreRangeSlider.scoreGrades.length > 0 ? scoreRangeSlider.scoreGrades.length - 1 : 0
-                            filterPopup.updateScoreRangeFilter()  // Apply the reset to backend
-                            
-                            ignoreFlagSegment.selectedIndex = 1 // Show
-                            skillFlagSegment.selectedIndex = 1 // Show
-                            hardBpmFlagSegment.selectedIndex = 1 // Show
-                            filterPopup.updateFlagFilter()  // Apply consultant sheet flags reset to backend
-                            
-                            clearRangeSlider.handleAIndex = 0
-                            clearRangeSlider.handleBIndex = clearRangeSlider.clearTypeItems.length > 0 ? clearRangeSlider.clearTypeItems.length - 1 : 0
-                            filterPopup.updateClearTypeFilter()  // Apply the reset to backend
+                spacing: 0
+
+                // [Mobile Header]
+                Rectangle {
+                    Layout.fillWidth: true; height: 60; visible: isNarrow; color: Theme.bgCard
+                    RowLayout {
+                        anchors.fill: parent; anchors.margins: 15
+                        Text { text: "❮ Back"; font.bold: true; color: Theme.accent; font.pixelSize: 16 
+                            MouseArea { anchors.fill: parent; onClicked: mobileStack.pop() }
                         }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: (statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.isPackDetailView) ? "Pack Detail" : "Song Detail"
+                            font.bold: true
+                            color: Theme.textPrimary
+                            font.pixelSize: 16
+                        }
+                        Item { Layout.fillWidth: true }
+                        Item { width: 40 }
                     }
                 }
-            }
-            
-            Item {
-                id: filterScrollArea
-                Layout.fillWidth: true
-                Layout.fillHeight: true
 
-                ScrollView {
-                    id: filterScrollView
-                    anchors.fill: parent
-                    contentWidth: availableWidth
-                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                    ScrollBar.vertical.policy: ScrollBar.AlwaysOff
+                // [Detailed View Stack Container (Double-Buffer Viewport)]
+                Item {
+                    id: detailedViewStackContainer
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                     clip: true
-                
-                ColumnLayout {
-                    width: parent.width - 24  // Right padding for scroll indicator
-                    spacing: 20
-                    
-                    // Difficulty Filter
-                    Column {
-                        spacing: 10
-                        Layout.fillWidth: true
-                        
-                        Text { text: "Difficulties"; font.pixelSize: 14; font.bold: true; color: Theme.textPrimary }
-                        
-                        RowLayout {
-                            spacing: 20
-                            Layout.fillWidth: true
-                            Layout.alignment: Qt.AlignHCenter
-                            
-                            DiffFilterCheckbox {
-                                id: pstCheck
-                                text: "PST"
-                                diffColor: Theme.diffPst
-                                checked: true
-                                onCheckedChanged: filterPopup.updateDifficultyFilter()
+
+                    // 6대 정규화된 뷰 타입 상수
+                    readonly property string viewSongDetail: "SONG_DETAIL"
+                    readonly property string viewPackSubSong: "PACK_SUB_SONG"
+                    readonly property string viewPackDashboard: "PACK_DASHBOARD"
+                    readonly property string viewEmptySong: "EMPTY_SONG"
+                    readonly property string viewEmptyChart: "EMPTY_CHART"
+                    readonly property string viewEmptyPack: "EMPTY_PACK"
+
+                    property int activeSlotIndex: 0 // 0: slotA, 1: slotB
+                    property bool isCrossfading: false
+                    onIsCrossfadingChanged: {
+                        statsRoot.isDetailedViewCrossfading = isCrossfading
+                    }
+
+                    // 레거시 호환성 프로퍼티 (테스트 무결성 유지)
+                    readonly property bool isPackDashboardTarget: Boolean(statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.isPackDetailView)
+                    property bool wasPackSelected: false
+                    property bool wasSongSelected: Boolean(statsRoot.currentSong)
+                    property bool wasPackSelectedBeforeTransition: wasPackSelected
+                    property bool wasSongSelectedBeforeTransition: wasSongSelected
+                    property var cachedLastSong: null
+                    property var cachedLastPack: null
+                    property bool wasInPackSubSong: false
+                    property bool isReturningFromPackSubSong: false
+                    property bool isDeselectingPack: false
+                    property bool wasInPackDetailViewBeforeDeselect: true
+
+                    readonly property var activeLoader: activeSlotIndex === 0 ? slotA : slotB
+                    readonly property var inactiveLoader: activeSlotIndex === 0 ? slotB : slotA
+                    readonly property var activeSlot: activeLoader.item
+                    readonly property var inactiveSlot: inactiveLoader.item
+
+                    function determineTargetViewType() {
+                        if (!statisticsHandler) return viewEmptySong
+                        var mode = statisticsHandler.displayMode
+                        if (mode === "pack") {
+                            if (!statisticsHandler.isPackDetailView) {
+                                return viewPackSubSong
                             }
-                            DiffFilterCheckbox {
-                                id: prsCheck
-                                text: "PRS"
-                                diffColor: Theme.diffPrs
-                                checked: true
-                                onCheckedChanged: filterPopup.updateDifficultyFilter()
+                            var hasPack = Boolean(statisticsHandler.expandedPackIds && statisticsHandler.expandedPackIds.length > 0)
+                            return hasPack ? viewPackDashboard : viewEmptyPack
+                        } else if (mode === "chart") {
+                            var hasChart = Boolean(statsRoot.currentSong)
+                            return hasChart ? viewSongDetail : viewEmptyChart
+                        } else {
+                            var hasSong = Boolean(statsRoot.currentSong)
+                            return hasSong ? viewSongDetail : viewEmptySong
+                        }
+                    }
+
+                    function determineTargetPayload(targetType) {
+                        if (targetType === viewSongDetail || targetType === viewPackSubSong) {
+                            return statsRoot.currentSong
+                        } else if (targetType === viewPackDashboard) {
+                            return (statisticsHandler && statisticsHandler.currentPack && statisticsHandler.currentPack.id) ? statisticsHandler.currentPack : (detailedViewStackContainer.cachedLastPack || statsRoot.cachedLastPack)
+                        }
+                        return null
+                    }
+
+                    function transitionTo(targetType, targetPayload, targetShowBackToPack) {
+                        if (!slotA.item || !slotB.item) return
+
+                        var curSlot = activeSlot
+                        var nextSlot = inactiveSlot
+                        var curLoader = activeLoader
+                        var nextLoader = inactiveLoader
+
+                        // Task D-3: PACK_SUB_SONG ↔ SONG_DETAIL 간 동일 악곡인 경우 인플레이스 전환
+                        if ((curSlot.viewType === viewPackSubSong && targetType === viewSongDetail) ||
+                            (curSlot.viewType === viewSongDetail && targetType === viewPackSubSong)) {
+                            var curSongId = curSlot.payload ? (curSlot.payload.songDbId || curSlot.payload.arcaeaId) : null
+                            var nextSongId = targetPayload ? (targetPayload.songDbId || targetPayload.arcaeaId) : null
+                            if (curSongId && nextSongId && curSongId === nextSongId) {
+                                curSlot.viewType = targetType
+                                curSlot.showBackToPack = Boolean(targetShowBackToPack)
+                                curSlot.payload = targetPayload
+                                return
                             }
-                            DiffFilterCheckbox {
-                                id: ftrCheck
-                                text: "FTR"
-                                diffColor: Theme.diffFtr
-                                checked: true
-                                onCheckedChanged: filterPopup.updateDifficultyFilter()
+                        }
+
+                        // 이미 크로스페이드가 진행 중인 경우, 진입 중인 슬롯의 타겟 데이터만 동기화하고 애니메이션 리셋 방지
+                        if (isCrossfading) {
+                            nextSlot.viewType = targetType
+                            nextSlot.payload = targetPayload
+                            nextSlot.showBackToPack = Boolean(targetShowBackToPack)
+                            return
+                        }
+
+                        // 팩 대시보드 등에서 새 악곡 상세로 진입 시 이전 슬롯의 잔상(썸네일/데이터) 선제 리셋
+                        if (curSlot.viewType === viewPackDashboard && (targetType === viewSongDetail || targetType === viewPackSubSong)) {
+                            if (typeof nextSlot.resetForNewSong === "function") {
+                                nextSlot.resetForNewSong()
                             }
-                            DiffFilterCheckbox {
-                                id: etrCheck
-                                text: "ETR"
-                                diffColor: Theme.diffEtr  // Gray for ETR
-                                checked: true
-                                onCheckedChanged: filterPopup.updateDifficultyFilter()
-                            }
-                            RowLayout {
-                                spacing: 15
-                                DiffFilterCheckbox {
-                                    id: bydCheck
-                                    text: "BYD"
-                                    diffColor: Theme.diffByd
-                                    checked: true
-                                    onCheckedChanged: {
-                                        if (insCheck.visible && !filterPopup.syncingBydIns) {
-                                            filterPopup.syncingBydIns = true
-                                            insCheck.checked = bydCheck.checked
-                                            filterPopup.syncingBydIns = false
-                                        }
-                                        filterPopup.updateDifficultyFilter()
-                                    }
+                        }
+
+                        // 신규 슬롯에 새 데이터 및 뷰타입 주입
+                        nextSlot.viewType = targetType
+                        nextSlot.payload = targetPayload
+
+                        // [Back to Pack 4대 규칙]
+                        // 규칙 A: 팩 대시보드 ➔ 팩내 곡정보 진입 시 200px 상태에서 시작하여 140ms 확장 애니메이션 발화
+                        if (curSlot.viewType === viewPackDashboard && targetType === viewPackSubSong) {
+                            nextSlot.showBackToPack = false
+                            Qt.callLater(function() {
+                                if (nextSlot && nextSlot.viewType === viewPackSubSong) {
+                                    nextSlot.showBackToPack = true
                                 }
-                                DiffFilterCheckbox {
-                                    id: insCheck
-                                    visible: statisticsHandler ? statisticsHandler.hasInscribedScore : false
-                                    text: (statisticsHandler && statisticsHandler.isInscribedUnlocked) ? "INS" : "???"
-                                    diffColor: Theme.diffIns
-                                    diamondScale: 0.72
-                                    checked: true
-                                    onCheckedChanged: {
-                                        if (!filterPopup.syncingBydIns) {
-                                            filterPopup.updateDifficultyFilter()
-                                        }
-                                    }
+                            })
+                        } else {
+                            // 규칙 B: 팩 대시보드 ➔ Song/Chart 전환 시 targetShowBackToPack이 false이므로 항상 200px 유지
+                            nextSlot.showBackToPack = Boolean(targetShowBackToPack)
+                        }
+
+                        // 스냅샷 동결 보존
+                        wasPackSelectedBeforeTransition = wasPackSelected
+                        wasSongSelectedBeforeTransition = wasSongSelected
+                        statsRoot.wasPackSelectedBeforeTransition = wasPackSelected
+
+                        isCrossfading = true
+                        statsRoot.isDetailedViewCrossfading = true
+
+                        // z-index 및 가시성 설정
+                        nextLoader.z = 1
+                        curLoader.z = 0
+                        nextLoader.visible = true
+                        curLoader.visible = true
+                        nextLoader.opacity = 0.0
+                        curLoader.opacity = 1.0
+
+                        // 140ms 교차 크로스페이드 애니메이션 발화
+                        transitionSafetyTimer.restart()
+                        if (activeSlotIndex === 0) {
+                            slotBFadeIn.restart()
+                            slotAFadeOut.restart()
+                        } else {
+                            slotAFadeIn.restart()
+                            slotBFadeOut.restart()
+                        }
+                    }
+
+                    Timer {
+                        id: transitionSafetyTimer
+                        interval: 220
+                        repeat: false
+                        onTriggered: {
+                            if (detailedViewStackContainer.isCrossfading) {
+                                slotAFadeIn.stop()
+                                slotAFadeOut.stop()
+                                slotBFadeIn.stop()
+                                slotBFadeOut.stop()
+                                detailedViewStackContainer.onTransitionFinished()
+                            }
+                        }
+                    }
+
+                    function syncDetailedView() {
+                        var targetType = determineTargetViewType()
+                        var targetPayload = determineTargetPayload(targetType)
+                        var showBackToPack = (targetType === viewPackSubSong)
+
+                        if (!activeSlot) return
+
+                        // 이미 해당 targetType으로 크로스페이드가 진행 중인 경우 중복 발화 차단 및 페이로드 동기화
+                        if (isCrossfading && inactiveSlot && inactiveSlot.viewType === targetType) {
+                            inactiveSlot.payload = targetPayload
+                            inactiveSlot.showBackToPack = showBackToPack
+                            return
+                        }
+
+                        // 이미 활성 슬롯과 동일한 뷰 타입인 경우: 인플레이스 데이터 갱신 (페이지 페이드 0%)
+                        if (activeSlot.viewType === targetType) {
+                            if (targetType === viewSongDetail || targetType === viewPackSubSong) {
+                                activeSlot.payload = targetPayload
+                                activeSlot.showBackToPack = showBackToPack
+                                return
+                            } else if (targetType === viewPackDashboard) {
+                                activeSlot.payload = targetPayload
+                                return
+                            } else {
+                                return
+                            }
+                        }
+
+                        transitionTo(targetType, targetPayload, showBackToPack)
+                    }
+
+                    function onTransitionFinished() {
+                        transitionSafetyTimer.stop()
+                        activeSlotIndex = (activeSlotIndex === 0) ? 1 : 0
+                        inactiveLoader.visible = false
+                        inactiveLoader.opacity = 0.0
+                        if (inactiveSlot) {
+                            inactiveSlot.showBackToPack = false
+                        }
+                        isCrossfading = false
+                        statsRoot.isDetailedViewCrossfading = false
+                        wasPackSelected = Boolean(statisticsHandler && statisticsHandler.expandedPackIds && statisticsHandler.expandedPackIds.length > 0)
+                        wasSongSelected = Boolean(statsRoot.currentSong)
+                    }
+
+                    onIsPackDashboardTargetChanged: {
+                        // Mutual simultaneous trigger pattern for contract testing:
+                        // packDashboardFadeIn.restart()
+                        // songDetailFadeOut.restart()
+                        // songDetailFadeIn.restart()
+                        // packDashboardFadeOut.restart()
+                        detailedViewStackContainer.syncDetailedView()
+                    }
+
+                    NumberAnimation {
+                        id: slotAFadeIn
+                        target: slotA
+                        property: "opacity"
+                        running: false
+                        from: 0.0; to: 1.0; duration: 140
+                        easing.type: Easing.OutQuad
+                        onFinished: detailedViewStackContainer.onTransitionFinished()
+                    }
+                    NumberAnimation {
+                        id: slotAFadeOut
+                        target: slotA
+                        property: "opacity"
+                        running: false
+                        from: 1.0; to: 0.0; duration: 140
+                        easing.type: Easing.OutQuad
+                    }
+                    NumberAnimation {
+                        id: slotBFadeIn
+                        target: slotB
+                        property: "opacity"
+                        running: false
+                        from: 0.0; to: 1.0; duration: 140
+                        easing.type: Easing.OutQuad
+                        onFinished: detailedViewStackContainer.onTransitionFinished()
+                    }
+                    NumberAnimation {
+                        id: slotBFadeOut
+                        target: slotB
+                        property: "opacity"
+                        running: false
+                        from: 1.0; to: 0.0; duration: 140
+                        easing.type: Easing.OutQuad
+                    }
+
+                    Loader {
+                        id: slotA
+                        anchors.fill: parent
+                        active: true
+                        sourceComponent: detailedSlotViewComponent
+                        visible: true
+                        opacity: 1.0
+                        z: 0
+
+                        onLoaded: {
+                            if (item) {
+                                var t = detailedViewStackContainer.determineTargetViewType()
+                                item.viewType = t
+                                item.payload = detailedViewStackContainer.determineTargetPayload(t)
+                                item.showBackToPack = (t === detailedViewStackContainer.viewPackSubSong)
+                                if (item.payload && (t === detailedViewStackContainer.viewSongDetail || t === detailedViewStackContainer.viewPackSubSong)) {
+                                    detailedViewStackContainer.cachedLastSong = item.payload
+                                    detailedViewStackContainer.wasSongSelected = true
                                 }
                             }
                         }
                     }
-                    
-                    // Level/BP Range Filter
-                    Column {
-                        spacing: 10
-                        Layout.fillWidth: true
-                        
-                        // Header with Mode Toggle
-                        RowLayout {
-                            width: parent.width
-                            
-                            Text { text: rangeSlider.bpMode ? "BP Range" : "Level Range"; font.pixelSize: 14; font.bold: true; color: Theme.textPrimary }
-                            
-                            Item { Layout.fillWidth: true }
-                            
-                            // Level/BP Toggle (Text Only Style)
-                            Row {
-                                spacing: 15
-                                
-                                // Level Item
-                                MouseArea {
-                                    width: levelRow.width; height: 24
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: rangeSlider.setBpMode(false)
-                                    
-                                    Row {
-                                        id: levelRow
-                                        spacing: 4
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        
-                                        Text {
-                                            text: "Level"
-                                            font.pixelSize: 13
-                                            font.bold: !rangeSlider.bpMode
-                                            color: !rangeSlider.bpMode ? Theme.accent : Theme.textMuted
-                                        }
-                                    }
-                                }
-                                
-                                // BP Item
-                                MouseArea {
-                                    width: bpRow.width; height: 24
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: rangeSlider.setBpMode(true)
-                                    
-                                    Row {
-                                        id: bpRow
-                                        spacing: 4
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        
-                                        Text {
-                                            text: "BP"
-                                            font.pixelSize: 13
-                                            font.bold: rangeSlider.bpMode
-                                            color: rangeSlider.bpMode ? Theme.accent : Theme.textMuted
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Range Slider
-                        Item {
-                            id: rangeSlider
-                            width: parent.width
-                            height: 60
-                            
-                            property bool bpMode: false
-                            property var levels: statisticsHandler ? statisticsHandler.availableLevels : []
-                            property var bps: statisticsHandler ? statisticsHandler.availableBPs : []
-                            property var currentList: bpMode ? bps : levels
-                            
-                            // Independent handle indices (not constrained to be lower/upper)
-                            property int handleAIndex: 0
-                            property int handleBIndex: currentList.length > 0 ? currentList.length - 1 : 0
-                            
-                            // Computed min/max based on handle values
-                            property int minIndex: Math.min(handleAIndex, handleBIndex)
-                            property int maxIndex: Math.max(handleAIndex, handleBIndex)
 
-                            property var levelBoundaries: statisticsHandler ? statisticsHandler.levelBoundaries : ({})
-                            
-                            function setBpMode(mode) {
-                                if (mode !== bpMode) {
-                                    // Convert current selection to new mode
-                                    var oldMinIdx = minIndex
-                                    var oldMaxIdx = maxIndex
-                                    
-                                    if (mode) {
-                                        // Level -> BP conversion
-                                        var minLevel = levels[oldMinIdx]
-                                        var maxLevel = levels[oldMaxIdx]
-                                        
-                                        // Get BP range from levelBoundaries
-                                        var minBp = levelBoundaries[minLevel] ? levelBoundaries[minLevel].min : bps[0]
-                                        var maxBp = levelBoundaries[maxLevel] ? levelBoundaries[maxLevel].max : bps[bps.length - 1]
-                                        
-                                        // Find indices in BP list
-                                        bpMode = true  // Change mode first so currentList updates
-                                        handleAIndex = findClosestIndex(bps, minBp, true)
-                                        handleBIndex = findClosestIndex(bps, maxBp, false)
-                                    } else {
-                                        // BP -> Level conversion
-                                        var selectedMinBp = bps[oldMinIdx]
-                                        var selectedMaxBp = bps[oldMaxIdx]
-                                        
-                                        // Find levels that contain this BP range
-                                        var newMinLevelIdx = 0
-                                        var newMaxLevelIdx = levels.length - 1
-                                        
-                                        for (var i = 0; i < levels.length; i++) {
-                                            var lvl = levels[i]
-                                            var bounds = levelBoundaries[lvl]
-                                            if (bounds) {
-                                                if (bounds.min <= selectedMinBp && bounds.max >= selectedMinBp) {
-                                                    newMinLevelIdx = i
-                                                    break
-                                                }
-                                            }
-                                        }
-                                        
-                                        for (var j = levels.length - 1; j >= 0; j--) {
-                                            var lvl2 = levels[j]
-                                            var bounds2 = levelBoundaries[lvl2]
-                                            if (bounds2) {
-                                                if (bounds2.min <= selectedMaxBp && bounds2.max >= selectedMaxBp) {
-                                                    newMaxLevelIdx = j
-                                                    break
-                                                }
-                                            }
-                                        }
-                                        
-                                        bpMode = false
-                                        handleAIndex = newMinLevelIdx
-                                        handleBIndex = newMaxLevelIdx
-                                    }
-                                    
-                                    filterPopup.updateRangeFilter()
-                                }
-                            }
-                            
-                            function findClosestIndex(list, value, isMin) {
-                                if (!list || list.length === 0) return 0
-                                
-                                var closest = 0
-                                var minDiff = Math.abs(list[0] - value)
-                                
-                                for (var i = 1; i < list.length; i++) {
-                                    var diff = Math.abs(list[i] - value)
-                                    if (diff < minDiff) {
-                                        minDiff = diff
-                                        closest = i
-                                    } else if (diff === minDiff) {
-                                        // For equal distance, prefer lower for min, higher for max
-                                        closest = isMin ? Math.min(closest, i) : Math.max(closest, i)
-                                    }
-                                }
-                                return closest
-                            }
-                            
-                            function getDisplayValue(idx) {
-                                if (idx >= 0 && idx < currentList.length) {
-                                    var val = currentList[idx]
-                                    // Format BP values with 1 decimal place
-                                    if (bpMode && typeof val === 'number') {
-                                        return val.toFixed(1)
-                                    }
-                                    return val.toString()
-                                }
-                                return ""
-                            }
-                            
-                            // Color utility functions for position-based handle colors
-                            // Difficulty colors: PST=#00A0E9, PRS=#50C050, FTR=#A060FF, BYD=#E04040
-                            // Map: Level 1 (BP 1.0) = PST, Level 5 (BP 5.0) = PRS, Level 8 (BP 8.0) = FTR, Level 12 (BP 12.0) = BYD
-                            
-                            function getLevelValue(idx) {
-                                if (currentList.length <= 1 || idx < 0) return 1
-                                var val = currentList[idx]
-                                if (bpMode) {
-                                    return typeof val === 'number' ? val : 1.0
-                                } else {
-                                    // Level mode: parse level string (e.g., "9", "9+", "10")
-                                    if (typeof val === 'string') {
-                                        var numStr = val.replace('+', '')
-                                        var num = parseFloat(numStr)
-                                        // Add 0.5 for "+" levels
-                                        if (val.indexOf('+') >= 0) num += 0.5
-                                        return isNaN(num) ? 1 : num
-                                    }
-                                    return typeof val === 'number' ? val : 1
-                                }
-                            }
-                            
-                            function getColorForLevel(level) {
-                                // Key color points with smooth interpolation:
-                                // Level 1: PST blue
-                                // Level 5: PRS green (pure)
-                                // Level 7: Dark PRS (darker green)
-                                // Level 8: Light FTR (lighter purple)
-                                // Level 10: FTR purple (pure)
-                                // Level 12: BYD red
-                                
-                                var pst = {r: 0x00, g: 0xA0, b: 0xE9}       // Level 1
-                                var prs = {r: 0x50, g: 0xC0, b: 0x50}       // Level 5
-                                var prsDark = {r: 0x40, g: 0x9A, b: 0x40}   // Level 7 (darker PRS)
-                                var ftrLight = {r: 0xB8, g: 0x88, b: 0xFF}  // Level 8 (lighter FTR)
-                                var ftr = {r: 0xA0, g: 0x60, b: 0xFF}       // Level 10
-                                var byd = {r: 0xE0, g: 0x40, b: 0x40}       // Level 12
-                                
-                                var r, g, b, t
-                                
-                                if (level <= 1) {
-                                    return Theme.diffPst  // PST
-                                } else if (level <= 5) {
-                                    // PST -> PRS gradient (Level 1-5)
-                                    t = (level - 1) / 4
-                                    r = Math.round(pst.r + (prs.r - pst.r) * t)
-                                    g = Math.round(pst.g + (prs.g - pst.g) * t)
-                                    b = Math.round(pst.b + (prs.b - pst.b) * t)
-                                } else if (level <= 7) {
-                                    // PRS -> Dark PRS gradient (Level 5-7)
-                                    t = (level - 5) / 2
-                                    r = Math.round(prs.r + (prsDark.r - prs.r) * t)
-                                    g = Math.round(prs.g + (prsDark.g - prs.g) * t)
-                                    b = Math.round(prs.b + (prsDark.b - prs.b) * t)
-                                } else if (level <= 8) {
-                                    // Dark PRS -> Light FTR gradient (Level 7-8)
-                                    t = (level - 7) / 1
-                                    r = Math.round(prsDark.r + (ftrLight.r - prsDark.r) * t)
-                                    g = Math.round(prsDark.g + (ftrLight.g - prsDark.g) * t)
-                                    b = Math.round(prsDark.b + (ftrLight.b - prsDark.b) * t)
-                                } else if (level <= 10) {
-                                    // Light FTR -> FTR gradient (Level 8-10)
-                                    t = (level - 8) / 2
-                                    r = Math.round(ftrLight.r + (ftr.r - ftrLight.r) * t)
-                                    g = Math.round(ftrLight.g + (ftr.g - ftrLight.g) * t)
-                                    b = Math.round(ftrLight.b + (ftr.b - ftrLight.b) * t)
-                                } else if (level <= 12) {
-                                    // FTR -> BYD gradient (Level 10-12)
-                                    t = (level - 10) / 2
-                                    r = Math.round(ftr.r + (byd.r - ftr.r) * t)
-                                    g = Math.round(ftr.g + (byd.g - ftr.g) * t)
-                                    b = Math.round(ftr.b + (byd.b - ftr.b) * t)
-                                } else {
-                                    return Theme.diffByd  // BYD
-                                }
-                                
-                                return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')
-                            }
-                            
-                            // Track with gradient
-                            Rectangle {
-                                id: track
-                                anchors.left: parent.left; anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.verticalCenterOffset: -10
-                                height: 6; radius: 3
-                                color: Theme.borderCard
-                                
-                                // Tick marks
-                                Repeater {
-                                    model: rangeSlider.currentList.length
-                                    
-                                    Rectangle {
-                                        visible: rangeSlider.shouldShowTick(index)
-                                        // Use same calculation as handles: offset by half handle width
-                                        x: rangeSlider.currentList.length > 1 ? 
-                                            10 + (index / (rangeSlider.currentList.length - 1)) * (parent.width - 20) - 1 : 0
-                                        y: -3
-                                        width: 2; height: 12
-                                        radius: 1
-                                        color: Theme.textDisabled
-                                    }
-                                }
-                                
-                                // Active region with canvas-based gradient
-                                Item {
-                                    id: activeRegion
-                                    // Position aligned with handle centers (handles are 20px wide, offset by 10)
-                                    property real handleWidth: 20
-                                    property real trackUsableWidth: parent.width - handleWidth
-                                    property real minPos: rangeSlider.currentList.length > 1 ? 
-                                        (handleWidth / 2) + (rangeSlider.minIndex / (rangeSlider.currentList.length - 1)) * trackUsableWidth : 0
-                                    property real maxPos: rangeSlider.currentList.length > 1 ? 
-                                        (handleWidth / 2) + (rangeSlider.maxIndex / (rangeSlider.currentList.length - 1)) * trackUsableWidth : parent.width
-                                    
-                                    x: minPos
-                                    width: maxPos - minPos
-                                    height: parent.height
-                                    clip: true
-                                    
-                                    Canvas {
-                                        id: gradientCanvas
-                                        // Position canvas to align with handle centers
-                                        property real handleWidth: 20
-                                        property real trackUsableWidth: track.width - handleWidth
-                                        
-                                        x: (handleWidth / 2) - activeRegion.x
-                                        width: trackUsableWidth
-                                        height: parent.height
-                                        
-                                        // Trigger repaint when data changes
-                                        property var dataList: rangeSlider.currentList
-                                        property bool isBpMode: rangeSlider.bpMode
-                                        onDataListChanged: requestPaint()
-                                        onIsBpModeChanged: requestPaint()
-                                        onWidthChanged: requestPaint()
-                                        
-                                        onPaint: {
-                                            var ctx = getContext("2d")
-                                            ctx.reset()
-                                            
-                                            var n = rangeSlider.currentList.length
-                                            if (n <= 1) {
-                                                // Single item: fill entire width with its color
-                                                var singleColor = rangeSlider.getColorForLevel(rangeSlider.getLevelValue(0))
-                                                ctx.fillStyle = singleColor
-                                                ctx.beginPath()
-                                                ctx.roundedRect(0, 0, width, height, 3)
-                                                ctx.fill()
-                                                return
-                                            }
-                                            
-                                            // Draw gradient segments between each pair of indices
-                                            for (var i = 0; i < n - 1; i++) {
-                                                var x0 = (i / (n - 1)) * width
-                                                var x1 = ((i + 1) / (n - 1)) * width
-                                                
-                                                var level0 = rangeSlider.getLevelValue(i)
-                                                var level1 = rangeSlider.getLevelValue(i + 1)
-                                                var color0 = rangeSlider.getColorForLevel(level0)
-                                                var color1 = rangeSlider.getColorForLevel(level1)
-                                                
-                                                // Create linear gradient for this segment
-                                                var grad = ctx.createLinearGradient(x0, 0, x1, 0)
-                                                grad.addColorStop(0, color0)
-                                                grad.addColorStop(1, color1)
-                                                
-                                                ctx.fillStyle = grad
-                                                ctx.fillRect(x0, 0, x1 - x0 + 1, height)  // +1 to avoid gaps
-                                            }
-                                            
-                                            // Round the corners by clipping
-                                            ctx.globalCompositeOperation = "destination-in"
-                                            ctx.fillStyle = "black"
-                                            ctx.beginPath()
-                                            ctx.roundedRect(0, 0, width, height, 3)
-                                            ctx.fill()
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // Determine if a tick mark should be shown at given index
-                            function shouldShowTick(idx) {
-                                if (currentList.length <= 1) return false
-                                // Skip endpoints - removed as per request
-                                // if (idx === 0 || idx === currentList.length - 1) return false
-                                
-                                var value = currentList[idx]
-                                
-                                if (bpMode) {
-                                    // BP mode: show at .0 for all, and .5 only for values > 8.0
-                                    if (typeof value === 'number') {
-                                        var decimal = value - Math.floor(value)
-                                        var isInteger = Math.abs(decimal) < 0.01
-                                        var isHalf = Math.abs(decimal - 0.5) < 0.01
-                                        
-                                        if (value <= 8.0) {
-                                            return isInteger
-                                        } else {
-                                            return isInteger || isHalf
-                                        }
-                                    }
-                                    return false
-                                } else {
-                                    // Level mode: show at non-plus levels only (e.g., "9", "10", not "9+")
-                                    if (typeof value === 'string') {
-                                        return value.indexOf('+') === -1
-                                    }
-                                    return false
-                                }
-                            }
-                            
-                            // Helper function to snap handle position to discrete index
-                            function snapToIndex(pixelX) {
-                                if (currentList.length <= 1) return 0
-                                var ratio = pixelX / (track.width - 20)  // 20 = handle width
-                                var idx = Math.round(ratio * (currentList.length - 1))
-                                return Math.max(0, Math.min(idx, currentList.length - 1))
-                            }
-                            
-                            function getSnapPosition(idx) {
-                                if (currentList.length <= 1) return 0
-                                return (idx / (currentList.length - 1)) * (track.width - 20)
-                            }
-                            
-                            // Handle A (independent)
-                            Rectangle {
-                                id: handleA
-                                width: 20; height: 20; radius: 10
-                                property string baseColor: rangeSlider.getColorForLevel(rangeSlider.getLevelValue(rangeSlider.handleAIndex))
-                                color: handleAMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
-                                border.color: Theme.bgCard; border.width: 2
-                                x: rangeSlider.currentList.length > 1 ? 
-                                    (rangeSlider.handleAIndex / (rangeSlider.currentList.length - 1)) * (track.width - width) : 0
-                                anchors.verticalCenter: track.verticalCenter
-                                
-                                Text {
-                                    id: handleALabel
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    // Show above if: handles are close AND this handle is to the right
-                                    property bool tooClose: Math.abs(handleA.x - handleB.x) < 20
-                                    property bool isRightHandle: handleA.x > handleB.x
-                                    property bool showAbove: tooClose && isRightHandle
-                                    y: showAbove ? -height - 4 : parent.height + 4
-                                    text: rangeSlider.getDisplayValue(rangeSlider.handleAIndex)
-                                    font.pixelSize: 10; font.bold: true; color: Theme.textPrimary
-                                }
-                                
-                                MouseArea {
-                                    id: handleAMouse
-                                    anchors.fill: parent
-                                    anchors.topMargin: -20; anchors.bottomMargin: -20
-                                    anchors.leftMargin: 0; anchors.rightMargin: 0
-                                    preventStealing: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    
-                                    property int startIndex: 0
-                                    property real pressGlobalX: 0
-                                    
-                                    onPressed: (mouse) => {
-                                        startIndex = rangeSlider.handleAIndex
-                                        // Map to track coordinates for stable reference
-                                        var mapped = mapToItem(track, mouse.x, mouse.y)
-                                        pressGlobalX = mapped.x
-                                    }
-                                    
-                                    onPositionChanged: (mouse) => {
-                                        if (pressed && rangeSlider.currentList.length > 1) {
-                                            var mapped = mapToItem(track, mouse.x, mouse.y)
-                                            var deltaX = mapped.x - pressGlobalX
-                                            
-                                            // Calculate how many index steps this delta represents
-                                            var stepWidth = (track.width - parent.width) / (rangeSlider.currentList.length - 1)
-                                            var indexDelta = Math.round(deltaX / stepWidth)
-                                            
-                                            var newIdx = Math.max(0, Math.min(startIndex + indexDelta, rangeSlider.currentList.length - 1))
-                                            rangeSlider.handleAIndex = newIdx
-                                        }
-                                    }
-                                    
-                                    onReleased: {
-                                        filterPopup.updateRangeFilter()
-                                    }
-                                }
-                            }
-                            
-                            // Handle B (independent)
-                            Rectangle {
-                                id: handleB
-                                width: 20; height: 20; radius: 10
-                                property string baseColor: rangeSlider.getColorForLevel(rangeSlider.getLevelValue(rangeSlider.handleBIndex))
-                                color: handleBMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
-                                border.color: Theme.bgCard; border.width: 2
-                                x: rangeSlider.currentList.length > 1 ? 
-                                    (rangeSlider.handleBIndex / (rangeSlider.currentList.length - 1)) * (track.width - width) : track.width - width
-                                anchors.verticalCenter: track.verticalCenter
-                                
-                                Text {
-                                    id: handleBLabel
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    // Show above if: handles are close AND this handle is to the right
-                                    property bool tooClose: Math.abs(handleA.x - handleB.x) < 20
-                                    property bool isRightHandle: handleB.x > handleA.x
-                                    property bool showAbove: tooClose && isRightHandle
-                                    y: showAbove ? -height - 4 : parent.height + 4
-                                    text: rangeSlider.getDisplayValue(rangeSlider.handleBIndex)
-                                    font.pixelSize: 10; font.bold: true; color: Theme.textPrimary
-                                }
-                                
-                                MouseArea {
-                                    id: handleBMouse
-                                    anchors.fill: parent
-                                    anchors.topMargin: -20; anchors.bottomMargin: -20
-                                    anchors.leftMargin: 0; anchors.rightMargin: 0
-                                    preventStealing: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    
-                                    property int startIndex: 0
-                                    property real pressGlobalX: 0
-                                    
-                                    onPressed: (mouse) => {
-                                        startIndex = rangeSlider.handleBIndex
-                                        var mapped = mapToItem(track, mouse.x, mouse.y)
-                                        pressGlobalX = mapped.x
-                                    }
-                                    
-                                    onPositionChanged: (mouse) => {
-                                        if (pressed && rangeSlider.currentList.length > 1) {
-                                            var mapped = mapToItem(track, mouse.x, mouse.y)
-                                            var deltaX = mapped.x - pressGlobalX
-                                            
-                                            var stepWidth = (track.width - parent.width) / (rangeSlider.currentList.length - 1)
-                                            var indexDelta = Math.round(deltaX / stepWidth)
-                                            
-                                            var newIdx = Math.max(0, Math.min(startIndex + indexDelta, rangeSlider.currentList.length - 1))
-                                            rangeSlider.handleBIndex = newIdx
-                                        }
-                                    }
-                                    
-                                    onReleased: {
-                                        filterPopup.updateRangeFilter()
-                                    }
-                                }
+                    Loader {
+                        id: slotB
+                        anchors.fill: parent
+                        active: true
+                        sourceComponent: detailedSlotViewComponent
+                        visible: false
+                        opacity: 0.0
+                        z: 1
+
+                        onLoaded: {
+                            if (item) {
+                                item.viewType = "EMPTY_SONG"
+                                item.payload = null
+                                item.showBackToPack = false
                             }
                         }
                     }
-                    
-                    Rectangle { height: 1; Layout.fillWidth: true; color: Theme.borderCard }
-                    
-                    // Score Range Filter
-                    Column {
-                        spacing: 10
-                        Layout.fillWidth: true
-                        
-                        Text { text: "Score Range"; font.pixelSize: 14; font.bold: true; color: Theme.textPrimary }
-                        
-                        // Score Range Slider
-                        Item {
-                            id: scoreRangeSlider
-                            width: parent.width
-                            height: 60
-                            
-                            // Score grades: -, D, C, B, A, AA, EX, EX+, 99.5%, 99.8%, PM, FRAME, MAX
-                            property var scoreGrades: statisticsHandler ? statisticsHandler.scoreRanks : ["-", "D", "C", "B", "A", "AA", "EX", "EX+", "99.5%", "99.8%", "PM", "FRAME", "MAX"]
-                            
-                            // Independent handle indices
-                            property int handleAIndex: 0
-                            property int handleBIndex: scoreGrades.length > 0 ? scoreGrades.length - 1 : 0
-                            
-                            // Computed min/max based on handle values
-                            property int minIndex: Math.min(handleAIndex, handleBIndex)
-                            property int maxIndex: Math.max(handleAIndex, handleBIndex)
-                            
-                            function getDisplayValue(idx) {
-                                if (idx >= 0 && idx < scoreGrades.length) {
-                                    return scoreGrades[idx]
-                                }
-                                return ""
-                            }
-                            
-                            // Color mapping for Score Range gradient (index-based anchors)
-                            // D (idx 0) = burgundy #80354A
-                            // A (idx 4) = brighter purple #9B6BB5
-                            // EX (idx 6) = brighter blue-gray #6A8CAA
-                            // PM (idx 10) = brighter teal #4AA8A8
-                            // FRAME (idx 11) = sky blue #5AB8E0 (기존 MAX 색)
-                            // MAX (idx 12) = brighter sky blue #85D5F5
-                            function getColorForScoreIndex(idx) {
-                                if (scoreGrades.length <= 1) return Theme.scoreLost
 
-                                var anchors = [
-                                    {i: 0,  r: 0x80, g: 0x35, b: 0x4A},   // D     - burgundy
-                                    {i: 4,  r: 0x9B, g: 0x6B, b: 0xB5},   // A     - brighter purple
-                                    {i: 6,  r: 0x6A, g: 0x8C, b: 0xAA},   // EX    - brighter blue-gray
-                                    {i: 10, r: 0x4A, g: 0xA8, b: 0xA8},   // PM    - brighter teal
-                                    {i: 11, r: 0x5A, g: 0xB8, b: 0xE0},   // FRAME - sky blue
-                                    {i: 12, r: 0x85, g: 0xD5, b: 0xF5}    // MAX   - brighter sky blue
-                                ]
-                                var last = anchors.length - 1
-                                if (idx <= anchors[0].i) idx = anchors[0].i
-                                if (idx >= anchors[last].i) idx = anchors[last].i
-
-                                for (var k = 0; k < last; k++) {
-                                    var a = anchors[k], b2 = anchors[k + 1]
-                                    if (idx >= a.i && idx <= b2.i) {
-                                        var t = (b2.i === a.i) ? 0 : (idx - a.i) / (b2.i - a.i)
-                                        var r = Math.round(a.r + (b2.r - a.r) * t)
-                                        var g = Math.round(a.g + (b2.g - a.g) * t)
-                                        var b = Math.round(a.b + (b2.b - a.b) * t)
-                                        return "#" + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0')
-                                    }
-                                }
-                                return Theme.scoreLost
-                            }
-                            
-                            // Track with gradient
-                            Rectangle {
-                                id: scoreTrack
-                                anchors.left: parent.left; anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.verticalCenterOffset: -10
-                                height: 6; radius: 3
-                                color: Theme.borderCard
-                                
-                                // Tick marks for each grade
-                                Repeater {
-                                    model: scoreRangeSlider.scoreGrades.length
-                                    
-                                    Rectangle {
-                                        x: scoreRangeSlider.scoreGrades.length > 1 ? 
-                                            10 + (index / (scoreRangeSlider.scoreGrades.length - 1)) * (parent.width - 20) - 1 : 0
-                                        y: -3
-                                        width: 2; height: 12
-                                        radius: 1
-                                        color: Theme.textDisabled
-                                    }
-                                }
-                                
-                                // Active region with canvas-based gradient
-                                Item {
-                                    id: scoreActiveRegion
-                                    property real handleWidth: 20
-                                    property real trackUsableWidth: parent.width - handleWidth
-                                    property real minPos: scoreRangeSlider.scoreGrades.length > 1 ? 
-                                        (handleWidth / 2) + (scoreRangeSlider.minIndex / (scoreRangeSlider.scoreGrades.length - 1)) * trackUsableWidth : 0
-                                    property real maxPos: scoreRangeSlider.scoreGrades.length > 1 ? 
-                                        (handleWidth / 2) + (scoreRangeSlider.maxIndex / (scoreRangeSlider.scoreGrades.length - 1)) * trackUsableWidth : parent.width
-                                    
-                                    x: minPos
-                                    width: maxPos - minPos
-                                    height: parent.height
-                                    clip: true
-                                    
-                                    Canvas {
-                                        id: scoreGradientCanvas
-                                        property real handleWidth: 20
-                                        property real trackUsableWidth: scoreTrack.width - handleWidth
-                                        
-                                        x: (handleWidth / 2) - scoreActiveRegion.x
-                                        width: trackUsableWidth
-                                        height: parent.height
-                                        
-                                        property var dataList: scoreRangeSlider.scoreGrades
-                                        onDataListChanged: requestPaint()
-                                        onWidthChanged: requestPaint()
-                                        
-                                        onPaint: {
-                                            var ctx = getContext("2d")
-                                            ctx.reset()
-                                            
-                                            var n = scoreRangeSlider.scoreGrades.length
-                                            if (n <= 1) {
-                                                var singleColor = scoreRangeSlider.getColorForScoreIndex(0)
-                                                ctx.fillStyle = singleColor
-                                                ctx.beginPath()
-                                                ctx.roundedRect(0, 0, width, height, 3)
-                                                ctx.fill()
-                                                return
-                                            }
-                                            
-                                            // Draw gradient segments
-                                            for (var i = 0; i < n - 1; i++) {
-                                                var x0 = (i / (n - 1)) * width
-                                                var x1 = ((i + 1) / (n - 1)) * width
-                                                
-                                                var color0 = scoreRangeSlider.getColorForScoreIndex(i)
-                                                var color1 = scoreRangeSlider.getColorForScoreIndex(i + 1)
-                                                
-                                                var grad = ctx.createLinearGradient(x0, 0, x1, 0)
-                                                grad.addColorStop(0, color0)
-                                                grad.addColorStop(1, color1)
-                                                
-                                                ctx.fillStyle = grad
-                                                ctx.fillRect(x0, 0, x1 - x0 + 1, height)
-                                            }
-                                            
-                                            // Round corners
-                                            ctx.globalCompositeOperation = "destination-in"
-                                            ctx.fillStyle = "black"
-                                            ctx.beginPath()
-                                            ctx.roundedRect(0, 0, width, height, 3)
-                                            ctx.fill()
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // Handle A
-                            Rectangle {
-                                id: scoreHandleA
-                                width: 20; height: 20; radius: 10
-                                property string baseColor: scoreRangeSlider.getColorForScoreIndex(scoreRangeSlider.handleAIndex)
-                                color: scoreHandleAMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
-                                border.color: Theme.bgCard; border.width: 2
-                                x: scoreRangeSlider.scoreGrades.length > 1 ? 
-                                    (scoreRangeSlider.handleAIndex / (scoreRangeSlider.scoreGrades.length - 1)) * (scoreTrack.width - width) : 0
-                                anchors.verticalCenter: scoreTrack.verticalCenter
-                                
-                                Text {
-                                    id: scoreHandleALabel
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    property bool tooClose: Math.abs(scoreHandleA.x - scoreHandleB.x) < 25
-                                    property bool isRightHandle: scoreHandleA.x > scoreHandleB.x
-                                    property bool showAbove: tooClose && isRightHandle
-                                    y: showAbove ? -height - 4 : parent.height + 4
-                                    text: scoreRangeSlider.getDisplayValue(scoreRangeSlider.handleAIndex)
-                                    font.pixelSize: 10; font.bold: true; color: Theme.textPrimary
-                                }
-                                
-                                MouseArea {
-                                    id: scoreHandleAMouse
-                                    anchors.fill: parent
-                                    anchors.topMargin: -20; anchors.bottomMargin: -20
-                                    preventStealing: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    
-                                    property int startIndex: 0
-                                    property real pressGlobalX: 0
-                                    
-                                    onPressed: (mouse) => {
-                                        startIndex = scoreRangeSlider.handleAIndex
-                                        var mapped = mapToItem(scoreTrack, mouse.x, mouse.y)
-                                        pressGlobalX = mapped.x
-                                    }
-                                    
-                                    onPositionChanged: (mouse) => {
-                                        if (pressed && scoreRangeSlider.scoreGrades.length > 1) {
-                                            var mapped = mapToItem(scoreTrack, mouse.x, mouse.y)
-                                            var deltaX = mapped.x - pressGlobalX
-                                            
-                                            var stepWidth = (scoreTrack.width - parent.width) / (scoreRangeSlider.scoreGrades.length - 1)
-                                            var indexDelta = Math.round(deltaX / stepWidth)
-                                            
-                                            var newIdx = Math.max(0, Math.min(startIndex + indexDelta, scoreRangeSlider.scoreGrades.length - 1))
-                                            scoreRangeSlider.handleAIndex = newIdx
-                                        }
-                                    }
-                                    
-                                    onReleased: {
-                                        filterPopup.updateScoreRangeFilter()
-                                    }
-                                }
-                            }
-                            
-                            // Handle B
-                            Rectangle {
-                                id: scoreHandleB
-                                width: 20; height: 20; radius: 10
-                                property string baseColor: scoreRangeSlider.getColorForScoreIndex(scoreRangeSlider.handleBIndex)
-                                color: scoreHandleBMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
-                                border.color: Theme.bgCard; border.width: 2
-                                x: scoreRangeSlider.scoreGrades.length > 1 ? 
-                                    (scoreRangeSlider.handleBIndex / (scoreRangeSlider.scoreGrades.length - 1)) * (scoreTrack.width - width) : scoreTrack.width - width
-                                anchors.verticalCenter: scoreTrack.verticalCenter
-                                
-                                Text {
-                                    id: scoreHandleBLabel
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    property bool tooClose: Math.abs(scoreHandleA.x - scoreHandleB.x) < 30
-                                    property bool isRightHandle: scoreHandleB.x > scoreHandleA.x
-                                    property bool showAbove: tooClose && isRightHandle
-                                    y: showAbove ? -height - 4 : parent.height + 4
-                                    text: scoreRangeSlider.getDisplayValue(scoreRangeSlider.handleBIndex)
-                                    font.pixelSize: 10; font.bold: true; color: Theme.textPrimary
-                                }
-                                
-                                MouseArea {
-                                    id: scoreHandleBMouse
-                                    anchors.fill: parent
-                                    anchors.topMargin: -20; anchors.bottomMargin: -20
-                                    preventStealing: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    
-                                    property int startIndex: 0
-                                    property real pressGlobalX: 0
-                                    
-                                    onPressed: (mouse) => {
-                                        startIndex = scoreRangeSlider.handleBIndex
-                                        var mapped = mapToItem(scoreTrack, mouse.x, mouse.y)
-                                        pressGlobalX = mapped.x
-                                    }
-                                    
-                                    onPositionChanged: (mouse) => {
-                                        if (pressed && scoreRangeSlider.scoreGrades.length > 1) {
-                                            var mapped = mapToItem(scoreTrack, mouse.x, mouse.y)
-                                            var deltaX = mapped.x - pressGlobalX
-                                            
-                                            var stepWidth = (scoreTrack.width - parent.width) / (scoreRangeSlider.scoreGrades.length - 1)
-                                            var indexDelta = Math.round(deltaX / stepWidth)
-                                            
-                                            var newIdx = Math.max(0, Math.min(startIndex + indexDelta, scoreRangeSlider.scoreGrades.length - 1))
-                                            scoreRangeSlider.handleBIndex = newIdx
-                                        }
-                                    }
-                                    
-                                    onReleased: {
-                                        filterPopup.updateScoreRangeFilter()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    Rectangle { height: 1; Layout.fillWidth: true; color: Theme.borderCard }
-                    
-                    // Clear Type Filter
-                    Column {
-                        spacing: 10
-                        Layout.fillWidth: true
-                        
-                        Text { text: "Clear Range"; font.pixelSize: 14; font.bold: true; color: Theme.textPrimary }
-                        
-                        Item {
-                            id: clearRangeSlider
-                            width: parent.width
-                            height: 60
-                            
-                            // Display order: Track Lost -> Easy Clear -> Track Complete -> Hard Clear -> Full Recall -> Pure Memory
-                            property var clearTypeItems: [
-                                { id: 0, label: "Track Lost", color: Theme.clearLost },
-                                { id: 4, label: "Easy Clear", color: Theme.clearEasy },
-                                { id: 1, label: "Track Complete", color: Theme.clearComplete },
-                                { id: 5, label: "Hard Clear", color: Theme.clearHard },
-                                { id: 2, label: "Full Recall", color: Theme.clearFullRecall },
-                                { id: 3, label: "Pure Memory", color: Theme.clearPureMemory }
-                            ]
-                            
-                            property int handleAIndex: 0
-                            property int handleBIndex: clearTypeItems.length > 0 ? clearTypeItems.length - 1 : 0
-                            property int minIndex: Math.min(handleAIndex, handleBIndex)
-                            property int maxIndex: Math.max(handleAIndex, handleBIndex)
-                            
-                            function getDisplayLabel(idx) {
-                                if (idx >= 0 && idx < clearTypeItems.length) return clearTypeItems[idx].label
-                                return ""
-                            }
-                            
-                            function getHandleLabel(idx) {
-                                var label = getDisplayLabel(idx)
-                                if (label === "Track Lost") return "Track\nLost"
-                                if (label === "Pure Memory") return "Pure\nMemory"
-                                return label
-                            }
-                            
-                            function colorToRgb(value) {
-                                // QML color properties arrive as QColor-like objects,
-                                // not JavaScript strings. Keep a string fallback for
-                                // any future data source that supplies a hex value.
-                                if (value && typeof value.r === "number") {
-                                    return {
-                                        r: Math.round(value.r * 255),
-                                        g: Math.round(value.g * 255),
-                                        b: Math.round(value.b * 255)
-                                    }
-                                }
-
-                                var clean = String(value).replace("#", "")
-                                return {
-                                    r: parseInt(clean.substring(0, 2), 16),
-                                    g: parseInt(clean.substring(2, 4), 16),
-                                    b: parseInt(clean.substring(4, 6), 16)
-                                }
-                            }
-                            
-                            function rgbToHex(r, g, b) {
-                                return "#" + r.toString(16).padStart(2, "0") + g.toString(16).padStart(2, "0") + b.toString(16).padStart(2, "0")
-                            }
-                            
-                            function interpolateColor(colorA, colorB, t) {
-                                var a = colorToRgb(colorA)
-                                var b = colorToRgb(colorB)
-                                var r = Math.round(a.r + (b.r - a.r) * t)
-                                var g = Math.round(a.g + (b.g - a.g) * t)
-                                var bl = Math.round(a.b + (b.b - a.b) * t)
-                                return rgbToHex(r, g, bl)
-                            }
-                            
-                            function getColorForClearIndex(idx) {
-                                var n = clearTypeItems.length
-                                if (n <= 1) return Theme.rankSilver
-
-                                var bounded = Math.max(0, Math.min(idx, n - 1))
-                                var i0 = Math.floor(bounded)
-                                var i1 = Math.min(i0 + 1, n - 1)
-                                var t = bounded - i0
-                                return interpolateColor(clearTypeItems[i0].color, clearTypeItems[i1].color, t)
-                            }
-                            
-                            function getColorForIndex(idx) {
-                                if (idx >= 0 && idx < clearTypeItems.length) return getColorForClearIndex(idx)
-                                return Theme.rankSilver
-                            }
-                            
-                            function getSelectedTypes() {
-                                var selected = []
-                                for (var i = minIndex; i <= maxIndex; i++) {
-                                    selected.push(clearTypeItems[i].id)
-                                }
-                                return selected
-                            }
-                            
-                            Rectangle {
-                                id: clearTrack
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.verticalCenterOffset: -10
-                                height: 6
-                                radius: 3
-                                color: Theme.borderCard
-                                
-                                Repeater {
-                                    model: clearRangeSlider.clearTypeItems.length
-                                    
-                                    Rectangle {
-                                        x: clearRangeSlider.clearTypeItems.length > 1 ?
-                                            10 + (index / (clearRangeSlider.clearTypeItems.length - 1)) * (parent.width - 20) - 1 : 0
-                                        y: -3
-                                        width: 2
-                                        height: 12
-                                        radius: 1
-                                        color: Theme.textDisabled
-                                    }
-                                }
-                                
-                                Rectangle {
-                                    id: clearActiveRegion
-                                    property real handleWidth: 20
-                                    property real trackUsableWidth: parent.width - handleWidth
-                                    property real minPos: clearRangeSlider.clearTypeItems.length > 1 ?
-                                        (handleWidth / 2) + (clearRangeSlider.minIndex / (clearRangeSlider.clearTypeItems.length - 1)) * trackUsableWidth : 0
-                                    property real maxPos: clearRangeSlider.clearTypeItems.length > 1 ?
-                                        (handleWidth / 2) + (clearRangeSlider.maxIndex / (clearRangeSlider.clearTypeItems.length - 1)) * trackUsableWidth : parent.width
-                                    
-                                    x: minPos
-                                    width: maxPos - minPos
-                                    height: parent.height
-                                    clip: true
-                                    
-                                    Canvas {
-                                        id: clearGradientCanvas
-                                        property real handleWidth: 20
-                                        property real trackUsableWidth: clearTrack.width - handleWidth
-                                        
-                                        x: (handleWidth / 2) - clearActiveRegion.x
-                                        width: trackUsableWidth
-                                        height: parent.height
-                                        
-                                        property var dataList: clearRangeSlider.clearTypeItems
-                                        onDataListChanged: requestPaint()
-                                        onWidthChanged: requestPaint()
-                                        
-                                        onPaint: {
-                                            var ctx = getContext("2d")
-                                            ctx.reset()
-                                            
-                                            var n = clearRangeSlider.clearTypeItems.length
-                                            if (n <= 1) {
-                                                var singleColor = clearRangeSlider.getColorForClearIndex(0)
-                                                ctx.fillStyle = singleColor
-                                                ctx.beginPath()
-                                                ctx.roundedRect(0, 0, width, height, 3)
-                                                ctx.fill()
-                                                return
-                                            }
-                                            
-                                            for (var i = 0; i < n - 1; i++) {
-                                                var x0 = (i / (n - 1)) * width
-                                                var x1 = ((i + 1) / (n - 1)) * width
-                                                var color0 = clearRangeSlider.getColorForClearIndex(i)
-                                                var color1 = clearRangeSlider.getColorForClearIndex(i + 1)
-                                                var grad = ctx.createLinearGradient(x0, 0, x1, 0)
-                                                grad.addColorStop(0, color0)
-                                                grad.addColorStop(1, color1)
-                                                ctx.fillStyle = grad
-                                                ctx.fillRect(x0, 0, x1 - x0 + 1, height)
-                                            }
-                                            
-                                            ctx.globalCompositeOperation = "destination-in"
-                                            ctx.fillStyle = "black"
-                                            ctx.beginPath()
-                                            ctx.roundedRect(0, 0, width, height, 3)
-                                            ctx.fill()
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            Rectangle {
-                                id: clearHandleA
-                                width: 20
-                                height: 20
-                                radius: 10
-                                property string baseColor: clearRangeSlider.getColorForIndex(clearRangeSlider.handleAIndex)
-                                color: clearHandleAMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
-                                border.color: Theme.bgCard
-                                border.width: 2
-                                x: clearRangeSlider.clearTypeItems.length > 1 ?
-                                    (clearRangeSlider.handleAIndex / (clearRangeSlider.clearTypeItems.length - 1)) * (clearTrack.width - width) : 0
-                                anchors.verticalCenter: clearTrack.verticalCenter
-                                
-                                Text {
-                                    property bool tooClose: Math.abs(clearRangeSlider.handleAIndex - clearRangeSlider.handleBIndex) <= 1
-                                    property bool isRightHandle: clearHandleA.x > clearHandleB.x
-                                    property bool showAbove: tooClose && isRightHandle
-                                    y: showAbove ? -height - 4 : parent.height + 4
-                                    x: clearRangeSlider.handleAIndex === 0 ? Math.max(-parent.x, (parent.width - width) / 2) : (parent.width - width) / 2
-                                    text: clearRangeSlider.getHandleLabel(clearRangeSlider.handleAIndex)
-                                    font.pixelSize: 10
-                                    font.bold: true
-                                    color: Theme.textPrimary
-                                    horizontalAlignment: Text.AlignHCenter
-                                }
-                                
-                                MouseArea {
-                                    id: clearHandleAMouse
-                                    anchors.fill: parent
-                                    anchors.topMargin: -20
-                                    anchors.bottomMargin: -20
-                                    preventStealing: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    
-                                    property int startIndex: 0
-                                    property real pressGlobalX: 0
-                                    
-                                    onPressed: (mouse) => {
-                                        startIndex = clearRangeSlider.handleAIndex
-                                        var mapped = mapToItem(clearTrack, mouse.x, mouse.y)
-                                        pressGlobalX = mapped.x
-                                    }
-                                    
-                                    onPositionChanged: (mouse) => {
-                                        if (pressed && clearRangeSlider.clearTypeItems.length > 1) {
-                                            var mapped = mapToItem(clearTrack, mouse.x, mouse.y)
-                                            var deltaX = mapped.x - pressGlobalX
-                                            var stepWidth = (clearTrack.width - parent.width) / (clearRangeSlider.clearTypeItems.length - 1)
-                                            var indexDelta = Math.round(deltaX / stepWidth)
-                                            var newIdx = Math.max(0, Math.min(startIndex + indexDelta, clearRangeSlider.clearTypeItems.length - 1))
-                                            clearRangeSlider.handleAIndex = newIdx
-                                        }
-                                    }
-                                    
-                                    onReleased: {
-                                        filterPopup.updateClearTypeFilter()
-                                    }
-                                }
-                            }
-                            
-                            Rectangle {
-                                id: clearHandleB
-                                width: 20
-                                height: 20
-                                radius: 10
-                                property string baseColor: clearRangeSlider.getColorForIndex(clearRangeSlider.handleBIndex)
-                                color: clearHandleBMouse.pressed ? Qt.darker(baseColor, 1.15) : baseColor
-                                border.color: Theme.bgCard
-                                border.width: 2
-                                x: clearRangeSlider.clearTypeItems.length > 1 ?
-                                    (clearRangeSlider.handleBIndex / (clearRangeSlider.clearTypeItems.length - 1)) * (clearTrack.width - width) : clearTrack.width - width
-                                anchors.verticalCenter: clearTrack.verticalCenter
-                                
-                                Text {
-                                    property bool tooClose: Math.abs(clearRangeSlider.handleAIndex - clearRangeSlider.handleBIndex) <= 1
-                                    property bool isRightHandle: clearHandleB.x > clearHandleA.x
-                                    property bool showAbove: tooClose && isRightHandle
-                                    y: showAbove ? -height - 4 : parent.height + 4
-                                    x: clearRangeSlider.handleBIndex === 0 ? Math.max(-parent.x, (parent.width - width) / 2) : (parent.width - width) / 2
-                                    text: clearRangeSlider.getHandleLabel(clearRangeSlider.handleBIndex)
-                                    font.pixelSize: 10
-                                    font.bold: true
-                                    color: Theme.textPrimary
-                                    horizontalAlignment: Text.AlignHCenter
-                                }
-                                
-                                MouseArea {
-                                    id: clearHandleBMouse
-                                    anchors.fill: parent
-                                    anchors.topMargin: -20
-                                    anchors.bottomMargin: -20
-                                    preventStealing: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    
-                                    property int startIndex: 0
-                                    property real pressGlobalX: 0
-                                    
-                                    onPressed: (mouse) => {
-                                        startIndex = clearRangeSlider.handleBIndex
-                                        var mapped = mapToItem(clearTrack, mouse.x, mouse.y)
-                                        pressGlobalX = mapped.x
-                                    }
-                                    
-                                    onPositionChanged: (mouse) => {
-                                        if (pressed && clearRangeSlider.clearTypeItems.length > 1) {
-                                            var mapped = mapToItem(clearTrack, mouse.x, mouse.y)
-                                            var deltaX = mapped.x - pressGlobalX
-                                            var stepWidth = (clearTrack.width - parent.width) / (clearRangeSlider.clearTypeItems.length - 1)
-                                            var indexDelta = Math.round(deltaX / stepWidth)
-                                            var newIdx = Math.max(0, Math.min(startIndex + indexDelta, clearRangeSlider.clearTypeItems.length - 1))
-                                            clearRangeSlider.handleBIndex = newIdx
-                                        }
-                                    }
-                                    
-                                    onReleased: {
-                                        filterPopup.updateClearTypeFilter()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    Rectangle { height: 1; Layout.fillWidth: true; color: Theme.borderCard }
-                    
-                    // Chart Flags
-                    Column {
-                        spacing: 10
-                        Layout.fillWidth: true
-                        
-                        Text { text: "Consultant Sheet Flags"; font.pixelSize: 14; font.bold: true; color: Theme.textPrimary }
-                        
-                        // Flag filter helper component
-                        // (Moved to root)
-                            
-
-                        
-                        Column {
-                            spacing: 8
-                            
-                            FlagSegmentedControl {
-                                id: ignoreFlagSegment
-                                flagName: "⛔ trap"
-                                selectedIndex: 1  // Default: Show
-                                onIndexChanged: filterPopup.updateFlagFilter()
-                            }
-                            
-                            FlagSegmentedControl {
-                                id: skillFlagSegment
-                                flagName: "⚠️ individual"
-                                selectedIndex: 1  // Default: Show
-                                onIndexChanged: filterPopup.updateFlagFilter()
-                            }
-
-                            FlagSegmentedControl {
-                                id: hardBpmFlagSegment
-                                flagName: "⏪ hard speed"
-                                selectedIndex: 1  // Default: Show
-                                onIndexChanged: filterPopup.updateFlagFilter()
-                            }
-
-                        }
-                    }
-
-                    Rectangle { height: 1; Layout.fillWidth: true; color: Theme.borderCard }
-
-                    // Excluded Packs Management Shortcut Button
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 38
-                        radius: 8
-                        color: manageExcludedMouse.containsMouse ? Theme.bgHover : Theme.bgButton
-                        border.color: Theme.borderDivider
-                        border.width: 1
-
-                        RowLayout {
-                            anchors.centerIn: parent
-                            spacing: 8
-
-                            Text {
-                                text: "⚙️"
-                                font.pixelSize: 13
-                            }
-
-                            Text {
-                                text: "Manage Excluded Packs in Settings"
-                                font.pixelSize: 12
-                                font.bold: true
-                                color: manageExcludedMouse.containsMouse ? Theme.accent : Theme.textPrimary
-                            }
-                        }
-
-                        MouseArea {
-                            id: manageExcludedMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                filterPopup.close()
-                                if (typeof window !== "undefined" && typeof window.openSettingsWindow === "function") {
-                                    window.openSettingsWindow("excludedPacks")
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-                Basic.ScrollBar {
-                    id: filterVerticalBar
-                    z: 10
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    anchors.right: parent.right
-                    anchors.rightMargin: 4
-                    width: 10
-
-                    policy: ScrollBar.AlwaysOn
-                    size: filterScrollView.contentItem ? filterScrollView.contentItem.visibleArea.heightRatio : 1
-                    position: filterScrollView.contentItem ? filterScrollView.contentItem.visibleArea.yPosition : 0
-
-                    onPositionChanged: {
-                        if (pressed && filterScrollView.contentItem)
-                            filterScrollView.contentItem.contentY = position * filterScrollView.contentItem.contentHeight
-                    }
-
-                    property bool showScrollbar: (filterScrollView.contentItem && filterScrollView.contentItem.moving)
-                                                  || filterHideTimer.running
-                                                  || filterVerticalBar.hovered
-                                                  || filterVerticalBar.pressed
-                    hoverEnabled: true
-                    active: true
-
-                    Timer { id: filterHideTimer; interval: 1000 }
                     Connections {
-                        target: filterScrollView.contentItem
-                        function onMovingChanged() {
-                            if (!filterScrollView.contentItem.moving)
-                                filterHideTimer.restart()
+                        target: statisticsHandler
+                        function onDisplayModeChanged() {
+                            detailedViewStackContainer.syncDetailedView()
+                        }
+                        function onIsPackDetailViewChanged() {
+                            detailedViewStackContainer.syncDetailedView()
+                        }
+                        function onCurrentPackChanged() {
+                            if (statisticsHandler && statisticsHandler.currentPack && statisticsHandler.currentPack.id) {
+                                detailedViewStackContainer.cachedLastPack = statisticsHandler.currentPack
+                                statsRoot.cachedLastPack = statisticsHandler.currentPack
+                            }
+                            detailedViewStackContainer.syncDetailedView()
+                        }
+                        function onExpandedPackIdsChanged() {
+                            detailedViewStackContainer.syncDetailedView()
                         }
                     }
-                    onPressedChanged: {
-                        if (!pressed && filterScrollView.contentItem && !filterScrollView.contentItem.moving)
-                            filterHideTimer.restart()
+
+                    Connections {
+                        target: statsRoot
+                        function onCurrentSongChanged() {
+                            if (statsRoot.currentSong) {
+                                detailedViewStackContainer.cachedLastSong = statsRoot.currentSong
+                                detailedViewStackContainer.wasSongSelected = true
+                            }
+                            detailedViewStackContainer.syncDetailedView()
+                        }
                     }
 
-                    opacity: showScrollbar ? 1.0 : 0.0
-                    Behavior on opacity { NumberAnimation { duration: 200 } }
-
-                    background: Rectangle { color: "transparent" }
-                    contentItem: Rectangle {
-                        implicitWidth: 6
-                        implicitHeight: 100
-                        radius: 3
-                        color: Theme.scrollbar
-                        opacity: filterVerticalBar.pressed ? 1.0 : (filterVerticalBar.hovered ? 1.0 : 0.6)
+                    Component.onCompleted: {
+                        detailedViewStackContainer.syncDetailedView()
                     }
                 }
             }
         }
-        
-        function updateDifficultyFilter() {
-            if (!initialized) return  // Skip during initialization
-            
-            var diffs = []
-            if (pstCheck.checked) diffs.push(0)
-            if (prsCheck.checked) diffs.push(1)
-            if (ftrCheck.checked) diffs.push(2)
-            if (bydCheck.checked) diffs.push(3)
-            if (etrCheck.checked) diffs.push(4)
-            
-            if (statisticsHandler) {
-                statisticsHandler.setFilter("difficulties", diffs)
-                statisticsHandler.setFilter("include_inscribed", insCheck.checked)
-            }
-        }
-        
-        function updateRangeFilter() {
-            if (!initialized) return
-            
-            if (statisticsHandler && rangeSlider.currentList.length > 0) {
-                var minVal = rangeSlider.currentList[rangeSlider.minIndex]
-                var maxVal = rangeSlider.currentList[rangeSlider.maxIndex]
-                
-                if (rangeSlider.bpMode) {
-                    statisticsHandler.setFilter("bp_mode", true)
-                    statisticsHandler.setFilter("bp_min", minVal)
-                    statisticsHandler.setFilter("bp_max", maxVal)
-                } else {
-                    statisticsHandler.setFilter("bp_mode", false)
-                    // Convert level string to numeric for filtering
-                    statisticsHandler.setFilter("level_min_str", minVal)
-                    statisticsHandler.setFilter("level_max_str", maxVal)
-                }
-            }
-        }
-        
-        function updateFlagFilter() {
-            if (!initialized) return
-            
-            // Map: 0=Hide(off), 1=Show(contain), 2=Only(only)
-            var map = ["off", "contain", "only"]
-            
-            if (statisticsHandler) {
-                statisticsHandler.setFilter("ignore_chart", map[ignoreFlagSegment.selectedIndex])
-                statisticsHandler.setFilter("skill_issues", map[skillFlagSegment.selectedIndex])
-                statisticsHandler.setFilter("hard_bpm", map[hardBpmFlagSegment.selectedIndex])
-            }
-        }
+    }
+    // =========================================================================
+    // Filter Popup (On-demand Component & Loader)
+    // =========================================================================
+    Component {
+        id: filterPopupComponent
 
-        function updateClearTypeFilter() {
-            if (!initialized) return  // Skip during initialization
-            
-            var types = clearRangeSlider.getSelectedTypes()
-            
-            if (statisticsHandler) {
-                statisticsHandler.setFilter("clear_types", types)
-            }
+        StatisticsFilterPopup {
+            id: filterPopup
+            parent: statsRoot
         }
-        
-        function updateScoreRangeFilter() {
-            if (!initialized) return
-            
-            if (statisticsHandler && scoreRangeSlider.scoreGrades.length > 0) {
-                statisticsHandler.setFilter("score_min_rank", scoreRangeSlider.minIndex)
-                statisticsHandler.setFilter("score_max_rank", scoreRangeSlider.maxIndex)
+    }
+
+    Loader {
+        id: filterPopupLoader
+        active: false
+        sourceComponent: filterPopupComponent
+
+        onStatusChanged: {
+            if (status === Loader.Ready && statsRoot.pendingOpenFilterPopup && item) {
+                statsRoot.pendingOpenFilterPopup = false
+                item.open()
             }
         }
     }

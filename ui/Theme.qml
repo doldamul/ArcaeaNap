@@ -4,7 +4,7 @@ import QtQuick
 QtObject {
     id: theme
 
-    readonly property bool isDarkMode: typeof themeHandler === "undefined" ? false : themeHandler.isDarkMode
+    readonly property bool isDarkMode: (typeof themeHandler !== "undefined" && themeHandler) ? themeHandler.isDarkMode : false
     readonly property bool isDark: isDarkMode
 
     // Base UI

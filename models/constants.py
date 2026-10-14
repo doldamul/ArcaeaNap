@@ -73,10 +73,6 @@ POTENTIAL_GRADES: list[tuple[int, str, int]] = [
 ]
 
 
-
-
-
-
 # === 클리어 타입 텍스트 상수 ===
 
 CLEAR_TYPE_TEXTS: dict[int, str] = {

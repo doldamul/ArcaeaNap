@@ -179,6 +179,7 @@ ApplicationWindow {
         dbMissingPopup.refreshGoogleConnectionState()
         if (startupHandler) {
             startupHandler.checkAndLoad()
+            startupHandler.start_idle_detection(window)
         }
     }
 
@@ -564,11 +565,15 @@ ApplicationWindow {
         function onFrameSwapped() {
             if (!window.isMainRendered) {
                 window.isMainRendered = true
-                Qt.callLater(function() {
-                    if (!settingsWindowLoader.active) {
-                        settingsWindowLoader.active = true
-                    }
-                })
+            }
+        }
+    }
+
+    Connections {
+        target: startupHandler
+        function onAppBecameIdle() {
+            if (!settingsWindowLoader.active) {
+                settingsWindowLoader.active = true
             }
         }
     }
@@ -587,11 +592,19 @@ ApplicationWindow {
         active: false
 
         onStatusChanged: {
-            if (status === Loader.Ready && pendingOpenSettings) {
-                pendingOpenSettings = false
-                var sec = pendingSettingsSection
-                pendingSettingsSection = ""
-                openSettingsWindow(sec)
+            if (status === Loader.Ready) {
+                if (pendingOpenSettings) {
+                    pendingOpenSettings = false
+                    var sec = pendingSettingsSection
+                    pendingSettingsSection = ""
+                    openSettingsWindow(sec)
+                }
+                // 1차 프리웜(설정창) 완료 후 다음 유휴 턴에 2차 프리웜(Statistics 탭) 가동
+                Qt.callLater(function() {
+                    if (typeof statisticsTabLoader !== "undefined" && statisticsTabLoader && !statisticsTabLoader.wasLoaded) {
+                        statisticsTabLoader.prewarm()
+                    }
+                })
             }
         }
     }
@@ -677,8 +690,11 @@ ApplicationWindow {
             id: tabLoader
             property int tabIndex: 0 // 이 탭의 고유 번호
             property bool wasLoaded: false
+            asynchronous: true
             
             anchors.fill: parent
+
+            function prewarm() { if (!wasLoaded) wasLoaded = true }
             
             // 첫 진입 시점까지 로드를 지연하고, 한 번 로드된 이후에는 언로드하지 않고 유지
             active: window.currentTab === tabIndex || wasLoaded
@@ -713,22 +729,37 @@ ApplicationWindow {
             }
         }
 
-        // 1. Home 페이지
+        // 1. Home 페이지 (기동 시 즉시 렌더링을 위해 동기 로드)
         TabPage {
+            id: homeTabLoader
             source: "home_ui.qml"
             tabIndex: 0
+            asynchronous: false
         }
 
         // 2. Analyze 페이지
         TabPage {
+            id: analyzeTabLoader
             source: "analyze_ui.qml"
             tabIndex: 1
         }
 
         // 3. Statistics 페이지
         TabPage {
+            id: statisticsTabLoader
             source: "statistics_ui.qml"
             tabIndex: 2
+
+            onStatusChanged: {
+                if (status === Loader.Ready) {
+                    // 2차 프리웜(Statistics 탭) 완료 후 다음 유휴 턴에 3차 프리웜(Analyze 탭) 가동
+                    Qt.callLater(function() {
+                        if (typeof analyzeTabLoader !== "undefined" && analyzeTabLoader && !analyzeTabLoader.wasLoaded) {
+                            analyzeTabLoader.prewarm()
+                        }
+                    })
+                }
+            }
         }
     }
 

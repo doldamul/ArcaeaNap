@@ -2,7 +2,7 @@
 import sys
 import os
 
-from PyQt6.QtGui import QGuiApplication, QSurfaceFormat, QIcon, QImageReader, QPixmap
+from PyQt6.QtGui import QGuiApplication, QSurfaceFormat, QIcon, QImageReader, QPixmap, QFont
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtCore import QUrl, QByteArray, QBuffer, QIODevice, Qt, QTimer, QObject, pyqtSlot
 
@@ -136,6 +136,7 @@ def main():
     uses_mac_cocoa_window = sys.platform == "darwin"
 
     app = QGuiApplication(sys.argv)
+    app.setFont(QFont("Segoe UI", 9))
 
     # C++ 브리지가 메인 윈도우(QWindow)의 NSWindow를 하이재킹하면서,
     # macOS가 메인 윈도우를 숨겨진 것으로 간주할 수 있습니다.
