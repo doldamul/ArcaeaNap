@@ -7,7 +7,11 @@ import sys
 
 from PyQt6.QtGui import QFontDatabase
 
-BASE_UI_FONT_FAMILY = "Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+if sys.platform == "darwin":
+    # Segoe UI is not available on macOS; prefer SF Pro / the system UI font.
+    BASE_UI_FONT_FAMILY = "SF Pro Text, .AppleSystemUIFont, Helvetica Neue, Helvetica, Arial, sans-serif"
+else:
+    BASE_UI_FONT_FAMILY = "Segoe UI, Roboto, Helvetica, Arial, sans-serif"
 TITLE_FONT_DIRNAME = os.path.join("resources", "fonts")
 TITLE_FONT_FILENAME = "NotoSansJP-VariableFont_wght.ttf"
 

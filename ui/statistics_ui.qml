@@ -341,12 +341,12 @@ Item {
                             }
                             visible: diffInfo ? Boolean(diffInfo.showInsMark) : false
 
-                            Text {
-                                anchors.centerIn: parent
-                                anchors.verticalCenterOffset: -0.5
-                                text: (insMarkArea.diffInfo && insMarkArea.diffInfo.insActive) ? "◆" : "◇"
+                            DiamondMark {
+                                x: Math.round((parent.width - width) / 2)
+                                y: Math.round((parent.height - height) / 2)
+                                size: 8
+                                filled: Boolean(insMarkArea.diffInfo && insMarkArea.diffInfo.insActive)
                                 color: Theme.diffIns
-                                font.pixelSize: 9
                             }
                         }
                         
@@ -757,14 +757,14 @@ Item {
 
                                     Row {
                                         id: diffRow
-                                        spacing: 0
+                                        spacing: 1
                                         anchors.verticalCenter: parent.verticalCenter
                                         Repeater {
                                             model: filterData ? filterData.data : []
-                                            Text {
-                                                text: modelData.active ? "◆" : "◇"
+                                            DiamondMark {
+                                                size: 10
+                                                filled: modelData.active
                                                 color: Theme.getDiffColor(modelData.diff)
-                                                font.pixelSize: 11
                                                 anchors.verticalCenter: parent.verticalCenter
                                             }
                                         }

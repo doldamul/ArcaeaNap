@@ -2,7 +2,7 @@
 import sys
 import os
 
-from PyQt6.QtGui import QGuiApplication, QSurfaceFormat, QIcon, QImageReader, QPixmap, QFont
+from PyQt6.QtGui import QGuiApplication, QSurfaceFormat, QIcon, QImageReader, QPixmap, QFont, QFontDatabase
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtCore import QUrl, QByteArray, QBuffer, QIODevice, Qt, QTimer, QObject, pyqtSlot
 
@@ -136,7 +136,15 @@ def main():
     uses_mac_cocoa_window = sys.platform == "darwin"
 
     app = QGuiApplication(sys.argv)
-    app.setFont(QFont("Segoe UI", 9))
+    if uses_mac_cocoa_window:
+        # macOS maps 1pt to ~1px (72dpi), so 9pt renders much smaller than on
+        # Windows (Segoe UI 9pt ~= 12px). Use the system UI font with an explicit
+        # pixel size instead.
+        app_font = QFontDatabase.systemFont(QFontDatabase.SystemFont.GeneralFont)
+        app_font.setPixelSize(13)
+    else:
+        app_font = QFont("Segoe UI", 9)
+    app.setFont(app_font)
 
     # C++ 브리지가 메인 윈도우(QWindow)의 NSWindow를 하이재킹하면서,
     # macOS가 메인 윈도우를 숨겨진 것으로 간주할 수 있습니다.
