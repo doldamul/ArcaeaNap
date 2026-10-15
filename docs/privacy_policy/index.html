@@ -53,7 +53,7 @@
       <!-- Section 2: Content -->
       <section class="legal-section">
         <div class="legal-container">
-          <p><strong>Effective Date: May 8, 2026</strong></p>
+          <p><strong>Effective Date: October 15, 2026</strong></p>
           <hr />
           <h3>1. Introduction</h3>
           <p>
@@ -79,11 +79,12 @@
             <code>https://www.googleapis.com/auth/drive.file</code> scope). This
             data is used solely for the purpose of exporting and synchronizing
             your local Arcaea play records to your personal Google Sheet.
-            Additionally, the application accesses a public,
-            community-maintained Google Sheet in read-only mode (using the
-            <code>https://www.googleapis.com/auth/spreadsheets.readonly</code>
-            scope) to fetch the general song data required to generate the local
-            song database.
+            Additionally, the application reads a public,
+            community-maintained Google Sheet in read-only mode to fetch the
+            general song data required to generate the local song database.
+            This read does not use your Google account permissions (no
+            additional OAuth scope is requested); it is performed with the
+            application's public API key only.
           </p>
 
           <h3>3. Data Transmission and Sharing</h3>

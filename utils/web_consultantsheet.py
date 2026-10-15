@@ -20,7 +20,6 @@ from services.connection_store import get_provider, set_provider, remove_provide
 from services.keyring_store import get_secret, set_secret, delete_secret
 
 SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets.readonly",
     "https://www.googleapis.com/auth/drive.file",
     "https://www.googleapis.com/auth/userinfo.email",
     "openid"
@@ -727,11 +726,18 @@ def update_search_cells_and_get_url(sheet_id, canonical_title, diff_name,
     return build_sheet_url(sheet_id, search_ws.id, 'C4')
 
 
+def _open_public_spreadsheet(sheet_id):
+    """Open a link-shared (public) spreadsheet read-only with the API key.
+
+    No user OAuth token is involved, so no spreadsheets.* scope is required and
+    the song database can be built without a Google sign-in.
+    """
+    key, _, _ = _read_client_values()
+    return gspread.api_key(key).open_by_key(sheet_id)
+
+
 def open_sheet():
-    creds = get_creds()
-    
-    gc = gspread.authorize(creds)
-    sheet = gc.open_by_key(SPREADSHEET_ID)
+    sheet = _open_public_spreadsheet(SPREADSHEET_ID)
 
     init_songs_db()
 
