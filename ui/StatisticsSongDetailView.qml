@@ -605,11 +605,10 @@ ColumnLayout {
                                 }
                                 Behavior on color { ColorAnimation { duration: 150 } }
 
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: parent.effectiveFav ? "♥" : "♡"
-                                    font.pixelSize: 18
-                                    color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                FavGlyph {
+                                    filled: parent.effectiveFav
+                                    pixelSize: 18
+                                    glyphColor: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
                                 }
 
                                 MouseArea {

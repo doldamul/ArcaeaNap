@@ -118,7 +118,8 @@ ColumnLayout {
                                                     font.bold: true
                                                     color: Theme.detailHeaderTitle
                                                     elide: Text.ElideRight
-                                                    Layout.fillWidth: true
+                                                    Layout.fillWidth: false
+                                                    Layout.maximumWidth: Math.max(0, parent.width - heroPackFavButton.width - parent.spacing)
                                                 }
 
                                                 // Pack Favorite Button right next to pack name (28x28)
@@ -143,11 +144,10 @@ ColumnLayout {
                                                     }
                                                     Behavior on color { ColorAnimation { duration: 150 } }
 
-                                                    Text {
-                                                        anchors.centerIn: parent
-                                                        text: parent.effectiveFav ? "♥" : "♡"
-                                                        font.pixelSize: 18
-                                                        color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                                    FavGlyph {
+                                                        filled: parent.effectiveFav
+                                                        pixelSize: 18
+                                                        glyphColor: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
                                                     }
 
                                                     MouseArea {
