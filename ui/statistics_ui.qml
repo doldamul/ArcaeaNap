@@ -1830,7 +1830,7 @@ Item {
                                                             spacing: 0
                                                             // Separator (before each item except the first)
                                                             Text {
-                                                                text: " / "
+                                                                text: (index > 0 && (function() { var l = rowModel.filteredDifficulties || []; var p = l[index - 1]; return Boolean(p && p.isFavorite && isRowSelected) || isItemHovered })()) ? "/ " : " / "
                                                                 font.pixelSize: difficultyRow.isStandaloneMode ? 13 : 11
                                                                 color: Theme.textFaint
                                                                 visible: index > 0
@@ -1894,11 +1894,10 @@ Item {
                                                                 property bool effectiveFav: chartFavMouse.pressed ? !modelData.isFavorite : modelData.isFavorite
                                                                 color: (chartFavMouse.containsMouse && !chartFavMouse.pressed) ? Theme.favoriteHoverBg : "transparent"
 
-                                                                Text {
-                                                                    anchors.centerIn: parent
-                                                                    text: parent.effectiveFav ? "♥" : "♡"
-                                                                    font.pixelSize: 9
-                                                                    color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                                                FavGlyph {
+                                                                    filled: parent.effectiveFav
+                                                                    pixelSize: 9
+                                                                    glyphColor: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
                                                                 }
 
                                                                 MouseArea {
@@ -1976,11 +1975,10 @@ Item {
                                                                 property bool effectiveFav: singleChartFavMouse.pressed ? !rowModel.isChartFavorite : Boolean(rowModel && rowModel.isChartFavorite)
                                                                 color: (singleChartFavMouse.containsMouse && !singleChartFavMouse.pressed) ? Theme.favoriteHoverBg : "transparent"
 
-                                                                Text {
-                                                                    anchors.centerIn: parent
-                                                                    text: parent.effectiveFav ? "♥" : "♡"
-                                                                    font.pixelSize: 10
-                                                                    color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                                                FavGlyph {
+                                                                    filled: parent.effectiveFav
+                                                                    pixelSize: 10
+                                                                    glyphColor: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
                                                                 }
 
                                                                 MouseArea {
@@ -2659,7 +2657,7 @@ Item {
                                                             spacing: 0
 
                                                             Text {
-                                                                text: " / "
+                                                                text: (index > 0 && (function() { var l = songItemData.filteredDifficulties || []; var p = l[index - 1]; return Boolean(p && p.isFavorite) || isItemHovered })()) ? "/ " : " / "
                                                                 font.pixelSize: parent.parent.parent.isStandaloneMode ? 13 : 11
                                                                 color: Theme.textFaint
                                                                 visible: index > 0
@@ -2712,7 +2710,7 @@ Item {
                                                             Rectangle {
                                                                 id: packChartFavBtn
                                                                 z: 2
-                                                                property bool showChartFav: (songItemRect.isSelected && modelData.isFavorite) || isItemHovered
+                                                                property bool showChartFav: Boolean(modelData.isFavorite) || isItemHovered
                                                                 visible: showChartFav
                                                                 width: visible ? 13 : 0
                                                                 height: 13
@@ -2722,11 +2720,10 @@ Item {
                                                                 property bool effectiveFav: packChartFavMouse.pressed ? !modelData.isFavorite : modelData.isFavorite
                                                                 color: (packChartFavMouse.containsMouse && !packChartFavMouse.pressed) ? Theme.favoriteHoverBg : "transparent"
 
-                                                                Text {
-                                                                    anchors.centerIn: parent
-                                                                    text: parent.effectiveFav ? "♥" : "♡"
-                                                                    font.pixelSize: 9
-                                                                    color: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
+                                                                FavGlyph {
+                                                                    filled: parent.effectiveFav
+                                                                    pixelSize: 9
+                                                                    glyphColor: parent.effectiveFav ? Theme.favoriteActive : Theme.favoriteInactive
                                                                 }
 
                                                                 MouseArea {
@@ -3306,8 +3303,10 @@ Item {
                             return
                         }
 
-                        // 팩 대시보드 등에서 새 악곡 상세로 진입 시 이전 슬롯의 잔상(썸네일/데이터) 선제 리셋
-                        if (curSlot.viewType === viewPackDashboard && (targetType === viewSongDetail || targetType === viewPackSubSong)) {
+                        // 새 악곡 상세로 진입하는 슬롯은 과거에 사용하던 다른 악곡의 썸네일 잔상을 선제 리셋
+                        // (썸네일 다운로드 대기 중 '이전 이미지 유지' 동작이 엉뚱한 악곡의 잔상을 붙들지 않도록).
+                        // 리셋 후 슬롯이 표시되는 시점의 onVisibleChanged -> ensureLoaded()가 target을 다시 로드한다.
+                        if (targetType === viewSongDetail || targetType === viewPackSubSong) {
                             if (typeof nextSlot.resetForNewSong === "function") {
                                 nextSlot.resetForNewSong()
                             }
@@ -3442,7 +3441,9 @@ Item {
                         property: "opacity"
                         running: false
                         from: 1.0; to: 0.0; duration: 140
-                        easing.type: Easing.OutQuad
+                        // 진입 슬롯(OutQuad 페이드인)과 합성 시 총 커버리지 저하(배경 비침 → 다크모드에서 어두운 썸네일이 밝아 보임)를
+                        // 최소화하기 위해 퇴장 슬롯은 후반에 몰아서 투명해지도록 한다.
+                        easing.type: Easing.InCubic
                     }
                     NumberAnimation {
                         id: slotBFadeIn
@@ -3459,7 +3460,7 @@ Item {
                         property: "opacity"
                         running: false
                         from: 1.0; to: 0.0; duration: 140
-                        easing.type: Easing.OutQuad
+                        easing.type: Easing.InCubic
                     }
 
                     Loader {

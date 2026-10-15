@@ -267,6 +267,28 @@ class ThumbnailService(QObject):
 
         return ""
 
+    def is_thumbnail_pending(self, arcaea_id: str, difficulty: int) -> bool:
+        """해당 악곡/난이도 썸네일이 클라우드 보관(Dataless) 상태라 다운로드 완료를 기다리는 중인지 반환한다.
+
+        True인 동안 get_path_for_difficulty()는 빈 문자열을 돌려주지만, 이는 '썸네일 없음'이 아니라
+        '아직 준비 안 됨'이므로 UI는 이전 이미지를 유지하다가 로드 완료 시 크로스페이드해야 한다.
+        """
+        if not arcaea_id:
+            return False
+
+        diff_code = DIFF_CODE_MAP.get(difficulty)
+        if diff_code:
+            exact_filepath = os.path.join(self._thumbnails_dir, f"{arcaea_id}_{diff_code}.jpg")
+            if os.path.exists(exact_filepath):
+                return not is_file_hydrated(exact_filepath)
+
+        # 정확한 난이도 파일이 없으면 우선순위 폴백 파일 중 최우선 존재 파일 기준
+        for code in THUMBNAIL_PRIORITY:
+            filepath = os.path.join(self._thumbnails_dir, f"{arcaea_id}_{code}.jpg")
+            if os.path.exists(filepath):
+                return not is_file_hydrated(filepath)
+        return False
+
     def get_representative_color(self, arcaea_id: str, difficulty: int) -> str:
         """선택된 썸네일에서 추출한 대표 색상을 반환한다 (메모리 캐싱 및 Dataless 보호)."""
         if not arcaea_id:

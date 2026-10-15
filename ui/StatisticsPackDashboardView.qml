@@ -13,7 +13,10 @@ ColumnLayout {
     property bool isDiffCramped: (statsRoot && statsRoot.isDiffCramped) ? statsRoot.isDiffCramped : false
     property var statsRoot: null
     property string titleFontFamily: (statsRoot && statsRoot.titleFontFamily) ? statsRoot.titleFontFamily : ((typeof embeddedTitleFontFamily === "string" && embeddedTitleFontFamily.length > 0) ? embeddedTitleFontFamily : "Segoe UI")
-    property int thumbnailVersion: (statsRoot && statsRoot.thumbnailVersion) ? statsRoot.thumbnailVersion : 0
+    // NOTE: statistics_ui.qml에서 `statsRoot: statsRoot`로 전달하면 자기 자신의 프로퍼티(null)로 해석되어
+    // statsRoot를 통한 thumbnailVersion은 항상 0에 고정된다. 썸네일 다운로드 완료 통지를 받으려면
+    // 컨텍스트 핸들러의 thumbnailVersion(NOTIFY 시그널 보유)을 직접 바인딩해야 한다.
+    property int thumbnailVersion: statsHandler ? statsHandler.thumbnailVersion : (statisticsHandler ? statisticsHandler.thumbnailVersion : 0)
     property var packDashboardScrollView: this
 
     // Aliases for external reference & contract preservation
@@ -38,6 +41,11 @@ ColumnLayout {
                                 border.width: 1
                                 border.color: Theme.borderDivider
                                 clip: true
+
+                                // 카드를 항상 하나의 텍스처로 합성한 뒤 opacity를 적용한다.
+                                // (개별 자식 opacity 적용 시 딤 오버레이가 이미지보다 먼저 옅어져 다크모드에서 썸네일이 순간적으로 밝아짐)
+                                layer.enabled: true
+                                layer.smooth: true
 
                                 // 1. Fallback Background
                                 Rectangle {

@@ -18,7 +18,10 @@ ColumnLayout {
     property bool isDiffCramped: (statsRoot && statsRoot.isDiffCramped) ? statsRoot.isDiffCramped : false
     property int bestPotentialMarkLimit: (statsRoot && statsRoot.bestPotentialMarkLimit !== undefined) ? statsRoot.bestPotentialMarkLimit : 0
     property string titleFontFamily: (statsRoot && statsRoot.titleFontFamily) ? statsRoot.titleFontFamily : ((typeof embeddedTitleFontFamily === "string" && embeddedTitleFontFamily.length > 0) ? embeddedTitleFontFamily : "Segoe UI")
-    property int thumbnailVersion: (statsRoot && statsRoot.thumbnailVersion) ? statsRoot.thumbnailVersion : 0
+    // NOTE: statistics_ui.qml에서 `statsRoot: statsRoot`로 전달하면 자기 자신의 프로퍼티(null)로 해석되어
+    // statsRoot를 통한 thumbnailVersion은 항상 0에 고정된다. 썸네일 다운로드 완료 통지를 받으려면
+    // 컨텍스트 핸들러의 thumbnailVersion(NOTIFY 시그널 보유)을 직접 바인딩해야 한다.
+    property int thumbnailVersion: statsHandler ? statsHandler.thumbnailVersion : (statisticsHandler ? statisticsHandler.thumbnailVersion : 0)
 
     // Aliases for external reference & contract preservation
     property alias headerContainer: headerContainer
@@ -196,6 +199,11 @@ ColumnLayout {
                                             var _v = thumbnailVersion;
                                             return statsHandler && currentSong ? statsHandler.getThumbnailPathForDifficulty(currentSong.arcaeaId || "", headerContainer.effectiveHeaderDiff) : ""
                                         }
+                                        // 클라우드 보관 썸네일 다운로드 대기 중이면 이전 이미지를 유지하고, 로드 완료 후에 크로스페이드
+                                        holdWhileEmpty: {
+                                            var _v = thumbnailVersion;
+                                            return statsHandler && currentSong ? statsHandler.isThumbnailPending(currentSong.arcaeaId || "", headerContainer.effectiveHeaderDiff) : false
+                                        }
                                         fillMode: Image.PreserveAspectCrop
                                         antialiasing: true
                                         
@@ -288,6 +296,11 @@ ColumnLayout {
                                             targetSource: {
                                                 var _v = thumbnailVersion;
                                                 return statsHandler && currentSong ? statsHandler.getThumbnailPathForDifficulty(currentSong.arcaeaId || "", headerContainer.effectiveHeaderDiff) : ""
+                                            }
+                                            // 클라우드 보관 썸네일 다운로드 대기 중이면 이전 이미지를 유지하고, 로드 완료 후에 크로스페이드
+                                            holdWhileEmpty: {
+                                                var _v = thumbnailVersion;
+                                                return statsHandler && currentSong ? statsHandler.isThumbnailPending(currentSong.arcaeaId || "", headerContainer.effectiveHeaderDiff) : false
                                             }
                                             fillMode: Image.PreserveAspectCrop
                                             smooth: true
@@ -658,8 +671,9 @@ ColumnLayout {
                                 }
 
                                 visible: currentSong !== null && sheetAvailable && sheetDiffName !== ""
+                                         // NOTE: 전역 statisticsHandler 상태(pack 대시보드 진입 등)를 직접 참조하면 크로스페이드 시작 전에
+                                         // 0ms로 숨겨지므로 참조하지 않는다. 슬롯 가시성/페이드는 상위 컨테이너가 담당한다.
                                          && showShortcut
-                                         && !Boolean(statisticsHandler && statisticsHandler.displayMode === "pack" && statisticsHandler.isPackDetailView)
                                 z: 40
                                 anchors.top: parent.top
                                 anchors.topMargin: headerContainer.showBackToPack ? (isNarrow ? 53 : 62) : (isNarrow ? 15 : 24)

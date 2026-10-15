@@ -318,49 +318,65 @@ def fill_song_titles_from_scores():
         songs_cursor.execute("ATTACH DATABASE ? AS user_db", (scores_db_path,))
         attached = True
 
-        songs_cursor.execute("""
-            UPDATE songs
-            SET title_en = COALESCE(
-                    (SELECT us.title_en
-                     FROM user_db.scores us
-                     WHERE us.arcaea_id = songs.arcaea_id
-                       AND us.title_en IS NOT NULL AND us.title_en != ''
-                     ORDER BY
-                        CASE WHEN LOWER(us.title_en) = LOWER(songs.canonical_title) THEN 0
-                             WHEN us.difficulty IN (SELECT c.difficulty FROM charts c WHERE c.song_id = songs.id) THEN 1
-                             ELSE 2 END,
-                        us.rowid DESC
-                     LIMIT 1),
-                    NULLIF(songs.title_en, '')
-                ),
-                title_jp = COALESCE(
-                    (SELECT us.title_jp
-                     FROM user_db.scores us
-                     WHERE us.arcaea_id = songs.arcaea_id
-                       AND us.title_jp IS NOT NULL AND us.title_jp != ''
-                     ORDER BY
-                        CASE WHEN LOWER(us.title_en) = LOWER(songs.canonical_title) THEN 0
-                             WHEN us.difficulty IN (SELECT c.difficulty FROM charts c WHERE c.song_id = songs.id) THEN 1
-                             ELSE 2 END,
-                        us.rowid DESC
-                     LIMIT 1),
-                    NULLIF(songs.title_jp, '')
-                ),
-                artist = COALESCE(
-                    NULLIF(NULLIF(songs.artist, ''), 'Unknown'),
-                    (SELECT us.artist
-                     FROM user_db.scores us
-                     WHERE us.arcaea_id = songs.arcaea_id
-                       AND us.artist IS NOT NULL AND us.artist != ''
-                     ORDER BY
-                        CASE WHEN LOWER(us.title_en) = LOWER(songs.canonical_title) THEN 0
-                             WHEN us.difficulty IN (SELECT c.difficulty FROM charts c WHERE c.song_id = songs.id) THEN 1
-                             ELSE 2 END,
-                        us.rowid DESC
-                     LIMIT 1)
-                )
-            WHERE songs.arcaea_id IS NOT NULL AND songs.arcaea_id != ''
-        """)
+        # SQLite는 UPDATE 내 상관 서브쿼리의 ORDER BY에서 바깥 테이블 컬럼을 참조하지 못하므로
+        # (no such column: songs.canonical_title) 우선순위 선정은 Python에서 수행한다.
+        score_cols = {r[1] for r in songs_cursor.execute("PRAGMA user_db.table_info(scores)")}
+        sel = lambda c: f"us.{c}" if c in score_cols else "NULL"
+        score_rows = songs_cursor.execute(f"""
+            SELECT us.arcaea_id, us.difficulty, {sel('title_en')}, {sel('title_jp')}, {sel('artist')}
+            FROM user_db.scores us
+            WHERE us.arcaea_id IS NOT NULL AND us.arcaea_id != ''
+            ORDER BY us.rowid DESC
+        """).fetchall()
+        scores_by_aid = {}
+        for aid, diff, t_en, t_jp, art in score_rows:
+            scores_by_aid.setdefault(aid, []).append((diff, t_en, t_jp, art))
+
+        chart_diffs = {}
+        for sid, diff in songs_cursor.execute("SELECT song_id, difficulty FROM charts"):
+            chart_diffs.setdefault(sid, set()).add(diff)
+
+        songs = songs_cursor.execute("""
+            SELECT id, arcaea_id, canonical_title, title_en, title_jp, artist
+            FROM songs
+            WHERE arcaea_id IS NOT NULL AND arcaea_id != ''
+        """).fetchall()
+
+        def pick(candidates, idx, canonical, diffs):
+            """우선순위(제목 일치 > 보유 난이도 > 기타), 동순위는 최신 rowid 우선."""
+            best, best_rank = None, 3
+            for cand in candidates:  # rowid DESC 순서
+                value = cand[idx]
+                if value is None or value == '':
+                    continue
+                if (cand[1] or '').lower() == (canonical or '').lower():
+                    rank = 0
+                elif cand[0] in diffs:
+                    rank = 1
+                else:
+                    rank = 2
+                if rank < best_rank:
+                    best, best_rank = value, rank
+                    if rank == 0:
+                        break
+            return best
+
+        updates = []
+        for sid, aid, canonical, cur_en, cur_jp, cur_artist in songs:
+            cands = scores_by_aid.get(aid, [])
+            diffs = chart_diffs.get(sid, set())
+            new_en = pick(cands, 1, canonical, diffs) or (cur_en or None)
+            new_jp = pick(cands, 2, canonical, diffs) or (cur_jp or None)
+            if cur_artist and cur_artist != 'Unknown':
+                new_artist = cur_artist
+            else:
+                new_artist = pick(cands, 3, canonical, diffs)
+            updates.append((new_en, new_jp, new_artist, sid))
+
+        songs_cursor.executemany(
+            "UPDATE songs SET title_en = ?, title_jp = ?, artist = ? WHERE id = ?",
+            updates,
+        )
 
         songs_conn.commit()
 

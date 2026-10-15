@@ -714,6 +714,10 @@ class StatisticsHandler(QObject):
     def getThumbnailPathForDifficulty(self, arcaea_id: str, difficulty: int) -> str:
         return self._thumbnail_service.get_path_for_difficulty(arcaea_id, difficulty)
 
+    @pyqtSlot(str, int, result=bool)
+    def isThumbnailPending(self, arcaea_id: str, difficulty: int) -> bool:
+        return self._thumbnail_service.is_thumbnail_pending(arcaea_id, difficulty)
+
     def set_settings_handler(self, settings_handler):
         """Connect to SettingsHandler for pack classification mode and excluded packs changes."""
         if self._settings_handler:

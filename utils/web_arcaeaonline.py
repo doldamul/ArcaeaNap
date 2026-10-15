@@ -1871,6 +1871,13 @@ class ArcaeaOnline:
         
         if saved_count > 0:
             self.log(f"Saved {saved_count} thumbnails.")
+            # ThumbnailService는 존재하지 않음("")/폴백 경로를 메모리에 캐시하므로
+            # 새 파일이 저장되면 캐시를 비우고 thumbnailVersion을 갱신해 UI가 다시 조회하게 한다.
+            try:
+                from services.thumbnail_service import ThumbnailService
+                ThumbnailService.get_instance().clear_cache()
+            except Exception as e:
+                self.log(f"Thumbnail cache refresh failed: {e}")
         if not_found_count > 0:
             self.log(f"{not_found_count} thumbnails not found.")
 
